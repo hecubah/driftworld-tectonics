@@ -7,9 +7,11 @@ using UnityEngine.UI;
 
 public class TectonicPlanet
 {
-    public PlanetManager m_PlanetManager;
+    public PlanetManager m_PlanetManager; // manager object for backcalls and configuration calls
 
-    public float m_Radius;
+    public float m_Radius; // radius of the planet
+
+    public RandomMersenne m_Random; // reference object to manager RNG
 
     public List<Vector3> m_CrustVertices;
     public List<DRTriangle> m_CrustTriangles;
@@ -46,6 +48,8 @@ public class TectonicPlanet
         m_PlanetManager = (PlanetManager)GameObject.Find("Planet").GetComponent(typeof(PlanetManager));
 
         m_Radius = radius;
+
+        m_Random = m_PlanetManager.m_Random;
 
         m_CrustVertices = new List<Vector3>();
         m_CrustTriangles = new List<DRTriangle>();
@@ -481,7 +485,6 @@ public class TectonicPlanet
         Vector3[] vertices_input = new Vector3[m_VerticesCount];
         Vector3[] random_input = new Vector3[64*APR.FractalTerrainIterations];
         float[] elevations_output = new float[m_VerticesCount];
-        RandomMersenne rand = new RandomMersenne((uint)random_input.GetHashCode());
 
         for (int i = 0; i < m_VerticesCount; i++)
         {
@@ -490,7 +493,7 @@ public class TectonicPlanet
 
         for (int i = 0; i < 64*APR.FractalTerrainIterations; i++)
         {
-            random_input[i] = new Vector3(rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f));
+            random_input[i] = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f));
         }
 
         ComputeBuffer vertices_input_buffer = new ComputeBuffer(vertices_input.Length, 12, ComputeBufferType.Default);
@@ -520,15 +523,14 @@ public class TectonicPlanet
     // Create new crust as random centroid set Voronoi map
     public void InitializeRandomCrust()
     {
-        RandomMersenne rand = new RandomMersenne((uint)DateTime.Now.Millisecond); // time randomized seed - to call for a specific one, rewrite or parametrize
         List<Vector3> centroids = new List<Vector3>(); // vertices are assigned around these centroids
         List<Plate> plates = new List<Plate>(); // formal partition objects
         for (int i = 0; i < APR.PlateInitNumberOfCentroids; i++) // for each centroid
         {
-            centroids.Add(new Vector3(rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f)).normalized); // set the centroid vector
+            centroids.Add(new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized); // set the centroid vector
             Plate new_plate = new Plate(this); // create a new plate
-            new_plate.m_RotationAxis = new Vector3(rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f)).normalized; // randomized rotation axis
-            new_plate.m_PlateAngularSpeed = rand.Range(0.0f, APR.MaxPlateAngularSpeed); // angular speed of the plate
+            new_plate.m_RotationAxis = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized; // randomized rotation axis
+            new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, APR.MaxPlateAngularSpeed); // angular speed of the plate
             new_plate.m_Elevation = APR.PlateInitElevation; // initial elevation of all vertices in the plate
             plates.Add(new_plate); // add new plate to the list
         }

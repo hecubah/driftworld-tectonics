@@ -7,7 +7,7 @@ using UnityEngine;
 public class PlanetManager : MonoBehaviour
 {
     public float m_Radius = 1.0f; // multiple of 1000 km
-    public GameObject m_Surface = null;
+    [HideInInspector] public GameObject m_Surface = null;
     public TectonicPlanet m_DataMathSphere = null;
     public TectonicPlanet m_RenderMathSphere = null;
     public TectonicPlanet m_Planet = null;
@@ -20,6 +20,7 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_TriangleCollisionTestCShader = null;
 
     public uint m_RandomSeed = 0;
+    public RandomMersenne m_Random;
 
     [HideInInspector] public string m_RenderMode = "";
     [HideInInspector] public bool m_PropagateCrust = false;
@@ -37,6 +38,7 @@ public class PlanetManager : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+        m_Random = new RandomMersenne(m_RandomSeed);
     }
 
     // Update is called once per frame
@@ -199,28 +201,26 @@ public class PlanetManager : MonoBehaviour
         float mintR = 0.5f;
         float maxtR = 2f;
         List<Vector3> vertices = new List<Vector3>();
-        RandomMersenne rand = new RandomMersenne(m_RandomSeed);
-        m_RandomSeed++;
 
-        Vector3 random_first = new Vector3(rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f)).normalized;
+        Vector3 random_first = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
         Vector3 r_planex = new Vector3(random_first.y, -random_first.x, 0f).normalized;
         Vector3 r_planey = Vector3.Cross(random_first, r_planex);
 
-        float randR = rand.Range(mintR, maxtR);
+        float randR = m_Random.Range(mintR, maxtR);
         for (int i = 0; i < 3; i++)
         {
-            float randPhi = rand.Range(0f, 2 * Mathf.PI);
+            float randPhi = m_Random.Range(0f, 2 * Mathf.PI);
             vertices.Add((random_first + randR * Mathf.Cos(randPhi) * r_planex + randR * Mathf.Sin(randPhi) * r_planey).normalized);
         }
 
-        Vector3 random_second = new Vector3(rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f), rand.Range(-1.0f, 1.0f)).normalized;
+        Vector3 random_second = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
         r_planex = new Vector3(random_second.y, -random_second.x, 0f).normalized;
         r_planey = Vector3.Cross(random_second, r_planex);
 
-        randR = rand.Range(mintR, maxtR);
+        randR = m_Random.Range(mintR, maxtR);
         for (int i = 0; i < 3; i++)
         {
-            float randPhi = rand.Range(0f, 2 * Mathf.PI);
+            float randPhi = m_Random.Range(0f, 2 * Mathf.PI);
             vertices.Add((random_second + randR * Mathf.Cos(randPhi) * r_planex + randR * Mathf.Sin(randPhi) * r_planey).normalized);
         }
 
