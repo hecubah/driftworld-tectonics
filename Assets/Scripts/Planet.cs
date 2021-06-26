@@ -23,18 +23,19 @@ public class TectonicPlanet
     public List<List<int>> m_DataTrianglesOfVertices;
     public List<PointData> m_DataPointData;
 
-
     public int m_VerticesCount;
     public int m_TrianglesCount;
+
     public List<int> m_LookupStartTriangles;
 
     public List<Vector3> m_RenderVertices;
     public List<DRTriangle> m_RenderTriangles;
     public List<List<int>> m_RenderVerticesNeighbours;
     public List<List<int>> m_RenderTrianglesOfVertices;
+    public List<PointData> m_RenderPointData;
+
     public int m_RenderVerticesCount;
     public int m_RenderTrianglesCount;
-    public List<PointData> m_RenderPointData;
 
 
     public int m_TectonicPlatesCount;
@@ -50,25 +51,27 @@ public class TectonicPlanet
         m_CrustTriangles = new List<DRTriangle>();
         m_CrustVerticesNeighbours = new List<List<int>>();
         m_CrustTrianglesOfVertices = new List<List<int>>();
-        m_VerticesCount = 0;
-        m_TrianglesCount = 0;
         m_CrustPointData = new List<PointData>();
 
         m_DataVertices = new List<Vector3>();
         m_DataTriangles = new List<DRTriangle>();
+        m_DataVerticesNeighbours = new List<List<int>>();
+        m_DataTrianglesOfVertices = new List<List<int>>();
         m_DataPointData = new List<PointData>();
 
-        m_LookupStartTriangles = new List<int>();
+        m_VerticesCount = 0;
+        m_TrianglesCount = 0;
 
+        m_LookupStartTriangles = new List<int>();
 
         m_RenderVertices = new List<Vector3>();
         m_RenderTriangles = new List<DRTriangle>();
         m_RenderVerticesNeighbours = new List<List<int>>();
         m_RenderTrianglesOfVertices = new List<List<int>>();
-        m_RenderVerticesCount = 0;
-        m_RenderTrianglesCount = 0;
         m_RenderPointData = new List<PointData>();
 
+        m_RenderVerticesCount = 0;
+        m_RenderTrianglesCount = 0;
 
         m_TectonicPlates = new List<Plate>();
     }
@@ -312,7 +315,7 @@ public class TectonicPlanet
     // Loads topology data from two files - data part from which crust data has then to be initialized, and render part that should normally be displayed
     public void LoadDefaultTopology(string data_filename, string render_filename)
     {
-        TopoMeshInterpreter.ReadMesh(out m_DataVertices, out m_DataTriangles, out m_DataVerticesNeighbours, out m_DataTrianglesOfVertices, data_filename);
+        TopoMeshInterpreter.ReadMesh(out m_DataVertices, out m_DataTriangles, out m_DataVerticesNeighbours, out m_DataTrianglesOfVertices, data_filename); // Read the data part
         foreach (DRTriangle it in m_DataTriangles)
         {
             it.EnsureClockwiseOrientation();
@@ -321,12 +324,12 @@ public class TectonicPlanet
         m_TrianglesCount = m_DataTriangles.Count;
         RecalculateLookups();
         m_DataPointData.Clear();
-        for (int i = 0; i < m_DataVertices.Count; i++)
+        for (int i = 0; i < m_VerticesCount; i++)
         {
             m_DataPointData.Add(new PointData());
         }
 
-        TopoMeshInterpreter.ReadMesh(out m_RenderVertices, out m_RenderTriangles, out m_RenderVerticesNeighbours, out m_RenderTrianglesOfVertices, render_filename);
+        TopoMeshInterpreter.ReadMesh(out m_RenderVertices, out m_RenderTriangles, out m_RenderVerticesNeighbours, out m_RenderTrianglesOfVertices, render_filename); // Read the render part
         foreach (DRTriangle it in m_RenderTriangles)
         {
             it.EnsureClockwiseOrientation();
