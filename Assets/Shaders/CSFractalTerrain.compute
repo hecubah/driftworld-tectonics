@@ -1,0 +1,21 @@
+﻿#pragma kernel CSFractalTerrain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+StructuredBuffer<float3> vertices_input;
+StructuredBuffer<float3> random_input;
+RWStructuredBuffer<float> elevations_output;
+uint vertices_number;
+float elevation_step;
+
+
+[numthreads(64, 1, 1)]
+void CSFractalTerrain(uint3 id : SV_DispatchThreadID)
+{
+    uint thread_coord = id.x;
+    float3 plane_normal = random_input[id.x];
+    uint i;
+    for (i = 0; i < vertices_number; i++) {
+        elevations_output[i] += (dot(vertices_input[i], plane_normal) >= 0 ? elevation_step : -elevation_step);
+    }
+}
