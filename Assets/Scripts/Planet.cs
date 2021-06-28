@@ -24,6 +24,7 @@ public class TectonicPlanet
     public List<List<int>> m_DataVerticesNeighbours;
     public List<List<int>> m_DataTrianglesOfVertices;
     public List<PointData> m_DataPointData;
+    BoundingVolume m_DataBVH;
 
     public int m_VerticesCount;
     public int m_TrianglesCount;
@@ -62,6 +63,7 @@ public class TectonicPlanet
         m_DataVerticesNeighbours = new List<List<int>>();
         m_DataTrianglesOfVertices = new List<List<int>>();
         m_DataPointData = new List<PointData>();
+        m_DataBVH = null;
 
         m_VerticesCount = 0;
         m_TrianglesCount = 0;
@@ -320,17 +322,23 @@ public class TectonicPlanet
     public void LoadDefaultTopology(string data_filename, string render_filename)
     {
         TopoMeshInterpreter.ReadMesh(out m_DataVertices, out m_DataTriangles, out m_DataVerticesNeighbours, out m_DataTrianglesOfVertices, data_filename); // Read the data part
-        foreach (DRTriangle it in m_DataTriangles)
+        m_VerticesCount = m_DataVertices.Count; // set the data vertices count
+        m_TrianglesCount = m_DataTriangles.Count; // set the data triangles count
+        List<BoundingVolume> m_BVTLeaves = new List<BoundingVolume>();
+        for (int i = 0; i < m_TrianglesCount; i++) // for all triangles in data
         {
-            it.EnsureClockwiseOrientation();
+            m_DataTriangles[i].EnsureClockwiseOrientation(); // switch two points if the triangle is not clockwise
+            BoundingVolume new_bb = new BoundingVolume(m_DataTriangles[i].m_CCenter, m_DataTriangles[i].m_CUnitRadius); // create a leaf bounding box
+            new_bb.m_TriangleIndex = i;
+            m_DataTriangles[i].m_BVolume = new_bb;
+            m_BVTLeaves.Add(new_bb);
         }
-        m_VerticesCount = m_DataVertices.Count;
-        m_TrianglesCount = m_DataTriangles.Count;
-        RecalculateLookups();
-        m_DataPointData.Clear();
-        for (int i = 0; i < m_VerticesCount; i++)
+        RecalculateLookups(); // perhaps not needed anymore
+        m_DataBVH = BoundingVolume.ConstructBVH(m_BVTLeaves); // construct BVH from bottom
+        m_DataPointData.Clear(); // delete the list of crust point data
+        for (int i = 0; i < m_VerticesCount; i++) // for all vertices
         {
-            m_DataPointData.Add(new PointData());
+            m_DataPointData.Add(new PointData()); // add new point data
         }
 
         TopoMeshInterpreter.ReadMesh(out m_RenderVertices, out m_RenderTriangles, out m_RenderVerticesNeighbours, out m_RenderTrianglesOfVertices, render_filename); // Read the render part

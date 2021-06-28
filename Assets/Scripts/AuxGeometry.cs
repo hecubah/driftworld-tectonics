@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -19,6 +20,8 @@ public class DRTriangle
     public List<DRTriangle> m_TriangleReference;
     public List<int> m_Neighbours;
     public HashSet<int> m_VerticesSet;
+
+    public BoundingVolume m_BVolume = null;
 
     public DRTriangle(int a, int b, int c, List<Vector3> reference)
     {
@@ -185,21 +188,95 @@ public class DRTriangle
 
     }
 
-
 }
 
-public class BoundingBox
+public class BoundingVolume
 {
-    public List<BoundingBox> m_Children;
-    public List<DRTriangle> m_Trinagles;
-    public Vector3 m_Circumcenter;
-    public float m_Circumradius;
+    public List<BoundingVolume> m_Children; // all bounding box subboxes
+    public int m_TriangleIndex; // leaf bounding box triangle
+    public BoundingVolume m_Root = null; // bounding box tree root
+    public BoundingVolume m_Parent = null; // higher bounding box tree node
+    public Vector3 m_Circumcenter; // base circumcenter of the box
+    public float m_Circumradius; // range of the box from its center
+    public Quaternion m_GeneralTransform = Quaternion.identity; // root box transform to update on-the-fly
 
-    public BoundingBox (Vector3 circumcenter, float circumradius)
+    public BoundingVolume (Vector3 circumcenter, float circumradius)
     {
-        m_Circumcenter = circumcenter;
-        m_Circumradius = circumradius;
-        m_Children = new List<BoundingBox>();
-        m_Trinagles = new List<DRTriangle>();
+        m_Circumcenter = circumcenter; // needs to be known before constructor call
+        m_Circumradius = circumradius; // needs to be known before constructor call
+        m_Children = new List<BoundingVolume>(); // children are added while constructing the tree or performing operations
+        m_TriangleIndex = -1; // needs to be added when constructing the base of the tree
     }
+
+    public uint MortonCode() // assign an unsigned integer to the circumcenter point on the sphere
+    {
+        float atanval = Mathf.Atan2(m_Circumcenter.z, m_Circumcenter.x);
+        uint phi_norm = (uint)((atanval >= 0 ? atanval : atanval + 2 * Mathf.PI) / (2 * Mathf.PI) * 65535); // normalize to max_uint16
+        uint theta_norm = (uint)(Mathf.Acos(m_Circumcenter.y) / Mathf.PI * 65535); // normalize to max_uint16
+        uint code = 0; // fresh code
+        for (int i = 0; i < 16; i++) // for all bits in normalized int phi coordinate
+        {
+            code += ((phi_norm >> i) % 2) << (2 * i); // fill the second bits in couples
+        }
+        for (int i = 0; i < 16; i++) // for all bits in normalized int theta coordinate
+        {
+            code += ((theta_norm >> i) % 2) << (2 * i + 1); // fill the first bits in couples
+        }
+        return code; // return ready code
+    }
+
+    public static List<int> MCodeRadixSort(List<BoundingVolume> volume_list) // compute Morton codes of a list of a single level of bounding volumes and return the sort index list
+    {
+        int list_count = volume_list.Count; // number of bounding volume objects
+        List<uint> morton_code_list = new List<uint>(); // corresponding Morton codes list
+        Queue<int> wip_list = new Queue<int>(); // sorted sequence queue
+        for (int i = 0; i < list_count; i++) // for all bounding volume objects
+        {
+            morton_code_list.Add(volume_list[i].MortonCode()); // add the corresponding Morton code to the list
+            wip_list.Enqueue(i); // enqueue the identity index
+        }
+        for (int i = 0; i < 32; i++) // for all bits in the Morton code
+        {
+            Queue<int> zeroes = new Queue<int>(); // bucket queue of zero bits
+            Queue<int> ones = new Queue<int>(); // bucket queue of one bits
+            for (int j = 0; j < list_count; j++) // for all items in the index queue
+            {
+                int candidate = wip_list.Dequeue(); // get next index
+                if ((morton_code_list[candidate] >> i) % 2 == 0) // if the Morton code bit is zero
+                {
+                    zeroes.Enqueue(candidate); // add it to the zero bit bucket
+                }
+                else
+                {
+                    ones.Enqueue(candidate); // add it to the one bit bucket
+                }
+            }
+            int zeroes_size = zeroes.Count; // number of Morton codes with zero respective bit
+            int ones_size = ones.Count; // number of Morton codes with one respective bit
+            for (int j = 0; j < zeroes_size; j++) // for all codes in the zero bucket
+            {
+                wip_list.Enqueue(zeroes.Dequeue()); // add the zero bucket to the new sequence
+            }
+            for (int j = 0; j < ones_size; j++) // for all codes in the one bucket
+            {
+                wip_list.Enqueue(ones.Dequeue()); // add the one bucket to the new sequence
+            }
+        }
+        List<int> retVal = new List<int>(); // new return value list of indexes
+        for (int i = 0; i < list_count; i++) // for all items in the final sequence
+        {
+            retVal.Add(wip_list.Dequeue()); // add the final index to the list
+        }
+        return retVal; // return the list of indexes
+    }
+
+    public static BoundingVolume ConstructBVH(List<BoundingVolume> volume_list)
+    {
+        List<int> order_list = BoundingVolume.MCodeRadixSort(volume_list);
+
+        return null;
+    }
+
+
+
 }

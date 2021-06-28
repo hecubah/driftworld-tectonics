@@ -29,6 +29,12 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction()
     {
+        /*
+        Vector3 a = new Vector3(0,0,1);
+        uint code = DRTriangle.VecMortonCode(a);
+        string binary = Convert.ToString(code, 2).PadLeft(32, '0');
+        Debug.Log(binary);
+        */
     }
 
     public void DebugFunction2()
