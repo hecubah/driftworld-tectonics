@@ -329,29 +329,29 @@ public class TectonicPlanet
         {
             m_DataTriangles[i].EnsureClockwiseOrientation(); // switch two points if the triangle is not clockwise
             BoundingVolume new_bb = new BoundingVolume(m_DataTriangles[i].m_CCenter, m_DataTriangles[i].m_CUnitRadius); // create a leaf bounding box
-            new_bb.m_TriangleIndex = i;
-            m_DataTriangles[i].m_BVolume = new_bb;
-            m_BVTLeaves.Add(new_bb);
+            new_bb.m_TriangleIndex = i; // denote the triangle index to the leaf
+            m_DataTriangles[i].m_BVolume = new_bb; // denote the leaf to the respective triangle
+            m_BVTLeaves.Add(new_bb); // add the new bounding volume to the list of leaves
         }
-        RecalculateLookups(); // perhaps not needed anymore
+        RecalculateLookups(); // perhaps not needed anymore ----------------------------------------------------------------------
         m_DataBVH = BoundingVolume.ConstructBVH(m_BVTLeaves); // construct BVH from bottom
-        m_DataPointData.Clear(); // delete the list of crust point data
+        m_DataPointData.Clear(); // delete the list of crust point data - data
         for (int i = 0; i < m_VerticesCount; i++) // for all vertices
         {
             m_DataPointData.Add(new PointData()); // add new point data
         }
 
         TopoMeshInterpreter.ReadMesh(out m_RenderVertices, out m_RenderTriangles, out m_RenderVerticesNeighbours, out m_RenderTrianglesOfVertices, render_filename); // Read the render part
-        foreach (DRTriangle it in m_RenderTriangles)
+        m_RenderVerticesCount = m_RenderVertices.Count; // set the render vertices count
+        m_RenderTrianglesCount = m_RenderTriangles.Count; // set the render triangles count
+        foreach (DRTriangle it in m_RenderTriangles) // for all triangles in render
         {
-            it.EnsureClockwiseOrientation();
+            it.EnsureClockwiseOrientation(); // switch two points if the triangle is not clockwise
         }
-        m_RenderVerticesCount = m_RenderVertices.Count;
-        m_RenderTrianglesCount = m_RenderTriangles.Count;
         m_RenderPointData.Clear();
         for (int i = 0; i < m_RenderVertices.Count; i++)
         {
-            m_RenderPointData.Add(new PointData());
+            m_RenderPointData.Add(new PointData()); // delete the list of crust point data - render
         }
 
     }

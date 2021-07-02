@@ -972,6 +972,7 @@ MonoBehaviour:
     type: 3}
   m_TriangleCollisionTestCShader: {fileID: 7200000, guid: 5258b061de61b6343b3f0e01f149e5ef,
     type: 3}
+  m_CircleMergeShader: {fileID: 7200000, guid: 67c0f866e7f0ae3409d5fdcdbf218cf9, type: 3}
   m_RandomSeed: 120
   m_RenderMode: normal
   m_PropagateCrust: 1

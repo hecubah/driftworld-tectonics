@@ -1,0 +1,38 @@
+﻿#pragma kernel CSCircleMerge
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+float3 c1, c2, c3;
+float r1, r2, r3;
+
+[numthreads(4, 4, 4)]
+void CSCircleMerge(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+
+    float phi, theta, aside, bside, cside;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y + 0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    float4 outCol = float4(1, 1, 1, 1);
+
+    if (acos(dot(c3, w_pixelpoint)) < r3) {
+        outCol = float4(0, 0, 1, 1);
+    }
+
+    if (acos(dot(c2, w_pixelpoint)) < r2) {
+        outCol = float4(0, 1, 0, 1);
+    }
+
+    if (acos(dot(c1, w_pixelpoint)) < r1) {
+        outCol = float4(0.75, 0.75, 0, 1);
+    }
+
+    Result[pix_coords] = outCol;
+
+
+}

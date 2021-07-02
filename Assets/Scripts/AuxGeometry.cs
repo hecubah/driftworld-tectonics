@@ -272,9 +272,155 @@ public class BoundingVolume
 
     public static BoundingVolume ConstructBVH(List<BoundingVolume> volume_list)
     {
-        List<int> order_list = BoundingVolume.MCodeRadixSort(volume_list);
+        List<int> order_list = MCodeRadixSort(volume_list);
+        List<BoundingVolume> bvlist_in = new List<BoundingVolume>();
+        List<BoundingVolume> bvlist_out = new List<BoundingVolume>();
+        int list_size = volume_list.Count;
 
-        return null;
+        for (int i = 0; i < list_size; i++)
+        {
+            bvlist_in.Add(volume_list[order_list[i]]);
+        }
+
+        while (list_size > 1)
+        {
+            Debug.Log(list_size);
+            int[] nearest_neighbours = new int[list_size];
+            for (int i = 0; i < list_size; i++)
+            {
+                int min_ind = (int)Mathf.Max(i - APR.BVHConstructionRadius, 0);
+                int max_ind = (int)Mathf.Min(i + APR.BVHConstructionRadius, list_size - 1);
+                float mindist = Mathf.Infinity;
+                float dist;
+                for (int j = min_ind; j <= max_ind; j++)
+                {
+                    dist = Mathf.Acos(Vector3.Dot(bvlist_in[i].m_Circumcenter, bvlist_in[j].m_Circumcenter));
+                    if ((i != j) && (dist < mindist))
+                    {
+                        mindist = dist;
+                        nearest_neighbours[i] = j;
+                    }
+                }
+            }
+            int merges = 0;
+            int left = 0;
+            int non_correspondent = 0;
+            for (int i = 0; i < list_size; i++)
+            {
+                if (nearest_neighbours[nearest_neighbours[i]] == i)
+                {
+                    if (list_size < 2)
+                    {
+                        Debug.Log(i + "->" + nearest_neighbours[i] + ";" + nearest_neighbours[i] + "->" + nearest_neighbours[nearest_neighbours[i]]);
+                    }
+                    if (i < nearest_neighbours[i])
+                    {
+                        bvlist_out.Add(MergeBV(bvlist_in[i], bvlist_in[nearest_neighbours[i]]));
+                        merges++;
+                    } else
+                    {
+                        left++;
+                    }
+                } else
+                {
+                    bvlist_out.Add(bvlist_in[i]);
+                    non_correspondent++;
+                }
+            }
+            Debug.Log("times merged:" + merges);
+            Debug.Log("ommited:" + left);
+            Debug.Log("unmerged:" + non_correspondent);
+            bvlist_in = bvlist_out;
+            list_size = bvlist_in.Count();
+            bvlist_out = new List<BoundingVolume>();
+        }
+        return bvlist_in[0];
+    }
+
+    public static BoundingVolume MergeBV(BoundingVolume a, BoundingVolume b)
+    {
+        Vector3 c1 = a.m_Circumcenter;
+        Vector3 c2 = b.m_Circumcenter;
+        Vector3 c3;
+        float r1 = a.m_Circumradius;
+        float r2 = b.m_Circumradius;
+        float r3;
+
+        if (c1 == c2) // trivial - both centers are the same
+        {
+            c3 = c1;
+            r3 = Mathf.Max(r1, r2);
+        }
+        else
+        {
+            Vector3 aux_basvec;
+            if (c1 == -c2) // both centers are opposite
+            {
+                if (c1.x == 0f)
+                {
+                    aux_basvec = new Vector3(0f, c1.z, -c1.y).normalized;
+                }
+                else if (c1.y == 0f)
+                {
+                    aux_basvec = new Vector3(c1.z, 0f, -c1.x).normalized;
+                }
+                else
+                {
+                    aux_basvec = new Vector3(c1.y, -c1.x, 0f).normalized;
+                }
+            }
+            else
+            {
+                aux_basvec = Vector3.Cross(Vector3.Cross(c1, c2), c1).normalized;
+            }
+
+            bool invert_left_interval, invert_right_interval;
+            float distance = Mathf.Acos(Vector3.Dot(c1, c2));
+            invert_left_interval = (-r1 < distance - r2 ? false : true);
+            invert_right_interval = (r1 < distance + r2 ? false : true);
+
+            float delta_phi;
+
+            if (!invert_left_interval && !invert_right_interval)
+            {
+                delta_phi = (distance - r1 + r2) / 2.0f;
+                r3 = (r1 + r2 + distance) / 2.0f;
+            }
+            else if (!invert_left_interval && invert_right_interval)
+            {
+                delta_phi = 0;
+                r3 = r1;
+            }
+            else if (invert_left_interval && !invert_right_interval)
+            {
+                delta_phi = distance;
+                r3 = r2;
+            }
+            else
+            {
+                delta_phi = (distance + r1 - r2) / 2.0f;
+                r3 = (r1 + r2 + distance) / 2.0f;
+                Debug.LogError("Unrecognized circle merging");
+                Debug.LogError("c1:");
+                Debug.LogError("x:" + c1.x);
+                Debug.LogError("y:" + c1.y);
+                Debug.LogError("z:" + c1.z);
+                Debug.LogError("radius: " + r1);
+                Debug.LogError("c2:");
+                Debug.LogError("x:" + c2.x);
+                Debug.LogError("y:" + c2.y);
+                Debug.LogError("z:" + c2.z);
+                Debug.LogError("radius: " + r2);
+                Debug.LogError("Result: " + (Mathf.Cos(delta_phi) * c1 + Mathf.Sin(delta_phi) * aux_basvec) + " with radius " + r3);
+            }
+            c3 = Mathf.Cos(delta_phi) * c1 + Mathf.Sin(delta_phi) * aux_basvec;
+        }
+        BoundingVolume retVal = new BoundingVolume(c3, r3);
+        retVal.m_Children.Add(a);
+        retVal.m_Children.Add(b);
+        a.m_Parent = retVal;
+        b.m_Parent = retVal;
+        return retVal;
     }
 
 

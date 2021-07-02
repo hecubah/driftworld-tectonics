@@ -18,6 +18,7 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_PlatesBorderTextureCShader = null;
     public ComputeShader m_FractalTerrainCShader = null;
     public ComputeShader m_TriangleCollisionTestCShader = null;
+    public ComputeShader m_CircleMergeShader = null;
 
     public uint m_RandomSeed = 0;
     public RandomMersenne m_Random;
@@ -39,6 +40,107 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction2()
     {
+        DRTriangle a = m_Planet.m_RenderTriangles[m_Random.IRandom(0, m_Planet.m_VerticesCount)];
+        DRTriangle b = m_Planet.m_RenderTriangles[m_Random.IRandom(0, m_Planet.m_VerticesCount)];
+        Vector3 c1 = a.m_CCenter;
+        Vector3 c2 = b.m_CCenter;
+        Vector3 c3;
+        float r1 = a.m_CUnitRadius;
+        float r2 = b.m_CUnitRadius;
+        float r3;
+        /*
+        c1 = new Vector3(-0.6109008f, 0.7855832f, 0.09828214f);
+        r1 = 0.2397765f;
+        c2 = new Vector3(-0.6624671f, 0.7434846f, 0.09147672f);
+        r2 = 0.3587213f;
+        */
+        if (c1 == c2) // trivial - both centers are the same
+        {
+            c3 = c1;
+            r3 = Mathf.Max(r1, r2);
+        } else
+        {
+            Vector3 aux_basvec;
+            if (c1 == -c2) // both centers are opposite
+            {
+                if (c1.x == 0f)
+                {
+                    aux_basvec = new Vector3(0f, c1.z, -c1.y).normalized;
+                }
+                else if (c1.y == 0f)
+                {
+                    aux_basvec = new Vector3(c1.z, 0f, -c1.x).normalized;
+                }
+                else
+                {
+                    aux_basvec = new Vector3(c1.y, -c1.x, 0f).normalized;
+                }
+            }
+            else
+            {
+                aux_basvec = Vector3.Cross(Vector3.Cross(c1, c2), c1).normalized;
+            }
+
+            bool invert_left_interval, invert_right_interval;
+            float distance = Mathf.Acos(Vector3.Dot(c1, c2));
+            invert_left_interval = (-r1 < distance - r2 ? false : true);
+            invert_right_interval = (r1 < distance + r2 ? false : true);
+
+            float delta_phi;
+
+            if (!invert_left_interval && !invert_right_interval)
+            {
+                delta_phi = (distance - r1 + r2) / 2.0f;
+                r3 = (r1 + r2 + distance) / 2.0f;
+            }
+            else if (!invert_left_interval && invert_right_interval)
+            {
+                delta_phi = 0;
+                r3 = r1;
+            }
+            else if (invert_left_interval && !invert_right_interval)
+            {
+                delta_phi = distance;
+                r3 = r2;
+            }
+            else
+            {
+                delta_phi = (distance + r1 - r2) / 2.0f;
+                r3 = (r1 + r2 + distance) / 2.0f;
+                Debug.LogError("Unrecognized circle merging");
+            }
+            c3 = Mathf.Cos(delta_phi) * c1 + Mathf.Sin(delta_phi) * aux_basvec;
+        }
+
+        /*
+        Debug.Log(c3);
+        Debug.Log(c3.magnitude);
+        Debug.Log(r3);
+        */
+
+
+        int kernelHandle = m_CircleMergeShader.FindKernel("CSCircleMerge");
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+        m_CircleMergeShader.SetVector("c1", c1);
+        m_CircleMergeShader.SetVector("c2", c2);
+        m_CircleMergeShader.SetVector("c3", c3);
+        m_CircleMergeShader.SetFloat("r1", r1);
+        m_CircleMergeShader.SetFloat("r2", r2);
+        m_CircleMergeShader.SetFloat("r3", r3);
+        m_CircleMergeShader.SetTexture(kernelHandle, "Result", com_tex);
+        m_CircleMergeShader.Dispatch(kernelHandle, 256, 1024, 1);
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        tex.Apply();
+        com_tex.Release();
+        GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+        m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
     }
 
     // Start is called before the first frame update
@@ -62,6 +164,10 @@ public class PlanetManager : MonoBehaviour
             MeshFilter newMeshFilter = m_Surface.AddComponent<MeshFilter>();
             m_Surface.AddComponent<MeshRenderer>().sharedMaterial = new Material(Shader.Find("Custom/SphereTextureShader"));
             newMeshFilter.sharedMesh = new Mesh();
+        }
+        if (m_Random == null)
+        {
+            m_Random = new RandomMersenne(m_RandomSeed);
         }
         m_Planet = new TectonicPlanet(m_Radius);
         m_Planet.LoadDefaultTopology(m_DataMeshFilename, m_RenderMeshFilename);
@@ -203,7 +309,6 @@ public class PlanetManager : MonoBehaviour
 
     public void CAPTriangleCollisionTestTexture()
     {
-
         float mintR = 0.5f;
         float maxtR = 2f;
         List<Vector3> vertices = new List<Vector3>();

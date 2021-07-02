@@ -12,4 +12,5 @@ public static class APR
     public static float PlateInitElevation = -0.05f; // 
     public static float MaxPlateAngularSpeed = 0.03f; // per million years;
     public static float TectonicIterationStepTime = 5; // simulation time-step in My
+    public static int BVHConstructionRadius = 20; // interval radius for BVH construction
 }
