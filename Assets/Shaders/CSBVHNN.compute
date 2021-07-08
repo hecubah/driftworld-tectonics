@@ -1,0 +1,32 @@
+﻿
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSBVHNN
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWStructuredBuffer<int> nearest_neighbours;
+StructuredBuffer<float3> cluster_positions;
+int array_size;
+int BVH_radius;
+
+[numthreads(64, 1, 1)]
+void CSBVHNN(uint3 id : SV_DispatchThreadID)
+{
+    int i = id.x;
+
+    if (i < array_size) {
+        int min_ind = (int)max(i - BVH_radius, 0);
+        int max_ind = (int)min(i + BVH_radius, array_size - 1);
+        float mindist = 100000;
+        float dist;
+        for (int j = min_ind; j <= max_ind; j++)
+        {
+            dist = acos(dot(cluster_positions[i], cluster_positions[j]));
+            if ((i != j) && (dist < mindist))
+            {
+                mindist = dist;
+                nearest_neighbours[i] = j;
+            }
+        }       
+    }
+}

@@ -130,6 +130,14 @@ public class PlanetEditor : Editor
             {
                 m_PlanetManager.DebugFunction2(); // placeholder debug function
             }
+            if (GUILayout.Button("Debug Function 3"))
+            {
+                m_PlanetManager.DebugFunction3(); // placeholder debug function
+            }
+            if (GUILayout.Button("Debug Function 4"))
+            {
+                m_PlanetManager.DebugFunction4(); // placeholder debug function
+            }
             if (GUILayout.Button("Initialize RNG"))
             {
                 m_PlanetManager.m_Random.RandomInit(m_PlanetManager.m_RandomSeed); // initialize Mersenne RNG using given seed

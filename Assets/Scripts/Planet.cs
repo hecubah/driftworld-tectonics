@@ -24,7 +24,7 @@ public class TectonicPlanet
     public List<List<int>> m_DataVerticesNeighbours;
     public List<List<int>> m_DataTrianglesOfVertices;
     public List<PointData> m_DataPointData;
-    BoundingVolume m_DataBVH;
+    public BoundingVolume m_DataBVH;
 
     public int m_VerticesCount;
     public int m_TrianglesCount;
@@ -167,6 +167,12 @@ public class TectonicPlanet
             }
         }
         return current_searched_triangle;
+    }
+
+    public List<int> SearchDataForPoint(Vector3 needle)
+    {
+        List<int> retVal = m_DataBVH.SearchForPoint(needle, m_DataTriangles);
+        return retVal;
     }
 
     public void RecalculateLookups()
@@ -333,8 +339,7 @@ public class TectonicPlanet
             m_DataTriangles[i].m_BVolume = new_bb; // denote the leaf to the respective triangle
             m_BVTLeaves.Add(new_bb); // add the new bounding volume to the list of leaves
         }
-        RecalculateLookups(); // perhaps not needed anymore ----------------------------------------------------------------------
-        m_DataBVH = BoundingVolume.ConstructBVH(m_BVTLeaves); // construct BVH from bottom
+        m_DataBVH = ConstructBVH(m_BVTLeaves); // construct BVH from bottom
         m_DataPointData.Clear(); // delete the list of crust point data - data
         for (int i = 0; i < m_VerticesCount; i++) // for all vertices
         {
@@ -601,6 +606,93 @@ public class TectonicPlanet
             move = APR.TectonicIterationStepTime*m_TectonicPlates[m_CrustPointData[i].plate].m_PlateAngularSpeed * (Vector3.Cross(m_TectonicPlates[m_CrustPointData[i].plate].m_RotationAxis, m_CrustVertices[i]));
             m_CrustVertices[i] = (m_CrustVertices[i] + move).normalized;
         }
+    }
+
+    public BoundingVolume ConstructBVH(List<BoundingVolume> volume_list)
+    {
+        List<int> initial_order_indices = BoundingVolume.MCodeRadixSort(volume_list);
+
+        List<BoundingVolume> bvlist_in = new List<BoundingVolume>();
+        List<BoundingVolume> bvlist_out = new List<BoundingVolume>();
+        int list_size = volume_list.Count;
+
+        for (int i = 0; i < list_size; i++)
+        {
+            bvlist_in.Add(volume_list[initial_order_indices[i]]);
+        }
+        while (list_size > 1)
+        {
+
+
+            int[] nearest_neighbours = new int[list_size];
+
+            int kernelHandle = m_PlanetManager.m_BVHNearestNeighbourShader.FindKernel("CSBVHNN");
+
+            Vector3[] cluster_positions = new Vector3[list_size];
+            for (int i = 0; i < list_size; i++)
+            {
+                cluster_positions[i] = bvlist_in[i].m_Circumcenter;
+            }
+
+            ComputeBuffer cluster_positions_buffer = new ComputeBuffer(list_size, 12, ComputeBufferType.Default);
+            ComputeBuffer nearest_neighbours_buffer = new ComputeBuffer(list_size, 4, ComputeBufferType.Default);
+
+            cluster_positions_buffer.SetData(cluster_positions);
+
+            m_PlanetManager.m_BVHNearestNeighbourShader.SetBuffer(kernelHandle, "cluster_positions", cluster_positions_buffer);
+            m_PlanetManager.m_BVHNearestNeighbourShader.SetBuffer(kernelHandle, "nearest_neighbours", nearest_neighbours_buffer);
+
+            m_PlanetManager.m_BVHNearestNeighbourShader.SetInt("array_size", list_size);
+            m_PlanetManager.m_BVHNearestNeighbourShader.SetInt("BVH_radius", APR.BVHConstructionRadius);
+            m_PlanetManager.m_BVHNearestNeighbourShader.Dispatch(kernelHandle, (list_size/64) + 1, 1, 1);
+
+            cluster_positions_buffer.Release();
+            nearest_neighbours_buffer.GetData(nearest_neighbours);
+
+            nearest_neighbours_buffer.Release();
+
+
+            for (int i = 0; i < list_size; i++)
+            {
+                if ((nearest_neighbours[i] < 0) || (nearest_neighbours[i] >= list_size))
+                {
+                    nearest_neighbours[i] = (i == 0 ? 1 : 0);
+                }
+
+            }
+
+            int merges = 0;
+            int left = 0;
+            int non_correspondent = 0;
+            for (int i = 0; i < list_size; i++)
+            {
+                if (nearest_neighbours[i] < 0)
+                {
+                    Debug.Log(i + " -> " + nearest_neighbours[i]);
+                }
+                if (nearest_neighbours[nearest_neighbours[i]] == i)
+                {
+                    if (i < nearest_neighbours[i])
+                    {
+                        bvlist_out.Add(BoundingVolume.MergeBV(bvlist_in[i], bvlist_in[nearest_neighbours[i]]));
+                        merges++;
+                    }
+                    else
+                    {
+                        left++;
+                    }
+                }
+                else
+                {
+                    bvlist_out.Add(bvlist_in[i]);
+                    non_correspondent++;
+                }
+            }
+            bvlist_in = bvlist_out;
+            list_size = bvlist_in.Count();
+            bvlist_out = new List<BoundingVolume>();
+        }
+        return bvlist_in[0];
     }
 
 }

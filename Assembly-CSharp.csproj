@@ -76,7 +76,9 @@
     <None Include="Assets\Shaders\CSDefaultTerrainTexture.compute" />
     <None Include="Assets\Shaders\CSFractalTerrain.compute" />
     <None Include="Assets\Shaders\CSCircleMerge.compute" />
+    <None Include="Assets\Shaders\CSBVHNN.compute" />
     <None Include="Assets\Shaders\SphereTextureShader.shader" />
+    <None Include="Assets\Shaders\CSBVHContureTest.compute" />
     <None Include="Assets\Shaders\CSPlatesBorderTexture.compute" />
     <None Include="Assets\Shaders\CSTrianglePath.compute" />
     <Reference Include="UnityEngine">

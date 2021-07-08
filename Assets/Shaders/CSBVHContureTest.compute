@@ -1,0 +1,44 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSBVHContureTest
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+int array_size;
+float band;
+float3 missing;
+float missing_range;
+bool tint;
+RWTexture2D<float4> Result;
+StructuredBuffer<float3> bvc;
+StructuredBuffer<float> bvr;
+
+[numthreads(4, 4, 4)]
+void CSBVHContureTest(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653f;
+    float phi, theta, aside, bside, cside;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y + 0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    float4 outCol = float4(0, 0, 1, 1);
+    float shade;
+    for (int i = 0; i < array_size; i++) {
+        float shade = (float)i / array_size;
+        if ((acos(dot(w_pixelpoint, bvc[i])) > bvr[i] - band) && (acos(dot(w_pixelpoint, bvc[i])) < bvr[i] + band)) {
+            if (tint) {
+                outCol = float4(shade, shade, shade, 1);
+            }
+            else {
+                outCol = float4(0, 1, 0, 1);
+            }
+        }
+    }
+
+    if (acos(dot(w_pixelpoint, missing)) < missing_range) {
+        outCol = float4(1.f, 0.7f, 0.f, 1.f);
+    }
+
+    Result[pix_coords] = outCol;
+}
