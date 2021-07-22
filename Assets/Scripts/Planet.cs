@@ -40,9 +40,10 @@ public class TectonicPlanet
     public int m_RenderVerticesCount;
     public int m_RenderTrianglesCount;
 
-
     public int m_TectonicPlatesCount;
     public List<Plate> m_TectonicPlates;
+
+    public int[,] m_PlatesVP;
 
     public TectonicPlanet(float radius)
     {
@@ -80,6 +81,7 @@ public class TectonicPlanet
         m_RenderTrianglesCount = 0;
 
         m_TectonicPlates = new List<Plate>();
+        m_PlatesVP = null;
     }
 
     public static float UnitSphereDistance(Vector3 a, Vector3 b)
@@ -175,17 +177,6 @@ public class TectonicPlanet
         return retVal;
     }
 
-    public void RecalculateLookups()
-    {
-        m_LookupStartTriangles.Clear();
-        m_LookupStartTriangles.Add(SearchDataTrianglesForPointBruteForce(Vector3.up));
-        m_LookupStartTriangles.Add(SearchDataTrianglesForPoint(Vector3.forward));
-        m_LookupStartTriangles.Add(SearchDataTrianglesForPoint(Vector3.left));
-        m_LookupStartTriangles.Add(SearchDataTrianglesForPoint(Vector3.back));
-        m_LookupStartTriangles.Add(SearchDataTrianglesForPoint(Vector3.right));
-        m_LookupStartTriangles.Add(SearchDataTrianglesForPoint(Vector3.down));
-    }
-
     public void CrustToData() // WIP
     {
         for (int i = 0; i < m_VerticesCount; i++)
@@ -234,19 +225,12 @@ public class TectonicPlanet
 
     public void CrustMesh(out Vector3[] vertices_array, out int[] triangles_array)
     {
-        vertices_array = m_CrustVertices.ToArray();
+        vertices_array = new Vector3[m_VerticesCount];
         float elevation;
         for (int i = 0; i < m_VerticesCount; i++)
         {
-            if (m_CrustPointData[i].elevation > 0)
-            {
-                elevation = m_CrustPointData[i].elevation;
-            }
-            else
-            {
-                elevation = 0;
-            }
-            vertices_array[i] = (m_Radius + elevation) * vertices_array[i];
+            elevation = (m_CrustPointData[i].elevation > 0 ? m_CrustPointData[i].elevation : 0);
+            vertices_array[i] = (m_Radius + elevation) * (m_TectonicPlates[m_CrustPointData[i].plate].m_Transform * m_CrustVertices[i]);
         }
         List<int> triangles = new List<int>();
         for (int i = 0; i < m_TectonicPlatesCount; i++)
@@ -544,9 +528,19 @@ public class TectonicPlanet
             Plate new_plate = new Plate(this); // create a new plate
             new_plate.m_RotationAxis = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized; // randomized rotation axis
             new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, APR.MaxPlateAngularSpeed); // angular speed of the plate
-            new_plate.m_Elevation = APR.PlateInitElevation; // initial elevation of all vertices in the plate
+            if (m_Random.Range(0f, 1f) < APR.PlateInitLandRatio)
+            {
+                new_plate.m_InitElevation = APR.PlateInitLandElevation; // plate is continental
+            } else
+            {
+                new_plate.m_InitElevation = APR.PlateInitSeaElevation; // plate is oceanic
+            }
+            new_plate.m_Mass = 0.0f;
+            new_plate.m_Type = 0.0f;
             plates.Add(new_plate); // add new plate to the list
         }
+        m_CrustVertices = new List<Vector3>();
+        m_CrustPointData = new List<PointData>();
         for (int i = 0; i < m_DataVertices.Count; i++) // for all vertices on the global mesh
         {
             float mindist = Mathf.Infinity;
@@ -560,51 +554,134 @@ public class TectonicPlanet
                     plate_index = j;
                 }
             }
-            m_DataPointData[i].elevation = plates[plate_index].m_Elevation;
+            float el, thick;
+            el = plates[plate_index].m_InitElevation;
+            thick = m_Random.Range(APR.CrustThicknessMin, APR.CrustThicknessMax);
+            plates[plate_index].m_Mass += thick;
+            plates[plate_index].m_Type += el;
+            m_DataPointData[i].elevation = el;
+            m_DataPointData[i].thickness = thick;
             m_DataPointData[i].plate = plate_index;
             plates[plate_index].m_PlateVertices.Add(i);
+            m_CrustVertices.Add(m_DataVertices[i]);
+            m_CrustPointData.Add(new PointData(m_DataPointData[i]));
         }
-        bool borderTriangle = false;
-        for (int i = 0; i < m_DataTriangles.Count; i++)
+        for (int i = 0; i < m_DataTriangles.Count; i++) // for all triangles
         {
-            if ((m_DataPointData[m_DataTriangles[i].m_A].plate == m_DataPointData[m_DataTriangles[i].m_B].plate) && (m_DataPointData[m_DataTriangles[i].m_B].plate == m_DataPointData[m_DataTriangles[i].m_C].plate))
+            if ((m_DataPointData[m_DataTriangles[i].m_A].plate == m_DataPointData[m_DataTriangles[i].m_B].plate) && (m_DataPointData[m_DataTriangles[i].m_B].plate == m_DataPointData[m_DataTriangles[i].m_C].plate)) // if the triangle only has vertices of one type (qquivalence is a transitive relation)
             {
-                foreach (int it in m_DataTriangles[i].m_Neighbours)
-                {
-                    if ((m_DataPointData[m_DataTriangles[it].m_A].plate != m_DataPointData[m_DataTriangles[it].m_B].plate) || (m_DataPointData[m_DataTriangles[it].m_B].plate != m_DataPointData[m_DataTriangles[it].m_C].plate))
-                    {
-                        borderTriangle = true;
-                        break;
-                    }
-                }
                 plates[m_DataPointData[m_DataTriangles[i].m_A].plate].m_PlateTriangles.Add(i);
             }
-            if (borderTriangle)
+            m_CrustTriangles.Add(new DRTriangle(m_DataTriangles[i], m_CrustVertices));
+        }
+        foreach (Plate it in plates)
+        {
+            List<BoundingVolume> bvt_leaves = new List<BoundingVolume>();
+            int plate_tricount = it.m_PlateTriangles.Count();
+            for (int i = 0; i < plate_tricount; i++) // for all triangles in data
             {
-                plates[m_DataPointData[m_DataTriangles[i].m_A].plate].m_BorderTriangles.Add(i);
+                int tri_index = it.m_PlateTriangles[i];
+                BoundingVolume new_bb = new BoundingVolume(m_CrustTriangles[tri_index].m_CCenter, m_CrustTriangles[tri_index].m_CUnitRadius); // create a leaf bounding box
+                new_bb.m_TriangleIndex = tri_index; // denote the triangle index to the leaf
+                m_CrustTriangles[tri_index].m_BVolume = new_bb; // denote the leaf to the respective triangle
+                bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
             }
+            it.m_BVHPlate = ConstructBVH(bvt_leaves);
         }
-        foreach (Plate it in plates) {
-            it.m_TerrainAnchors.Add(it.m_BorderTriangles[0]);
-        }
+
         m_TectonicPlates = plates;
         m_TectonicPlatesCount = plates.Count;
 
-        ConstructBoundingBoxHiearchy();
+        m_PlatesVP = CalculatePlatesVP();
+        DetermineBorderTriangles();
     }
 
-    public void ConstructBoundingBoxHiearchy ()
+    public void DetermineBorderTriangles ()
     {
+        bool is_border;
+        foreach (Plate it in m_TectonicPlates)
+        {
+            int tri_count = it.m_PlateTriangles.Count;
+            for (int i = 0; i < tri_count; i++)
+            {
+                is_border = false;
+                int pi_a = m_CrustPointData[m_CrustTriangles[it.m_PlateTriangles[i]].m_A].plate;
+                int pi_b = m_CrustPointData[m_CrustTriangles[it.m_PlateTriangles[i]].m_B].plate;
+                int pi_c = m_CrustPointData[m_CrustTriangles[it.m_PlateTriangles[i]].m_C].plate;
+                if ((pi_a == pi_b) && (pi_b == pi_c))
+                {
+                    foreach (int it2 in m_CrustTriangles[it.m_PlateTriangles[i]].m_Neighbours)
+                    {
+                        pi_a = m_CrustPointData[m_CrustTriangles[it2].m_A].plate;
+                        pi_b = m_CrustPointData[m_CrustTriangles[it2].m_B].plate;
+                        pi_c = m_CrustPointData[m_CrustTriangles[it2].m_C].plate;
+                        if ((pi_a != pi_b) || (pi_b != pi_c))
+                        {
+                            is_border = true;
+                        }
 
+                    }
+                } 
+                if (is_border)
+                {
+                    it.m_BorderTriangles.Add(it.m_PlateTriangles[i]);
+                }
+            }
+        }
+    }
+
+    public int[,] CalculatePlatesVP ()
+    {
+        int[,] retVal = new int[m_TectonicPlatesCount, m_TectonicPlatesCount];
+        for (int i = 0; i < m_TectonicPlatesCount; i++)
+        {
+            for (int j = 0; j <= i; j++)
+            {
+                if (i == j)
+                {
+                    retVal[i, j] = 0;
+                } else
+                {
+                    if (m_TectonicPlates[i].m_Type >= 0)
+                    {
+                        if (m_TectonicPlates[j].m_Type < 0)
+                        {
+                            retVal[i, j] = 1;
+                        }
+                        else
+                        {
+                            retVal[i, j] = (m_TectonicPlates[i].m_Mass >= m_TectonicPlates[j].m_Mass ? -1 : 1);
+                        }
+                    }
+                    else
+                    {
+                        if (m_TectonicPlates[j].m_Type >= 0)
+                        {
+                            retVal[i, j] = -1;
+                        }
+                        else
+                        {
+                            retVal[i, j] = (m_TectonicPlates[i].m_Mass >= m_TectonicPlates[j].m_Mass ? -1 : 1);
+                        }
+                    }
+                }
+            }
+        }
+        for (int j = 0; j < m_TectonicPlatesCount; j++)
+        {
+            for (int i = 0; i < j; i++)
+            {
+                retVal[i, j] = -retVal[j, i];
+            }
+        }
+        return retVal;
     }
 
     public void MovePlates ()
     {
-        Vector3 move;
-        for (int i = 0; i < m_VerticesCount; i++)
+        for (int i = 0; i < m_TectonicPlatesCount; i++)
         {
-            move = APR.TectonicIterationStepTime*m_TectonicPlates[m_CrustPointData[i].plate].m_PlateAngularSpeed * (Vector3.Cross(m_TectonicPlates[m_CrustPointData[i].plate].m_RotationAxis, m_CrustVertices[i]));
-            m_CrustVertices[i] = (m_CrustVertices[i] + move).normalized;
+            m_TectonicPlates[i].m_Transform *= Quaternion.AngleAxis(APR.TectonicIterationStepTime * m_TectonicPlates[i].m_PlateAngularSpeed * 180.0f / Mathf.PI, m_TectonicPlates[i].m_RotationAxis);
         }
     }
 

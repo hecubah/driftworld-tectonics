@@ -20,7 +20,7 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_TriangleCollisionTestCShader = null;
     public ComputeShader m_CircleMergeShader = null;
     public ComputeShader m_BVHNearestNeighbourShader = null;
-    public ComputeShader m_BVHContureTestShader = null;
+    //public ComputeShader m_BVHContureTestShader = null;
 
     public uint m_RandomSeed = 0;
 
@@ -39,6 +39,18 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction()
     {
+        int n_plates = m_Planet.m_TectonicPlatesCount;
+        string a = "\n";
+        for (int i = 0; i < n_plates; i++)
+        {
+            for (int j = 0; j < n_plates; j++)
+            {
+                a += m_Planet.m_PlatesVP[i, j] + "\t";
+            }
+            a += "\n";
+        }
+        Debug.Log(a);
+
     }
 
     public void DebugFunction2()

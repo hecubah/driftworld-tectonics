@@ -41,6 +41,10 @@ public class DRTriangle
         m_C = source.m_C;
         m_VertexReference = reference;
         m_Neighbours = new List<int>();
+        foreach (int it in source.m_Neighbours)
+        {
+            m_Neighbours.Add(it);
+        }
         m_VerticesSet = new HashSet<int> { m_A, m_B, m_C };
         UpdateData();
     }
