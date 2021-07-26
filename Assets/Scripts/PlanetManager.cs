@@ -45,7 +45,7 @@ public class PlanetManager : MonoBehaviour
         {
             for (int j = 0; j < n_plates; j++)
             {
-                a += m_Planet.m_PlatesVP[i, j] + "\t";
+                a += m_Planet.m_PlatesOverlap[i, j] + "\t";
             }
             a += "\n";
         }
@@ -55,6 +55,14 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction2()
     {
+        int sum = 0;
+        foreach(Plate it in m_Planet.m_TectonicPlates)
+        {
+            int pr = it.m_BVHArray.Count;
+            Debug.Log(pr);
+            sum += pr;
+        }
+        Debug.Log("Součet: " + sum);
     }
 
     public void DebugFunction3()
@@ -179,6 +187,8 @@ public class PlanetManager : MonoBehaviour
 
     public void CAPPlatesBorderTexture(TectonicPlanet sphere)
     {
+
+
         int kernelHandle = m_PlatesBorderTextureCShader.FindKernel("CSPlatesBorderTexture");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
@@ -187,7 +197,6 @@ public class PlanetManager : MonoBehaviour
 
         Vector3[] triangle_points = new Vector3[3 * sphere.m_TrianglesCount];
         int[] point_values = new int[3 * sphere.m_TrianglesCount];
-        int[] triangle_neighbours = new int[3 * sphere.m_TrianglesCount];
         for (int i = 0; i < sphere.m_TrianglesCount; i++)
         {
             triangle_points[3 * i + 0] = sphere.m_CrustVertices[sphere.m_CrustTriangles[i].m_A];
@@ -196,28 +205,66 @@ public class PlanetManager : MonoBehaviour
             point_values[3 * i + 0] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_A].plate;
             point_values[3 * i + 1] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_B].plate;
             point_values[3 * i + 2] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_C].plate;
-            triangle_neighbours[3 * i + 0] = sphere.m_CrustTriangles[i].m_Neighbours[0];
-            triangle_neighbours[3 * i + 1] = sphere.m_CrustTriangles[i].m_Neighbours[1];
-            triangle_neighbours[3 * i + 2] = sphere.m_CrustTriangles[i].m_Neighbours[2];
         }
+
+        int[] overlap_matrix = new int[sphere.m_TectonicPlatesCount * sphere.m_TectonicPlatesCount];
+        int[] BVH_array_sizes = new int[sphere.m_TectonicPlatesCount];
+        List<BoundingVolumeStruct> BVArray_pass = new List<BoundingVolumeStruct>();
+        Vector4 [] plate_transforms = new Vector4[sphere.m_TectonicPlatesCount];
+
+        for (int i = 0; i < sphere.m_TectonicPlatesCount; i++)
+        {
+            for (int j = 0; j < sphere.m_TectonicPlatesCount; j++)
+            {
+                overlap_matrix[i * sphere.m_TectonicPlatesCount + j] = sphere.m_PlatesOverlap[i, j];
+            }
+            BVH_array_sizes[i] = sphere.m_TectonicPlates[i].m_BVHArray.Count;
+            BVArray_pass.AddRange(sphere.m_TectonicPlates[i].m_BVHArray);
+            Vector4 added_transform = new Vector4();
+            added_transform.x = sphere.m_TectonicPlates[i].m_Transform.x;
+            added_transform.y = sphere.m_TectonicPlates[i].m_Transform.y;
+            added_transform.z = sphere.m_TectonicPlates[i].m_Transform.z;
+            added_transform.w = sphere.m_TectonicPlates[i].m_Transform.w;
+            plate_transforms[i] = added_transform;
+              
+        }
+        BoundingVolumeStruct[] BVArray_finished = BVArray_pass.ToArray();
 
         ComputeBuffer triangle_points_buffer = new ComputeBuffer(triangle_points.Length, 12, ComputeBufferType.Default);
         ComputeBuffer point_values_buffer = new ComputeBuffer(point_values.Length, 4, ComputeBufferType.Default);
-        ComputeBuffer triangle_neighbours_buffer = new ComputeBuffer(triangle_neighbours.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer overlap_matrix_buffer = new ComputeBuffer(overlap_matrix.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer BVH_array_sizes_buffer = new ComputeBuffer(BVH_array_sizes.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer BVArray_finished_buffer = new ComputeBuffer(BVArray_finished.Length, 32, ComputeBufferType.Default);
+        ComputeBuffer plate_transforms_buffer = new ComputeBuffer(plate_transforms.Length, 16, ComputeBufferType.Default);
+
+
         triangle_points_buffer.SetData(triangle_points);
         point_values_buffer.SetData(point_values);
-        triangle_neighbours_buffer.SetData(triangle_neighbours);
+
+        overlap_matrix_buffer.SetData(overlap_matrix);
+        BVH_array_sizes_buffer.SetData(BVH_array_sizes);
+        BVArray_finished_buffer.SetData(BVArray_finished);
+        plate_transforms_buffer.SetData(plate_transforms);
 
         m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
         m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
-        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
-        m_PlatesBorderTextureCShader.SetInt("triangles_number", sphere.m_TrianglesCount);
-        m_PlatesBorderTextureCShader.SetInt("plates_number", sphere.m_TectonicPlatesCount);
+        m_PlatesBorderTextureCShader.SetInt("n_plates", sphere.m_TectonicPlatesCount);
+
+        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "overlap_matrix", overlap_matrix_buffer);
+        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
+        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "BVH_array", BVArray_finished_buffer);
+        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "plate_transforms", plate_transforms_buffer);
+
         m_PlatesBorderTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
         m_PlatesBorderTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
+
         triangle_points_buffer.Release();
         point_values_buffer.Release();
-        triangle_neighbours_buffer.Release();
+
+        overlap_matrix_buffer.Release();
+        BVH_array_sizes_buffer.Release();
+        BVArray_finished_buffer.Release();
+        plate_transforms_buffer.Release();
 
         RenderTexture.active = com_tex;
         Texture2D tex = new Texture2D(com_tex.width, com_tex.height);

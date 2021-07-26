@@ -43,7 +43,7 @@ public class TectonicPlanet
     public int m_TectonicPlatesCount;
     public List<Plate> m_TectonicPlates;
 
-    public int[,] m_PlatesVP;
+    public int[,] m_PlatesOverlap;
 
     public TectonicPlanet(float radius)
     {
@@ -81,7 +81,7 @@ public class TectonicPlanet
         m_RenderTrianglesCount = 0;
 
         m_TectonicPlates = new List<Plate>();
-        m_PlatesVP = null;
+        m_PlatesOverlap = null;
     }
 
     public static float UnitSphereDistance(Vector3 a, Vector3 b)
@@ -535,8 +535,6 @@ public class TectonicPlanet
             {
                 new_plate.m_InitElevation = APR.PlateInitSeaElevation; // plate is oceanic
             }
-            new_plate.m_Mass = 0.0f;
-            new_plate.m_Type = 0.0f;
             plates.Add(new_plate); // add new plate to the list
         }
         m_CrustVertices = new List<Vector3>();
@@ -587,12 +585,13 @@ public class TectonicPlanet
                 bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
             }
             it.m_BVHPlate = ConstructBVH(bvt_leaves);
+            it.BuildBVHArray();
         }
 
         m_TectonicPlates = plates;
         m_TectonicPlatesCount = plates.Count;
 
-        m_PlatesVP = CalculatePlatesVP();
+        m_PlatesOverlap = CalculatePlatesVP();
         DetermineBorderTriangles();
     }
 
@@ -650,7 +649,7 @@ public class TectonicPlanet
                         }
                         else
                         {
-                            retVal[i, j] = (m_TectonicPlates[i].m_Mass >= m_TectonicPlates[j].m_Mass ? -1 : 1);
+                            retVal[i, j] = ((float)m_TectonicPlates[i].m_Mass/(float)m_TectonicPlates[i].m_PlateVertices.Count >= (float)m_TectonicPlates[j].m_Mass/(float)m_TectonicPlates[j].m_PlateVertices.Count ? -1 : 1);
                         }
                     }
                     else
@@ -661,7 +660,7 @@ public class TectonicPlanet
                         }
                         else
                         {
-                            retVal[i, j] = (m_TectonicPlates[i].m_Mass >= m_TectonicPlates[j].m_Mass ? -1 : 1);
+                            retVal[i, j] = ((float)m_TectonicPlates[i].m_Mass / (float)m_TectonicPlates[i].m_PlateVertices.Count >= (float)m_TectonicPlates[j].m_Mass / (float)m_TectonicPlates[j].m_PlateVertices.Count ? -1 : 1);
                         }
                     }
                 }

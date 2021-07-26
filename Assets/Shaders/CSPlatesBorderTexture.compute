@@ -1,14 +1,29 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSPlatesBorderTexture
+#define MAX_BVS_SEARCHED 128
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
 RWTexture2D<float4> Result;
 StructuredBuffer<float3> triangle_points;
 StructuredBuffer<int> point_values;
-StructuredBuffer<int> triangle_neighbours;
-int triangles_number;
-int plates_number;
+
+int n_plates;
+
+StructuredBuffer<int> overlap_matrix;
+StructuredBuffer<int> BVH_array_sizes;
+
+struct BV {
+    int n_children;
+    int left_child;
+    int right_child;
+    int triangle_index;
+    float3 circumcenter;
+    float circumradius;
+};
+
+StructuredBuffer<BV> BVH_array;
+StructuredBuffer<float4> plate_transforms;
 
 float dist(float3 a, float3 b) {
     return acos(dot(a, b));
@@ -29,7 +44,7 @@ bool is_in_tri(float3 searchedpoint, float3 a, float3 b, float3 c) {
     abplane_test = dot(abcross, searchedpoint);
     bcplane_test = dot(bccross, searchedpoint);
     caplane_test = dot(cacross, searchedpoint);
-    return ((abplane_test * bcplane_test >= 0) && (bcplane_test * caplane_test >= 0) && (caplane_test * abplane_test >= 0) && (dot(triangle_barycenter, searchedpoint) >= 0));
+    return ((abplane_test >= 0) && (bcplane_test >= 0) && (caplane_test >= 0));
 }
 
 float barycentric_interpolation(float3 ipoint, float3 a, float a_val, float3 b, float b_val, float3 c, float c_val)
@@ -89,84 +104,95 @@ float4 HSVtoRGB(float h, float s, float v)
     return float4(ra+m, ga+m, ba+m, 1);
 }
 
+float4 qmul(float4 q1, float4 q2) {
+    return float4(
+        q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
+        q1.w * q2.w - dot(q1.xyz, q2.xyz)
+        );
+}
+
+float3 quat_rot(float3 v, float4 r) {
+    float4 r_c = r * float4(-1, -1, -1, 1);
+    return qmul(r, qmul(float4(v, 0), r_c)).xyz;
+}
+
+int found_in_bv(int index, int offset, float4 transform, float3 needle) {
+    int searched_indices_buffer[MAX_BVS_SEARCHED];
+    int found_index = -1;
+
+    int border_index = 0;
+    int current_index = 0;
+
+    searched_indices_buffer[border_index] = index;
+    border_index++;
+
+    while (current_index < min(border_index, MAX_BVS_SEARCHED)) {
+        int candidate_index = searched_indices_buffer[current_index];
+        BV candidate = BVH_array[offset + candidate_index];
+        float dot_prod = dot(needle, quat_rot(candidate.circumcenter, transform));
+        float multiplier = (candidate.circumradius < 0.005f ? 1.1f : 1.01f);
+
+        float dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
+        if (dist <= candidate.circumradius * multiplier) {
+            if (candidate.n_children == 2) {
+                searched_indices_buffer[border_index] = candidate.left_child;
+                border_index++;
+                searched_indices_buffer[border_index] = candidate.right_child;
+                border_index++;
+            }
+            else {
+                int trindex = candidate.triangle_index;
+                bool check = is_in_tri(needle, quat_rot(triangle_points[3 * trindex + 0], transform), quat_rot(triangle_points[3 * trindex + 1], transform), quat_rot(triangle_points[3 * trindex + 2], transform));
+                if (check) {
+                    return trindex;
+                }
+            }
+        }
+        current_index++;
+    }
+    return found_index;
+}
+
 [numthreads(4, 4, 4)]
 void CSPlatesBorderTexture(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
 {
     int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
     float PI = 3.141592653;
-    int loop = 0;
-    int MAX_LOOP = triangles_number;
-    float phi, theta, aside, bside, cside;
+    float phi, theta;
     phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
     theta = (1.0f - ((float)pix_coords.y + 0.5f) / 4096.0f) * PI;
     float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
-    float3 abcross, bccross, cacross, triangle_barycenter, neigh1_barycenter, neigh2_barycenter, neigh3_barycenter;
-    float abplane_test, bcplane_test, caplane_test;
-    int triangle_pointer = 0;
-    triangle_barycenter = bcenter(triangle_points[0], triangle_points[1], triangle_points[2]);
-    float triangle_pointer_dist = dist(triangle_barycenter, w_pixelpoint);
-    bool closest_barycenter;
-    int3 neighbours_indices;
-    bool found = false;
+    int found_index = -1;
+    int found_plate = -1;
+    int offset = 0;
 
-    do {
-        closest_barycenter = true;
-        neighbours_indices.x = triangle_neighbours[3 * triangle_pointer];
-        neighbours_indices.y = triangle_neighbours[3 * triangle_pointer + 1];
-        neighbours_indices.z = triangle_neighbours[3 * triangle_pointer + 2];
-        neigh1_barycenter = bcenter(triangle_points[3 * neighbours_indices.x], triangle_points[3 * neighbours_indices.x + 1], triangle_points[3 * neighbours_indices.x + 2]);
-        neigh2_barycenter = bcenter(triangle_points[3 * neighbours_indices.y], triangle_points[3 * neighbours_indices.y + 1], triangle_points[3 * neighbours_indices.y + 2]);
-        neigh3_barycenter = bcenter(triangle_points[3 * neighbours_indices.z], triangle_points[3 * neighbours_indices.z + 1], triangle_points[3 * neighbours_indices.z + 2]);
 
-        if (dist(neigh1_barycenter, w_pixelpoint) < triangle_pointer_dist) {
-            triangle_pointer_dist = dist(neigh1_barycenter, w_pixelpoint);
-            triangle_pointer = neighbours_indices.x;
-            closest_barycenter = false;
+    for (int i = 0; i < n_plates; i++) {
+        int help_index;
+        if (found_plate == -1) {
+            help_index = found_in_bv(0, offset, plate_transforms[i], w_pixelpoint);
+            if (help_index != -1) {
+                found_index = help_index;
+                found_plate = i;
+            }
         }
-        if (dist(neigh2_barycenter, w_pixelpoint) < triangle_pointer_dist) {
-            triangle_pointer_dist = dist(neigh2_barycenter, w_pixelpoint);
-            triangle_pointer = neighbours_indices.y;
-            closest_barycenter = false;
+        else if (overlap_matrix[i * n_plates + found_plate] != -1)
+        {
+            help_index = found_in_bv(0, offset, plate_transforms[i], w_pixelpoint);
+            if (help_index != -1) {
+                found_index = help_index;
+                found_plate = i;
+            }
         }
-        if (dist(neigh3_barycenter, w_pixelpoint) < triangle_pointer_dist) {
-            triangle_pointer_dist = dist(neigh3_barycenter, w_pixelpoint);
-            triangle_pointer = neighbours_indices.z;
-            closest_barycenter = false;
-        }
-        loop++;
-    } while ((!closest_barycenter) && (loop < MAX_LOOP));
-
-    neighbours_indices.x = triangle_neighbours[3 * triangle_pointer];
-    neighbours_indices.y = triangle_neighbours[3 * triangle_pointer + 1];
-    neighbours_indices.z = triangle_neighbours[3 * triangle_pointer + 2];
-
-    if (is_in_tri(w_pixelpoint, triangle_points[3 * neighbours_indices.x], triangle_points[3 * neighbours_indices.x + 1], triangle_points[3 * neighbours_indices.x + 2])) {
-        triangle_pointer = neighbours_indices.x;
+        offset += BVH_array_sizes[i];
     }
 
-    if (is_in_tri(w_pixelpoint, triangle_points[3 * neighbours_indices.y], triangle_points[3 * neighbours_indices.y + 1], triangle_points[3 * neighbours_indices.y + 2])) {
-        triangle_pointer = neighbours_indices.y;
-    }
-
-    if (is_in_tri(w_pixelpoint, triangle_points[3 * neighbours_indices.z], triangle_points[3 * neighbours_indices.z + 1], triangle_points[3 * neighbours_indices.z + 2])) {
-        triangle_pointer = neighbours_indices.z;
-    }
-
-    int a_plate, b_plate, c_plate;
-    a_plate = point_values[3 * triangle_pointer];
-    b_plate = point_values[3 * triangle_pointer + 1];
-    c_plate = point_values[3 * triangle_pointer + 2];
-    
-    float plate_hue;
-
-    if ((a_plate == b_plate) && (b_plate == c_plate)) {
-        
-        Result[pix_coords] = HSVtoRGB((float)a_plate/(float)plates_number*360.0f, 1, 1);
-    }
-    else {
+    if (found_index == -1) {
         Result[pix_coords] = float4(0, 0, 0, 1);
     }
-
+    else {
+        Result[pix_coords] = HSVtoRGB((float)found_plate / (float)n_plates * 360.0f, 1, 1);
+    }
 }
 
 /*

@@ -77,10 +77,10 @@ public class PlanetEditor : Editor
                     m_PlanetManager.m_Planet.MovePlates(); // move plates
                     m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
                 }
-            }
-            if (GUILayout.Button("Paint plate borders"))
-            {
-                m_PlanetManager.CAPPlatesBorderTexture(m_PlanetManager.m_Planet); // paint plate border texture over the mesh
+                if (GUILayout.Button("Paint plate borders"))
+                {
+                    m_PlanetManager.CAPPlatesBorderTexture(m_PlanetManager.m_Planet); // paint plate border texture over the mesh
+                }
             }
             if (GUILayout.Button("Initialize tectonic plates")) // new tectonic plates system
             {

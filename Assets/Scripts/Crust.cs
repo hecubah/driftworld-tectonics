@@ -35,16 +35,72 @@ public class Plate // maximal tectonic unit, the parameters drive certain decisi
     public float m_Mass; // total mass of the plate, sum of thickness values
     public float m_Type; // oceanic or continental plate, sum of elevation values
     public Quaternion m_Transform; // Relative transform caused by the motion of the plate
+    public List<BoundingVolumeStruct> m_BVHArray; // List representing the BVH for array buffer feeding of the compute buffers
+    
     public Plate (TectonicPlanet planet) // new plate with zeroed parameters
     {
         m_Planet = planet;
         m_PlateVertices = new List<int>();
         m_PlateTriangles = new List<int>();
         m_BorderTriangles = new List<int>();
+        m_BVHPlate = null;
         m_Transform = Quaternion.identity;
+        m_BVHArray = new List<BoundingVolumeStruct>();
+        m_Type = 0.0f;
+        m_Mass = 0.0f;
+    }
+
+    public void BuildBVHArray ()
+    {
+        m_BVHArray = new List<BoundingVolumeStruct>();
+        if (m_BVHPlate != null)
+        {
+            Queue<BoundingVolume> queue_feed = new Queue<BoundingVolume>();
+            int border_index = 0;
+            queue_feed.Enqueue(m_BVHPlate);
+            BoundingVolume source;
+            BoundingVolumeStruct fill;
+            while (queue_feed.Count > 0)
+            {
+                source = queue_feed.Dequeue();
+                fill = new BoundingVolumeStruct();
+                if (source.m_Children.Count == 2)
+                {
+                    fill.n_children = 2;
+                    fill.left_child = ++border_index;
+                    fill.right_child = ++border_index;
+                    queue_feed.Enqueue(source.m_Children[0]);
+                    queue_feed.Enqueue(source.m_Children[1]);
+                    fill.triangle_index = 0;
+                    fill.circumcenter = source.m_Circumcenter;
+                    fill.circumradius = source.m_Circumradius;
+                } else
+                {
+                    fill.n_children = 0;
+                    fill.left_child = 0;
+                    fill.right_child = 0;
+                    fill.triangle_index = source.m_TriangleIndex;
+                    fill.circumcenter = source.m_Circumcenter;
+                    fill.circumradius = source.m_Circumradius;
+                }
+                m_BVHArray.Add(fill);
+            }
+
+        }
+
     }
 }
 public class Crust
 {
 
+}
+
+public struct BoundingVolumeStruct
+{
+    public int n_children;
+    public int left_child;
+    public int right_child;
+    public int triangle_index;
+    public Vector3 circumcenter;
+    public float circumradius;
 }
