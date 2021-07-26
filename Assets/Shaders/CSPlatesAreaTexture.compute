@@ -1,5 +1,5 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSPlatesBorderTexture
+#pragma kernel CSPlatesAreaTexture
 #define MAX_BVS_SEARCHED 128
 
 // Create a RenderTexture with enableRandomWrite flag and set it
@@ -154,7 +154,7 @@ int found_in_bv(int index, int offset, float4 transform, float3 needle) {
 }
 
 [numthreads(4, 4, 4)]
-void CSPlatesBorderTexture(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+void CSPlatesAreaTexture(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
 {
     int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
     float PI = 3.141592653;

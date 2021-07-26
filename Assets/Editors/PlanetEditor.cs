@@ -79,7 +79,7 @@ public class PlanetEditor : Editor
                 }
                 if (GUILayout.Button("Paint plate borders"))
                 {
-                    m_PlanetManager.CAPPlatesBorderTexture(m_PlanetManager.m_Planet); // paint plate border texture over the mesh
+                    m_PlanetManager.CAPPlatesAreaTexture(m_PlanetManager.m_Planet); // paint plate border texture over the mesh
                 }
             }
             if (GUILayout.Button("Initialize tectonic plates")) // new tectonic plates system

@@ -15,7 +15,7 @@ public class PlanetManager : MonoBehaviour
     public string m_DataMeshFilename = "";
     public string m_RenderMeshFilename = "";
     public ComputeShader m_DefaultTerrainTextureCShader = null;
-    public ComputeShader m_PlatesBorderTextureCShader = null;
+    public ComputeShader m_PlatesAreaTextureCShader = null;
     public ComputeShader m_FractalTerrainCShader = null;
     public ComputeShader m_TriangleCollisionTestCShader = null;
     public ComputeShader m_CircleMergeShader = null;
@@ -185,11 +185,11 @@ public class PlanetManager : MonoBehaviour
         m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
     }
 
-    public void CAPPlatesBorderTexture(TectonicPlanet sphere)
+    public void CAPPlatesAreaTexture(TectonicPlanet sphere)
     {
 
 
-        int kernelHandle = m_PlatesBorderTextureCShader.FindKernel("CSPlatesBorderTexture");
+        int kernelHandle = m_PlatesAreaTextureCShader.FindKernel("CSPlatesBorderTexture");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
         com_tex.enableRandomWrite = true;
@@ -246,17 +246,17 @@ public class PlanetManager : MonoBehaviour
         BVArray_finished_buffer.SetData(BVArray_finished);
         plate_transforms_buffer.SetData(plate_transforms);
 
-        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
-        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
-        m_PlatesBorderTextureCShader.SetInt("n_plates", sphere.m_TectonicPlatesCount);
+        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
+        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
+        m_PlatesAreaTextureCShader.SetInt("n_plates", sphere.m_TectonicPlatesCount);
 
-        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "overlap_matrix", overlap_matrix_buffer);
-        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
-        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "BVH_array", BVArray_finished_buffer);
-        m_PlatesBorderTextureCShader.SetBuffer(kernelHandle, "plate_transforms", plate_transforms_buffer);
+        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "overlap_matrix", overlap_matrix_buffer);
+        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
+        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array", BVArray_finished_buffer);
+        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "plate_transforms", plate_transforms_buffer);
 
-        m_PlatesBorderTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
-        m_PlatesBorderTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
+        m_PlatesAreaTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
+        m_PlatesAreaTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
 
         triangle_points_buffer.Release();
         point_values_buffer.Release();
