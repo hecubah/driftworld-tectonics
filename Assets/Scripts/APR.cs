@@ -17,5 +17,6 @@ public static class APR
     public static float CrustThicknessMin = 0.04f; // minimum random crust thickness parameter
     public static float CrustThicknessMax = 0.06f; // maximum random crust thickness parameter
     public static float CrustElevationRandomThicknessRange = 0.01f; // how much the crust is varied in thickness across samples
+    public static float OceanBaseFloor = -0.5f; // base floor level when rendering without sample interpolation outside of tectonic plates
     public static int BVHConstructionRadius = 20; // interval radius for BVH construction
 }

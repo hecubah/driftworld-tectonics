@@ -24,10 +24,14 @@ public class PlanetEditor : Editor
             }
             m_PlanetManager.m_PropagateCrust = GUILayout.Toggle(m_PlanetManager.m_PropagateCrust, "Auto-propagate crust"); // toggle if the crust data should propagate automatically to main data
             m_PlanetManager.m_PropagateData = GUILayout.Toggle(m_PlanetManager.m_PropagateData, "Auto-propagate data"); // toggle if the main data should propagate automatically to render data
+            m_PlanetManager.m_ClampToOceanLevel = GUILayout.Toggle(m_PlanetManager.m_ClampToOceanLevel, "Clamp to ocean level"); // toggle if the elevation is to be clamped to ocean level
         }
         GUILayout.EndVertical(); // info box end
         if (GUILayout.Button("Load new planet")) // start button to load fresh planet
         {
+            m_PlanetManager.m_PropagateCrust = false;
+            m_PlanetManager.m_PropagateData = false;
+            m_PlanetManager.m_ClampToOceanLevel = false;
             m_PlanetManager.LoadNewPlanet(); // manager call for new mesh and topology
         }
         bool plates_render, data_render, default_render; // variables for button switching between render modes

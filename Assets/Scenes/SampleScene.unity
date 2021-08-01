@@ -966,7 +966,7 @@ MonoBehaviour:
   m_RenderMeshFilename: topomesh10000.dat
   m_DefaultTerrainTextureCShader: {fileID: 7200000, guid: e256be65a63892248be3dcb5e1716797,
     type: 3}
-  m_PlatesBorderTextureCShader: {fileID: 7200000, guid: abe531b600a520f48961f96322926a37,
+  m_PlatesAreaTextureCShader: {fileID: 7200000, guid: abe531b600a520f48961f96322926a37,
     type: 3}
   m_FractalTerrainCShader: {fileID: 7200000, guid: 45a8ab396e49c2340957752c7f7cea01,
     type: 3}
@@ -974,6 +974,10 @@ MonoBehaviour:
     type: 3}
   m_CircleMergeShader: {fileID: 7200000, guid: 67c0f866e7f0ae3409d5fdcdbf218cf9, type: 3}
   m_BVHNearestNeighbourShader: {fileID: 7200000, guid: d8a0db6cc20fea742bd3c959f9b06a30,
+    type: 3}
+  m_CrustToDataBaseShader: {fileID: 7200000, guid: 016dc696076448a4191e63bc1afd279f,
+    type: 3}
+  m_DataToRenderShader: {fileID: 7200000, guid: bea1c3ff193a97842bde00d04d94518f,
     type: 3}
   m_RandomSeed: 120
   m_BVHTreeDebugLevel: 0
@@ -984,6 +988,7 @@ MonoBehaviour:
   m_RenderMode: normal
   m_PropagateCrust: 0
   m_PropagateData: 0
+  m_ClampToOceanLevel: 0
 --- !u!4 &1329373857
 Transform:
   m_ObjectHideFlags: 0

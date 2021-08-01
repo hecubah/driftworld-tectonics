@@ -495,6 +495,48 @@ public class BoundingVolume
         return retVal;
     }
 
+    public static List<BoundingVolumeStruct> BuildBVHArray(BoundingVolume BV_root)
+    {
+        List<BoundingVolumeStruct> retVal = new List<BoundingVolumeStruct>();
+        if (BV_root != null)
+        {
+            Queue<BoundingVolume> queue_feed = new Queue<BoundingVolume>();
+            int border_index = 0;
+            queue_feed.Enqueue(BV_root);
+            BoundingVolume source;
+            BoundingVolumeStruct fill;
+            while (queue_feed.Count > 0)
+            {
+                source = queue_feed.Dequeue();
+                fill = new BoundingVolumeStruct();
+                if (source.m_Children.Count == 2)
+                {
+                    fill.n_children = 2;
+                    fill.left_child = ++border_index;
+                    fill.right_child = ++border_index;
+                    queue_feed.Enqueue(source.m_Children[0]);
+                    queue_feed.Enqueue(source.m_Children[1]);
+                    fill.triangle_index = 0;
+                    fill.circumcenter = source.m_Circumcenter;
+                    fill.circumradius = source.m_Circumradius;
+                }
+                else
+                {
+                    fill.n_children = 0;
+                    fill.left_child = 0;
+                    fill.right_child = 0;
+                    fill.triangle_index = source.m_TriangleIndex;
+                    fill.circumcenter = source.m_Circumcenter;
+                    fill.circumradius = source.m_Circumradius;
+                }
+                retVal.Add(fill);
+            }
+
+        }
+        return retVal;
+    }
+
+
     public List<int> SearchForPoint(Vector3 needle, List<DRTriangle> hay)
     {
         List<int> retVal = new List<int>();

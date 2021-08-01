@@ -20,6 +20,8 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_TriangleCollisionTestCShader = null;
     public ComputeShader m_CircleMergeShader = null;
     public ComputeShader m_BVHNearestNeighbourShader = null;
+    public ComputeShader m_CrustToDataBaseShader = null;
+    public ComputeShader m_DataToRenderShader = null;
     //public ComputeShader m_BVHContureTestShader = null;
 
     public uint m_RandomSeed = 0;
@@ -35,6 +37,7 @@ public class PlanetManager : MonoBehaviour
     [HideInInspector] public string m_RenderMode = "";
     [HideInInspector] public bool m_PropagateCrust = false;
     [HideInInspector] public bool m_PropagateData = false;
+    [HideInInspector] public bool m_ClampToOceanLevel = false;
 
 
     public void DebugFunction()
@@ -189,7 +192,7 @@ public class PlanetManager : MonoBehaviour
     {
 
 
-        int kernelHandle = m_PlatesAreaTextureCShader.FindKernel("CSPlatesBorderTexture");
+        int kernelHandle = m_PlatesAreaTextureCShader.FindKernel("CSPlatesAreaTexture");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
         com_tex.enableRandomWrite = true;

@@ -1,20 +1,17 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSPlatesAreaTexture
+#pragma kernel CSDataToRender
 #pragma warning( disable : 4714 ) // excess L1 cache registers
 #define MAX_BVS_SEARCHED 256
 #define EPSILON_TOLERANCE 0.00001f
+#define DEBUG_MISSING_ELEVATION -0.5f
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
-RWTexture2D<float4> Result;
 StructuredBuffer<float3> triangle_points;
-StructuredBuffer<int> point_values;
-
-int n_plates;
+StructuredBuffer<int> triangle_neighbours;
+StructuredBuffer<float> point_values;
 
 StructuredBuffer<int> overlap_matrix;
-StructuredBuffer<int> BVH_array_sizes;
-
 struct BV {
     int n_children;
     int left_child;
@@ -25,7 +22,9 @@ struct BV {
 };
 
 StructuredBuffer<BV> BVH_array;
-StructuredBuffer<float4> plate_transforms;
+StructuredBuffer<float3> render_vertices;
+int n_render_vertices;
+RWStructuredBuffer<float> elevations_out;
 
 float dist(float3 a, float3 b) {
     return acos(dot(a, b));
@@ -67,58 +66,7 @@ float barycentric_interpolation(float3 ipoint, float3 a, float a_val, float3 b, 
     return (u * a_val + v * b_val + w * c_val);
 }
 
-float4 HSVtoRGB(float h, float s, float v)
-{
-    float c = v * s;
-    float x = c * (float)(1 - (abs(((h / 60.0f) % 2) - 1)));
-    float m = v - c;
-    float ra, ga, ba;
-    if (h < 60) {
-        ra = c;
-        ga = x;
-        ba = 0;
-    }
-    else if (h < 120) {
-        ra = x;
-        ga = c;
-        ba = 0;
-    }
-    else if (h < 180) {
-        ra = 0;
-        ga = c;
-        ba = x;
-    }
-    else if (h < 240) {
-        ra = 0;
-        ga = x;
-        ba = c;
-    }
-    else if (h < 300) {
-        ra = x;
-        ga = 0;
-        ba = c;
-    }
-    else {
-        ra = c;
-        ga = 0;
-        ba = x;
-    }
-    return float4(ra+m, ga+m, ba+m, 1);
-}
-
-float4 qmul(float4 q1, float4 q2) {
-    return float4(
-        q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
-        q1.w * q2.w - dot(q1.xyz, q2.xyz)
-        );
-}
-
-float3 quat_rot(float3 v, float4 r) {
-    float4 r_c = r * float4(-1, -1, -1, 1);
-    return qmul(r, qmul(float4(v, 0), r_c)).xyz;
-}
-
-int found_in_bv(int index, int offset, float4 transform, float3 needle) {
+int found_in_bv(int index, float3 needle) {
     int searched_indices_buffer[MAX_BVS_SEARCHED];
     int found_index = -1;
 
@@ -128,14 +76,11 @@ int found_in_bv(int index, int offset, float4 transform, float3 needle) {
     searched_indices_buffer[border_index] = index;
     border_index++;
 
-    float3 needle_transformed = quat_rot(needle, transform * float4(-1, -1, -1, 1));
-
     while (current_index < min(border_index, MAX_BVS_SEARCHED)) {
         int candidate_index = searched_indices_buffer[current_index];
-        BV candidate = BVH_array[offset + candidate_index];
-        //float dot_prod = dot(needle, quat_rot(candidate.circumcenter, transform));
-        float dot_prod = dot(needle_transformed, candidate.circumcenter);
-        float multiplier = (candidate.circumradius < 0.005f ? 1.1f : 1.01f);
+        BV candidate = BVH_array[candidate_index];
+        float dot_prod = dot(needle, candidate.circumcenter);
+        float multiplier = (candidate.circumradius < 0.005f ? 1.5f : 1.1f);
 
         float dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
         if (dist <= candidate.circumradius * multiplier) {
@@ -147,10 +92,31 @@ int found_in_bv(int index, int offset, float4 transform, float3 needle) {
             }
             else {
                 int trindex = candidate.triangle_index;
-                //bool check = is_in_tri(needle, quat_rot(triangle_points[3 * trindex + 0], transform), quat_rot(triangle_points[3 * trindex + 1], transform), quat_rot(triangle_points[3 * trindex + 2], transform));
-                bool check = is_in_tri(needle_transformed,triangle_points[3 * trindex + 0], triangle_points[3 * trindex + 1], triangle_points[3 * trindex + 2]);
+                bool check = is_in_tri(needle, triangle_points[3 * trindex + 0], triangle_points[3 * trindex + 1], triangle_points[3 * trindex + 2]);
                 if (check) {
                     return trindex;
+                }
+                else {
+                    int tune_index = triangle_neighbours[3 * trindex + 0];
+                    check = is_in_tri(needle, triangle_points[3 * tune_index + 0], triangle_points[3 * tune_index + 1], triangle_points[3 * tune_index + 2]);
+                    if (check) {
+                        return tune_index;
+                    }
+                    else {
+                        tune_index = triangle_neighbours[3 * trindex + 1];
+                        check = is_in_tri(needle, triangle_points[3 * tune_index + 0], triangle_points[3 * tune_index + 1], triangle_points[3 * tune_index + 2]);
+                        if (check) {
+                            return tune_index;
+                        }
+                        else {
+                            tune_index = triangle_neighbours[3 * trindex + 2];
+                            check = is_in_tri(needle, triangle_points[3 * tune_index + 0], triangle_points[3 * tune_index + 1], triangle_points[3 * tune_index + 2]);
+                            if (check) {
+                                return tune_index;
+                            }
+                        }
+
+                    }
                 }
             }
         }
@@ -159,45 +125,28 @@ int found_in_bv(int index, int offset, float4 transform, float3 needle) {
     return found_index;
 }
 
-[numthreads(4, 4, 4)]
-void CSPlatesAreaTexture(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+[numthreads(64, 1, 1)]
+void CSDataToRender(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
 {
-    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
-    float PI = 3.141592653;
-    float phi, theta;
-    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
-    theta = (1.0f - ((float)pix_coords.y + 0.5f) / 4096.0f) * PI;
-    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
-    int found_index = -1;
-    int found_plate = -1;
-    int offset = 0;
-
-
-    for (int i = 0; i < n_plates; i++) {
-        int help_index;
-        if (found_plate == -1) {
-            help_index = found_in_bv(0, offset, plate_transforms[i], w_pixelpoint);
-            if (help_index != -1) {
-                found_index = help_index;
-                found_plate = i;
-            }
-        }
-        else if (overlap_matrix[i * n_plates + found_plate] != -1)
-        {
-            help_index = found_in_bv(0, offset, plate_transforms[i], w_pixelpoint);
-            if (help_index != -1) {
-                found_index = help_index;
-                found_plate = i;
-            }
-        }
-        offset += BVH_array_sizes[i];
+    int ivi = gID.x * 64 + gtID.x; // interpolated vertex index
+    if (ivi >= n_render_vertices) {
+        return;
     }
+    float3 iv = render_vertices[ivi];
+    int found_index = -1;
+
+    int help_index;
+    help_index = found_in_bv(0, iv);
+    if (help_index != -1) {
+        found_index = help_index;
+    }
+
 
     if (found_index == -1) {
-        Result[pix_coords] = float4(0, 0, 0, 1);
+        elevations_out[ivi] = DEBUG_MISSING_ELEVATION;
     }
     else {
-        Result[pix_coords] = HSVtoRGB((float)found_plate / (float)n_plates * 360.0f, 1, 1);
+        elevations_out[ivi] = barycentric_interpolation(iv, triangle_points[3 * found_index + 0], point_values[3 * found_index + 0], triangle_points[3 * found_index + 1], point_values[3 * found_index + 1], triangle_points[3 * found_index + 2], point_values[3 * found_index + 2]);
     }
 }
 
