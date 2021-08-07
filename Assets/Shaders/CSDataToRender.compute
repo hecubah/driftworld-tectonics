@@ -1,8 +1,8 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSDataToRender
 #pragma warning( disable : 4714 ) // excess L1 cache registers
-#define MAX_BVS_SEARCHED 256
-#define EPSILON_TOLERANCE 0.00001f
+#define MAX_BVS_SEARCHED 512
+#define EPSILON_TOLERANCE 0.00005f
 #define DEBUG_MISSING_ELEVATION -0.5f
 
 // Create a RenderTexture with enableRandomWrite flag and set it

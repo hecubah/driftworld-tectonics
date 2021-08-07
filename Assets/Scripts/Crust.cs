@@ -7,7 +7,7 @@ public class PointData // object containint additional vertex data
 {
     public float elevation = 0; // elevation parameter
     public float thickness = 0; // thickness parameter
-    public int plate = 0; // which plate the vertex belongs to
+    public int plate = -1; // which plate the vertex belongs to - -1 means no plate
 
     public PointData() // default constructor with blank data - zero plate index means something only if the list of plates is not empty
     {
@@ -18,6 +18,7 @@ public class PointData // object containint additional vertex data
     public PointData(PointData source) // copy constructor - unused at the moment
     {
         elevation = source.elevation;
+        thickness = source.thickness;
         plate = source.plate;
     }
 }

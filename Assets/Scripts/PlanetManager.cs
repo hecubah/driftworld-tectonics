@@ -20,8 +20,9 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_TriangleCollisionTestCShader = null;
     public ComputeShader m_CircleMergeShader = null;
     public ComputeShader m_BVHNearestNeighbourShader = null;
-    public ComputeShader m_CrustToDataBaseShader = null;
+    public ComputeShader m_CrustToDataShader = null;
     public ComputeShader m_DataToRenderShader = null;
+    public ComputeShader m_TerrainesConstructShader = null;
     //public ComputeShader m_BVHContureTestShader = null;
 
     public uint m_RandomSeed = 0;
@@ -42,30 +43,40 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction()
     {
-        int n_plates = m_Planet.m_TectonicPlatesCount;
-        string a = "\n";
-        for (int i = 0; i < n_plates; i++)
+        ComputeShader work_shader = m_TerrainesConstructShader;
+        int n_loops = 100000;
+        int kernelHandle = work_shader.FindKernel("CSTerrainesConstruct");
+        int size = 1500;
+        int [] array = new int[size];
+        for (int i = 0; i < size; i++)
         {
-            for (int j = 0; j < n_plates; j++)
-            {
-                a += m_Planet.m_PlatesOverlap[i, j] + "\t";
-            }
-            a += "\n";
+            array[i] = 0;
         }
-        Debug.Log(a);
+
+        ComputeBuffer array_buffer = new ComputeBuffer(size, 4, ComputeBufferType.Default);
+        array_buffer.SetData(array);
+        work_shader.SetBuffer(kernelHandle, "checks", array_buffer);
+        work_shader.SetInt("n_loops", n_loops);
+        work_shader.SetInt("size", size);
+        work_shader.Dispatch(kernelHandle, size / 64 + (size % 64 != 0 ? 1 : 0), 1, 1);
+
+        array_buffer.GetData(array);
+        array_buffer.Release();
+
+        int sum = 0;
+        for (int i = 0; i < size; i++)
+        {
+            sum += array[i];
+        }
+        Debug.Log("Součet je " + sum);
+
+
+
 
     }
 
     public void DebugFunction2()
     {
-        int sum = 0;
-        foreach(Plate it in m_Planet.m_TectonicPlates)
-        {
-            int pr = it.m_BVHArray.Count;
-            Debug.Log(pr);
-            sum += pr;
-        }
-        Debug.Log("Součet: " + sum);
     }
 
     public void DebugFunction3()
@@ -200,6 +211,7 @@ public class PlanetManager : MonoBehaviour
 
         Vector3[] triangle_points = new Vector3[3 * sphere.m_TrianglesCount];
         int[] point_values = new int[3 * sphere.m_TrianglesCount];
+        int[] triangle_neighbours = new int[3 * sphere.m_TrianglesCount];
         for (int i = 0; i < sphere.m_TrianglesCount; i++)
         {
             triangle_points[3 * i + 0] = sphere.m_CrustVertices[sphere.m_CrustTriangles[i].m_A];
@@ -208,12 +220,21 @@ public class PlanetManager : MonoBehaviour
             point_values[3 * i + 0] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_A].plate;
             point_values[3 * i + 1] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_B].plate;
             point_values[3 * i + 2] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_C].plate;
+            triangle_neighbours[3 * i + 0] = sphere.m_CrustTriangles[i].m_Neighbours[0];
+            triangle_neighbours[3 * i + 1] = sphere.m_CrustTriangles[i].m_Neighbours[1];
+            triangle_neighbours[3 * i + 2] = sphere.m_CrustTriangles[i].m_Neighbours[2];
         }
 
         int[] overlap_matrix = new int[sphere.m_TectonicPlatesCount * sphere.m_TectonicPlatesCount];
         int[] BVH_array_sizes = new int[sphere.m_TectonicPlatesCount];
         List<BoundingVolumeStruct> BVArray_pass = new List<BoundingVolumeStruct>();
         Vector4 [] plate_transforms = new Vector4[sphere.m_TectonicPlatesCount];
+
+        int[] vertex_plates = new int[sphere.m_VerticesCount];
+        for (int i = 0; i < sphere.m_VerticesCount; i++)
+        {
+            vertex_plates[i] = sphere.m_CrustPointData[i].plate;
+        }
 
         for (int i = 0; i < sphere.m_TectonicPlatesCount; i++)
         {
@@ -239,10 +260,14 @@ public class PlanetManager : MonoBehaviour
         ComputeBuffer BVH_array_sizes_buffer = new ComputeBuffer(BVH_array_sizes.Length, 4, ComputeBufferType.Default);
         ComputeBuffer BVArray_finished_buffer = new ComputeBuffer(BVArray_finished.Length, 32, ComputeBufferType.Default);
         ComputeBuffer plate_transforms_buffer = new ComputeBuffer(plate_transforms.Length, 16, ComputeBufferType.Default);
+        ComputeBuffer triangle_neighbours_buffer = new ComputeBuffer(triangle_neighbours.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer vertex_plates_buffer = new ComputeBuffer(vertex_plates.Length, 4, ComputeBufferType.Default);
 
 
         triangle_points_buffer.SetData(triangle_points);
         point_values_buffer.SetData(point_values);
+        triangle_neighbours_buffer.SetData(triangle_neighbours);
+        vertex_plates_buffer.SetData(vertex_plates);
 
         overlap_matrix_buffer.SetData(overlap_matrix);
         BVH_array_sizes_buffer.SetData(BVH_array_sizes);
@@ -257,6 +282,8 @@ public class PlanetManager : MonoBehaviour
         m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
         m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array", BVArray_finished_buffer);
         m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "plate_transforms", plate_transforms_buffer);
+        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
+        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "vertex_plates", vertex_plates_buffer);
 
         m_PlatesAreaTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
         m_PlatesAreaTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
@@ -268,6 +295,9 @@ public class PlanetManager : MonoBehaviour
         BVH_array_sizes_buffer.Release();
         BVArray_finished_buffer.Release();
         plate_transforms_buffer.Release();
+
+        triangle_neighbours_buffer.Release();
+        vertex_plates_buffer.Release();
 
         RenderTexture.active = com_tex;
         Texture2D tex = new Texture2D(com_tex.width, com_tex.height);

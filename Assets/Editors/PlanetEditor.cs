@@ -85,6 +85,16 @@ public class PlanetEditor : Editor
                 {
                     m_PlanetManager.CAPPlatesAreaTexture(m_PlanetManager.m_Planet); // paint plate border texture over the mesh
                 }
+                if (GUILayout.Button("Recalculate missing samples"))
+                {
+                    m_PlanetManager.m_Planet.CrustToDataRecalculateSamples(); // recalculate data mesh filling in missing samples
+                    m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
+                }
+                if (GUILayout.Button("Resample crust"))
+                {
+                    m_PlanetManager.m_Planet.ResampleCrust(); // recalculate data mesh filling in missing samples
+                    m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
+                }
             }
             if (GUILayout.Button("Initialize tectonic plates")) // new tectonic plates system
             {

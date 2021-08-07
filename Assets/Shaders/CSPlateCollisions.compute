@@ -1,0 +1,129 @@
+﻿#pragma kernel CSPlateCollisions
+
+#pragma warning( disable : 4714 ) // excess L1 cache registers
+#define MAX_BVS_SEARCHED 512
+#define EPSILON_TOLERANCE 0.00005f
+#define DEBUG_MISSING_ELEVATION -0.5f
+#define MAX_DISTANCE 1000
+
+StructuredBuffer<float3> triangle_vertices; // triangle vertex vectors
+
+StructuredBuffer<int> overlap_matrix; // plates' overlaps
+struct BV {
+    int n_children;
+    int left_child;
+    int right_child;
+    int triangle_index;
+    float3 circumcenter;
+    float circumradius;
+};
+
+StructuredBuffer<BV> BVH_array; // BV hiearchy of all respective plate triangles
+StructuredBuffer<int> BVH_array_sizes; // BV hiearchy sizes (pivots for BVH array)
+StructuredBuffer<int> offsets; // prefix sum of BV hiearchy sizes 
+StructuredBuffer<float4> plate_transforms; // quaternion array of geometry rotations
+
+int maxn_border_triangles;
+int n_crust_border_triangles;
+int n_plates;
+RWStructuredBuffer<float3> collisions; // 3d array of collision results (collision positions defining the collision front)
+
+StructuredBuffer<int> crust_border_triangles_array;
+StructuredBuffer<int> crust_border_triangles_circumcenters_array;
+StructuredBuffer<int> crust_border_triangles_circumradii_array;
+StructuredBuffer<int> crust_border_triangles_array_sizes;
+
+
+float4 qmul(float4 q1, float4 q2) {
+    return float4(
+        q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
+        q1.w * q2.w - dot(q1.xyz, q2.xyz)
+        );
+}
+
+float3 quat_rot(float3 v, float4 r) {
+    float4 r_c = r * float4(-1, -1, -1, 1);
+    return qmul(r, qmul(float4(v, 0), r_c)).xyz;
+}
+
+bool is_in_tri(float3 searchedpoint, float3 a, float3 b, float3 c) {
+    float3 abcross, bccross, cacross, triangle_barycenter;
+    float abplane_test, bcplane_test, caplane_test;
+    abcross = cross(a, b);
+    bccross = cross(b, c);
+    cacross = cross(c, a);
+    triangle_barycenter = normalize(a + b + c);
+    abplane_test = dot(abcross, searchedpoint);
+    bcplane_test = dot(bccross, searchedpoint);
+    caplane_test = dot(cacross, searchedpoint);
+    return ((abplane_test + EPSILON_TOLERANCE >= 0) && (bcplane_test + EPSILON_TOLERANCE >= 0) && (caplane_test + EPSILON_TOLERANCE >= 0));
+}
+
+int found_in_bv(int index, int offset, float4 transform, float3 needle) {
+    int searched_indices_buffer[MAX_BVS_SEARCHED];
+    int found_index = -1;
+
+    int border_index = 0;
+    int current_index = 0;
+
+    searched_indices_buffer[border_index] = index;
+    border_index++;
+
+    float3 needle_transformed = quat_rot(needle, transform * float4(-1, -1, -1, 1));
+
+    while (current_index < min(border_index, MAX_BVS_SEARCHED)) {
+        int candidate_index = searched_indices_buffer[current_index];
+        BV candidate = BVH_array[offset + candidate_index];
+        //float dot_prod = dot(needle, quat_rot(candidate.circumcenter, transform));
+        float dot_prod = dot(needle_transformed, candidate.circumcenter);
+        float multiplier = (candidate.circumradius < 0.005f ? 1.5f : 1.1f);
+
+        float dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
+        if (dist <= candidate.circumradius * multiplier) {
+            if (candidate.n_children == 2) {
+                searched_indices_buffer[border_index] = candidate.left_child;
+                border_index++;
+                searched_indices_buffer[border_index] = candidate.right_child;
+                border_index++;
+            }
+            else {
+                /*
+                int trindex = candidate.triangle_index;
+                //bool check = is_in_tri(needle, quat_rot(triangle_points[3 * trindex + 0], transform), quat_rot(triangle_points[3 * trindex + 1], transform), quat_rot(triangle_points[3 * trindex + 2], transform));
+                bool check = is_in_tri(needle_transformed, triangle_points[3 * trindex + 0], triangle_points[3 * trindex + 1], triangle_points[3 * trindex + 2]);
+                if (check) {
+                    return trindex;
+                }
+                */
+                int trindex = candidate.triangle_index;
+                bool check = is_in_tri(needle_transformed, triangle_vertices[3 * trindex + 0], triangle_vertices[3 * trindex + 1], triangle_vertices[3 * trindex + 2]);
+                if (check) {
+                    return trindex;
+                }
+            }
+        }
+        current_index++;
+    }
+    return found_index;
+}
+
+
+
+[numthreads(64,1,1)]
+void CSPlateCollisions(uint3 dID : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+
+    //Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
+    int ivi = dID.x; // interpolated vertex index
+    if (ivi >= n_crust_border_triangles) {
+        return;
+    }
+    int main_plate_index = 0;
+    //while (main_plate_index <)
+
+    //float3 iv = data_vertices[ivi];
+    //int found_index = -1;
+    //int found_plate = -1;
+    //int offset = 0;
+}

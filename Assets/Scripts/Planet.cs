@@ -181,12 +181,13 @@ public class TectonicPlanet
 
     public void CrustToData() // WIP
     {
-        ComputeShader work_shader = m_PlanetManager.m_CrustToDataBaseShader;
+        ComputeShader work_shader = m_PlanetManager.m_CrustToDataShader;
 
         int kernelHandle = work_shader.FindKernel("CSCrustToDataBase");
 
         Vector3[] triangle_points = new Vector3[3 * m_TrianglesCount];
         float[] point_values = new float[3 * m_TrianglesCount];
+        int[] triangle_neighbours = new int[3 * m_TrianglesCount];
         for (int i = 0; i < m_TrianglesCount; i++)
         {
             triangle_points[3 * i + 0] = m_CrustVertices[m_CrustTriangles[i].m_A];
@@ -195,12 +196,21 @@ public class TectonicPlanet
             point_values[3 * i + 0] = m_CrustPointData[m_CrustTriangles[i].m_A].elevation;
             point_values[3 * i + 1] = m_CrustPointData[m_CrustTriangles[i].m_B].elevation;
             point_values[3 * i + 2] = m_CrustPointData[m_CrustTriangles[i].m_C].elevation;
+            triangle_neighbours[3 * i + 0] = m_CrustTriangles[i].m_Neighbours[0];
+            triangle_neighbours[3 * i + 1] = m_CrustTriangles[i].m_Neighbours[1];
+            triangle_neighbours[3 * i + 2] = m_CrustTriangles[i].m_Neighbours[2];
         }
 
         int[] overlap_matrix = new int[m_TectonicPlatesCount * m_TectonicPlatesCount];
         int[] BVH_array_sizes = new int[m_TectonicPlatesCount];
         List<BoundingVolumeStruct> BVArray_pass = new List<BoundingVolumeStruct>();
         Vector4[] plate_transforms = new Vector4[m_TectonicPlatesCount];
+
+        int[] vertex_plates = new int[m_VerticesCount];
+        for (int i = 0; i < m_VerticesCount; i++)
+        {
+            vertex_plates[i] = m_CrustPointData[i].plate;
+        }
 
         for (int i = 0; i < m_TectonicPlatesCount; i++)
         {
@@ -233,9 +243,15 @@ public class TectonicPlanet
         ComputeBuffer elevations_out_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
         ComputeBuffer plates_out_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
 
+        ComputeBuffer triangle_neighbours_buffer = new ComputeBuffer(triangle_neighbours.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer vertex_plates_buffer = new ComputeBuffer(vertex_plates.Length, 4, ComputeBufferType.Default);
+
 
         triangle_points_buffer.SetData(triangle_points);
         point_values_buffer.SetData(point_values);
+
+        triangle_neighbours_buffer.SetData(triangle_neighbours);
+        vertex_plates_buffer.SetData(vertex_plates);
 
         overlap_matrix_buffer.SetData(overlap_matrix);
         BVH_array_sizes_buffer.SetData(BVH_array_sizes);
@@ -258,6 +274,10 @@ public class TectonicPlanet
         work_shader.SetBuffer(kernelHandle, "plates_out", plates_out_buffer);
         work_shader.SetFloat("ocean_base_floor", APR.OceanBaseFloor);
         work_shader.SetInt("n_data_vertices", m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
+        work_shader.SetBuffer(kernelHandle, "vertex_plates", vertex_plates_buffer);
+
 
 
         work_shader.Dispatch(kernelHandle, m_VerticesCount/64 + (m_VerticesCount%64 != 0 ? 1 : 0), 1, 1);
@@ -282,6 +302,10 @@ public class TectonicPlanet
 
         elevations_out_buffer.Release();
         plates_out_buffer.Release();
+
+        triangle_neighbours_buffer.Release();
+        vertex_plates_buffer.Release();
+
 
         /*
         for (int i = 0; i < m_VerticesCount; i++)
@@ -417,7 +441,12 @@ public class TectonicPlanet
         float elevation;
         for (int i = 0; i < m_VerticesCount; i++)
         {
-            elevation = (m_CrustPointData[i].elevation > 0 ? m_CrustPointData[i].elevation : 0);
+            //elevation = (m_CrustPointData[i].elevation > 0 ? m_CrustPointData[i].elevation : 0);
+            elevation = m_CrustPointData[i].elevation;
+            if ((m_PlanetManager.m_ClampToOceanLevel) && (elevation < 0))
+            {
+                elevation = 0;
+            }
             vertices_array[i] = (m_Radius + elevation) * (m_TectonicPlates[m_CrustPointData[i].plate].m_Transform * m_CrustVertices[i]);
         }
         List<int> triangles = new List<int>();
@@ -438,7 +467,8 @@ public class TectonicPlanet
     {
         if (propagate_crust)
         {
-            CrustToData();
+            //CrustToData();
+            CrustToDataRecalculateSamples();
         }
         vertices_array = m_DataVertices.ToArray();
         float elevation;
@@ -713,10 +743,10 @@ public class TectonicPlanet
             new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, APR.MaxPlateAngularSpeed); // angular speed of the plate
             if (m_Random.Range(0f, 1f) < APR.PlateInitLandRatio)
             {
-                new_plate.m_InitElevation = APR.PlateInitLandElevation; // plate is continental
+                new_plate.m_InitElevation = APR.AverageContinentalElevation; // plate is continental
             } else
             {
-                new_plate.m_InitElevation = APR.PlateInitSeaElevation; // plate is oceanic
+                new_plate.m_InitElevation = APR.AverageOceanicDepth; // plate is oceanic
             }
             plates.Add(new_plate); // add new plate to the list
         }
@@ -952,6 +982,231 @@ public class TectonicPlanet
             bvlist_out = new List<BoundingVolume>();
         }
         return bvlist_in[0];
+    }
+
+    public void CrustToDataRecalculateSamples()
+    {
+        ComputeShader work_shader = m_PlanetManager.m_CrustToDataShader;
+
+        int kernelHandle = work_shader.FindKernel("CSCrustToDataRecalculateSamples");
+
+        Vector3[] triangle_points = new Vector3[3 * m_TrianglesCount];
+        float[] vertex_elevations = new float[3 * m_TrianglesCount];
+        int[] triangle_neighbours = new int[3 * m_TrianglesCount];
+
+        int[] vertex_plates = new int[3 * m_TrianglesCount];
+        for (int i = 0; i < m_TrianglesCount; i++)
+        {
+            triangle_points[3 * i + 0] = m_CrustVertices[m_CrustTriangles[i].m_A];
+            triangle_points[3 * i + 1] = m_CrustVertices[m_CrustTriangles[i].m_B];
+            triangle_points[3 * i + 2] = m_CrustVertices[m_CrustTriangles[i].m_C];
+            vertex_elevations[3 * i + 0] = m_CrustPointData[m_CrustTriangles[i].m_A].elevation;
+            vertex_elevations[3 * i + 1] = m_CrustPointData[m_CrustTriangles[i].m_B].elevation;
+            vertex_elevations[3 * i + 2] = m_CrustPointData[m_CrustTriangles[i].m_C].elevation;
+            vertex_plates[3 * i + 0] = m_CrustPointData[m_CrustTriangles[i].m_A].plate;
+            vertex_plates[3 * i + 1] = m_CrustPointData[m_CrustTriangles[i].m_B].plate;
+            vertex_plates[3 * i + 2] = m_CrustPointData[m_CrustTriangles[i].m_C].plate;
+            triangle_neighbours[3 * i + 0] = m_CrustTriangles[i].m_Neighbours[0];
+            triangle_neighbours[3 * i + 1] = m_CrustTriangles[i].m_Neighbours[1];
+            triangle_neighbours[3 * i + 2] = m_CrustTriangles[i].m_Neighbours[2];
+        }
+        int[] overlap_matrix = new int[m_TectonicPlatesCount * m_TectonicPlatesCount];
+        int[] BVH_array_sizes = new int[m_TectonicPlatesCount];
+        List<BoundingVolumeStruct> BVArray_pass = new List<BoundingVolumeStruct>();
+        Vector4[] plate_transforms = new Vector4[m_TectonicPlatesCount];
+
+
+        List<int> border_triangles_array_sizes_list = new List<int>();
+        List<int> border_triangles_array_list = new List<int>();
+
+        for (int i = 0; i < m_TectonicPlatesCount; i++)
+        {
+            for (int j = 0; j < m_TectonicPlatesCount; j++)
+            {
+                overlap_matrix[i * m_TectonicPlatesCount + j] = m_PlatesOverlap[i, j];
+            }
+            BVH_array_sizes[i] = m_TectonicPlates[i].m_BVHArray.Count;
+            BVArray_pass.AddRange(m_TectonicPlates[i].m_BVHArray);
+            Vector4 added_transform = new Vector4();
+            added_transform.x = m_TectonicPlates[i].m_Transform.x;
+            added_transform.y = m_TectonicPlates[i].m_Transform.y;
+            added_transform.z = m_TectonicPlates[i].m_Transform.z;
+            added_transform.w = m_TectonicPlates[i].m_Transform.w;
+            plate_transforms[i] = added_transform;
+
+            border_triangles_array_sizes_list.Add(m_TectonicPlates[i].m_BorderTriangles.Count);
+            border_triangles_array_list.AddRange(m_TectonicPlates[i].m_BorderTriangles);
+            /*
+            for (int j = 0; j < m_TectonicPlates[i].m_BorderTriangles.Count; j++)
+            {
+                //border_triangles_array_list.Add(m_CrustTriangles[m_TectonicPlates[i].m_BorderTriangles[j]].m_BCenter);
+            }
+            */
+        }
+        BoundingVolumeStruct[] BVArray_finished = BVArray_pass.ToArray();
+
+        int[] border_triangles_array_sizes = border_triangles_array_sizes_list.ToArray();
+        int[] border_triangles_array = border_triangles_array_list.ToArray();
+
+        Vector3[] data_vertices = m_DataVertices.ToArray();
+
+        ComputeBuffer triangle_points_buffer = new ComputeBuffer(triangle_points.Length, 12, ComputeBufferType.Default);
+        ComputeBuffer vertex_elevations_buffer = new ComputeBuffer(vertex_elevations.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer overlap_matrix_buffer = new ComputeBuffer(overlap_matrix.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer BVH_array_sizes_buffer = new ComputeBuffer(BVH_array_sizes.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer BVArray_finished_buffer = new ComputeBuffer(BVArray_finished.Length, 32, ComputeBufferType.Default);
+        ComputeBuffer plate_transforms_buffer = new ComputeBuffer(plate_transforms.Length, 16, ComputeBufferType.Default);
+
+        ComputeBuffer data_vertices_buffer = new ComputeBuffer(m_VerticesCount, 12, ComputeBufferType.Default);
+        ComputeBuffer elevations_out_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+        ComputeBuffer plates_out_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+
+        ComputeBuffer triangle_neighbours_buffer = new ComputeBuffer(triangle_neighbours.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer vertex_plates_buffer = new ComputeBuffer(vertex_plates.Length, 4, ComputeBufferType.Default);
+
+        ComputeBuffer border_triangles_array_sizes_buffer = new ComputeBuffer(border_triangles_array_sizes.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer border_triangles_array_buffer = new ComputeBuffer(border_triangles_array.Length, 4, ComputeBufferType.Default);
+
+
+        triangle_points_buffer.SetData(triangle_points);
+        vertex_elevations_buffer.SetData(vertex_elevations);
+
+        triangle_neighbours_buffer.SetData(triangle_neighbours);
+        vertex_plates_buffer.SetData(vertex_plates);
+
+        overlap_matrix_buffer.SetData(overlap_matrix);
+        BVH_array_sizes_buffer.SetData(BVH_array_sizes);
+        BVArray_finished_buffer.SetData(BVArray_finished);
+        plate_transforms_buffer.SetData(plate_transforms);
+
+        data_vertices_buffer.SetData(data_vertices);
+
+        border_triangles_array_sizes_buffer.SetData(border_triangles_array_sizes);
+        border_triangles_array_buffer.SetData(border_triangles_array);
+
+        work_shader.SetBuffer(kernelHandle, "triangle_vertices", triangle_points_buffer);
+        work_shader.SetBuffer(kernelHandle, "vertex_elevations", vertex_elevations_buffer);
+        work_shader.SetInt("n_plates", m_TectonicPlatesCount);
+
+        work_shader.SetBuffer(kernelHandle, "overlap_matrix", overlap_matrix_buffer);
+        work_shader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
+        work_shader.SetBuffer(kernelHandle, "BVH_array", BVArray_finished_buffer);
+        work_shader.SetBuffer(kernelHandle, "plate_transforms", plate_transforms_buffer);
+
+        work_shader.SetBuffer(kernelHandle, "data_vertices", data_vertices_buffer);
+        work_shader.SetBuffer(kernelHandle, "elevations_out", elevations_out_buffer);
+        work_shader.SetBuffer(kernelHandle, "plates_out", plates_out_buffer);
+        work_shader.SetFloat("ocean_base_floor", APR.OceanBaseFloor);
+
+        work_shader.SetFloat("highest_oceanic_ridge_elevation", APR.HighestOceanicRidgeElevation);
+        work_shader.SetFloat("abyssal_plains_elevation", APR.AbyssalPlainsElevation);
+        work_shader.SetFloat("oceanic_ridge_elevation_falloff", APR.OceanicRidgeElevationFalloff);
+
+        work_shader.SetInt("n_data_vertices", m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
+        work_shader.SetBuffer(kernelHandle, "vertex_plates", vertex_plates_buffer);
+
+        work_shader.SetBuffer(kernelHandle, "crust_border_triangles_array", border_triangles_array_buffer);
+        work_shader.SetBuffer(kernelHandle, "crust_border_triangles_array_sizes", border_triangles_array_sizes_buffer);
+        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles_array_bcenters", border_triangles_array_buffer);
+
+
+
+        work_shader.Dispatch(kernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1);
+
+        triangle_points_buffer.Release();
+        vertex_elevations_buffer.Release();
+
+        overlap_matrix_buffer.Release();
+        BVH_array_sizes_buffer.Release();
+        BVArray_finished_buffer.Release();
+        plate_transforms_buffer.Release();
+
+        data_vertices_buffer.Release();
+
+        border_triangles_array_sizes_buffer.Release();
+        border_triangles_array_buffer.Release();
+
+        float[] elevations_out = new float[m_VerticesCount];
+        elevations_out_buffer.GetData(elevations_out);
+
+        int[] plates_out = new int[m_VerticesCount];
+        plates_out_buffer.GetData(plates_out);
+
+
+        for (int i = 0; i < m_VerticesCount; i++)
+        {
+            m_DataPointData[i].elevation = elevations_out[i];
+            m_DataPointData[i].plate = plates_out[i];
+
+        }
+
+        elevations_out_buffer.Release();
+        plates_out_buffer.Release();
+
+        triangle_neighbours_buffer.Release();
+        vertex_plates_buffer.Release();
+        /*
+        Dictionary<int, int> platen = new Dictionary<int, int>();
+        for (int i = 0; i < m_VerticesCount; i++)
+        {
+            int plate = m_DataPointData[i].plate;
+            if (!platen.ContainsKey(plate))
+            {
+                platen[plate] = 1;
+            }
+            else
+            {
+                platen[plate]++;
+            }
+        }
+        foreach(int it in platen.Keys)
+        {
+            Debug.Log(it + ": " + platen[it]);
+        }
+        */
+    }
+
+    public void ResampleCrust ()
+    {
+        foreach (Plate it in m_TectonicPlates)
+        {
+            it.m_BorderTriangles.Clear();
+            it.m_PlateTriangles.Clear();
+            it.m_PlateVertices.Clear();
+        }
+        for (int i = 0; i < m_DataVertices.Count; i++) // for all vertices on the global mesh
+        {
+            m_TectonicPlates[m_DataPointData[i].plate].m_PlateVertices.Add(i);
+            m_CrustPointData[i] = new PointData(m_DataPointData[i]);
+        }
+        for (int i = 0; i < m_DataTriangles.Count; i++) // for all triangles
+        {
+            if ((m_DataPointData[m_DataTriangles[i].m_A].plate == m_DataPointData[m_DataTriangles[i].m_B].plate) && (m_DataPointData[m_DataTriangles[i].m_B].plate == m_DataPointData[m_DataTriangles[i].m_C].plate)) // if the triangle only has vertices of one type (qquivalence is a transitive relation)
+            {
+                m_TectonicPlates[m_DataPointData[m_DataTriangles[i].m_A].plate].m_PlateTriangles.Add(i);
+            }
+        }
+        foreach (Plate it in m_TectonicPlates)
+        {
+            it.m_Transform = Quaternion.identity;
+            List<BoundingVolume> bvt_leaves = new List<BoundingVolume>();
+            int plate_tricount = it.m_PlateTriangles.Count();
+            for (int i = 0; i < plate_tricount; i++) // for all triangles in data
+            {
+                int tri_index = it.m_PlateTriangles[i];
+                BoundingVolume new_bb = new BoundingVolume(m_CrustTriangles[tri_index].m_CCenter, m_CrustTriangles[tri_index].m_CUnitRadius); // create a leaf bounding box
+                new_bb.m_TriangleIndex = tri_index; // denote the triangle index to the leaf
+                m_CrustTriangles[tri_index].m_BVolume = new_bb; // denote the leaf to the respective triangle
+                bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
+            }
+            it.m_BVHPlate = ConstructBVH(bvt_leaves);
+            it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
+        }
+
+        DetermineBorderTriangles();
+
     }
 
 }
