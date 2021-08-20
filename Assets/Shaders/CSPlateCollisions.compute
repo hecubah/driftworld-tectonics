@@ -2,14 +2,9 @@
 
 #pragma warning( disable : 4714 ) // excess L1 cache registers
 #define MAX_BVS_SEARCHED 512
-#define EPSILON_TOLERANCE 0.00005f
-#define DEBUG_MISSING_ELEVATION -0.5f
-#define MAX_DISTANCE 1000
+#define EPSILON_TOLERANCE 0.0f //0.00005f
 
-StructuredBuffer<float3> triangle_vertices; // triangle vertex vectors
-
-StructuredBuffer<int> overlap_matrix; // plates' overlaps
-struct BV {
+struct s_BV {
     int n_children;
     int left_child;
     int right_child;
@@ -18,20 +13,29 @@ struct BV {
     float circumradius;
 };
 
-StructuredBuffer<BV> BVH_array; // BV hiearchy of all respective plate triangles
-StructuredBuffer<int> BVH_array_sizes; // BV hiearchy sizes (pivots for BVH array)
-StructuredBuffer<int> offsets; // prefix sum of BV hiearchy sizes 
-StructuredBuffer<float4> plate_transforms; // quaternion array of geometry rotations
+struct s_triangle {
+    float3 a;
+    float3 b;
+    float3 c;
+};
 
+int n_triangles;
+int n_plates;
 int maxn_border_triangles;
 int n_crust_border_triangles;
-int n_plates;
-RWStructuredBuffer<float3> collisions; // 3d array of collision results (collision positions defining the collision front)
 
-StructuredBuffer<int> crust_border_triangles_array;
-StructuredBuffer<int> crust_border_triangles_circumcenters_array;
-StructuredBuffer<int> crust_border_triangles_circumradii_array;
-StructuredBuffer<int> crust_border_triangles_array_sizes;
+StructuredBuffer<s_triangle> crust_triangles; // triangle vertex vectors
+StructuredBuffer<int> crust_triangle_plates; // triangle plate indices
+StructuredBuffer<int> overlap_matrix; // plates' overlaps
+StructuredBuffer<s_BV> crust_BVH; // BV hiearchy of all respective plate triangles
+StructuredBuffer<int> crust_BVH_sps; // prefix sum of BV hiearchy sizes
+StructuredBuffer<float4> plate_transforms; // quaternion array of geometry rotations
+StructuredBuffer<int> crust_border_triangles;
+StructuredBuffer<float3> crust_border_triangle_circumcenters;
+StructuredBuffer<float> crust_border_triangle_circumradii;
+StructuredBuffer<int> crust_border_triangles_sps;
+
+RWStructuredBuffer<int> collisions; // 3d array of collision results (collision positions defining the collision front)
 
 
 float4 qmul(float4 q1, float4 q2) {
@@ -59,27 +63,101 @@ bool is_in_tri(float3 searchedpoint, float3 a, float3 b, float3 c) {
     return ((abplane_test + EPSILON_TOLERANCE >= 0) && (bcplane_test + EPSILON_TOLERANCE >= 0) && (caplane_test + EPSILON_TOLERANCE >= 0));
 }
 
-int found_in_bv(int index, int offset, float4 transform, float3 needle) {
-    int searched_indices_buffer[MAX_BVS_SEARCHED];
-    int found_index = -1;
+bool segments_intersect(float3 a1, float3 a2, float3 b1, float3 b2) {
 
+    float3 intersection = cross(cross(a1, a2), cross(b1, b2));
+    if (length(intersection) > 0) {
+        intersection = normalize(intersection);
+    }
+    else {
+        return true;
+    }
+    if (dot(a1, -intersection) > dot(a1, intersection)) {
+        intersection = -intersection;
+    }
+    if (dot(a1, intersection) >= dot(a1, a2) && dot(a2, intersection) >= dot(a1, a2) && dot(b1, intersection) >= dot(b1, b2) && dot(b2, intersection) >= dot(b1, b2)) {
+        return true;
+    }
+    else {
+        return false;
+    }
+    
+
+}
+
+//bool triangles_intersect(int triangle_a, int triangle_b, float4 transform) {
+
+bool triangles_intersect(s_triangle triangle_a, s_triangle triangle_b, int plate_index_a, int plate_index_b) {
+    float3 a1, a2, a3, b1, b2, b3;
+    float4 transform_a, transform_b;
+    transform_a = plate_transforms[plate_index_a];
+    transform_b = plate_transforms[plate_index_b];
+    a1 = quat_rot(triangle_a.a, transform_a);
+    a2 = quat_rot(triangle_a.b, transform_a);
+    a3 = quat_rot(triangle_a.c, transform_a);
+    b1 = quat_rot(triangle_b.a, transform_b);
+    b2 = quat_rot(triangle_b.b, transform_b);
+    b3 = quat_rot(triangle_b.c, transform_b);
+
+    if (is_in_tri(b1, a1, a2, a3) || is_in_tri(b2, a1, a2, a3) || is_in_tri(b3, a1, a2, a3) || is_in_tri(a1, b1, b2, b3) || is_in_tri(a2, b1, b2, b3) || is_in_tri(a3, b1, b2, b3)) {
+        return true;
+    }
+    if (segments_intersect(a1, a2, b1, b2)) {
+        return true;
+    }
+    if (segments_intersect(a1, a2, b2, b3)) {
+        return true;
+    }
+    if (segments_intersect(a1, a2, b3, b1)) {
+        return true;
+    }
+    if (segments_intersect(a2, a3, b1, b2)) {
+        return true;
+    }
+    if (segments_intersect(a2, a3, b2, b3)) {
+        return true;
+    }
+    if (segments_intersect(a2, a3, b3, b1)) {
+        return true;
+    }
+    if (segments_intersect(a3, a1, b1, b2)) {
+        return true;
+    }
+    if (segments_intersect(a3, a1, b2, b3)) {
+        return true;
+    }
+    if (segments_intersect(a3, a1, b3, b1)) {
+        return true;
+    }
+    return false;
+}
+
+bool triangle_collides_with_bv(int index_triangle, int index_triangle_plate, int index_bv_plate) {
+
+    if (index_triangle_plate == index_bv_plate) {
+        return false;
+    }
+    int searched_indices_buffer[MAX_BVS_SEARCHED];
     int border_index = 0;
     int current_index = 0;
 
-    searched_indices_buffer[border_index] = index;
+    searched_indices_buffer[border_index] = 0;
     border_index++;
 
-    float3 needle_transformed = quat_rot(needle, transform * float4(-1, -1, -1, 1));
+    float3 iv_cc = quat_rot(crust_border_triangle_circumcenters[index_triangle], plate_transforms[index_triangle_plate]);
+    //float3 iv_cc = quat_rot(crust_border_triangle_circumcenters[index_triangle], plate_transforms[index_bv_plate] * float4(-1, -1, -1, 1));
+    //float3 iv_cc = crust_border_triangle_circumcenters[index_triangle];
+    float iv_cr = crust_border_triangle_circumradii[index_triangle];
+    int offset = crust_BVH_sps[index_bv_plate];
 
     while (current_index < min(border_index, MAX_BVS_SEARCHED)) {
         int candidate_index = searched_indices_buffer[current_index];
-        BV candidate = BVH_array[offset + candidate_index];
-        //float dot_prod = dot(needle, quat_rot(candidate.circumcenter, transform));
-        float dot_prod = dot(needle_transformed, candidate.circumcenter);
-        float multiplier = (candidate.circumradius < 0.005f ? 1.5f : 1.1f);
+        s_BV candidate = crust_BVH[offset + candidate_index];
+
+        float dot_prod = dot(iv_cc, quat_rot(candidate.circumcenter, plate_transforms[index_bv_plate]));
 
         float dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
-        if (dist <= candidate.circumradius * multiplier) {
+        if (dist <= iv_cr + candidate.circumradius) {
             if (candidate.n_children == 2) {
                 searched_indices_buffer[border_index] = candidate.left_child;
                 border_index++;
@@ -87,43 +165,125 @@ int found_in_bv(int index, int offset, float4 transform, float3 needle) {
                 border_index++;
             }
             else {
+                if (candidate.triangle_index == -1) {
+                    return false;
+                }
+                s_triangle triangle1 = crust_triangles[crust_border_triangles[index_triangle]];
+                s_triangle triangle2 = crust_triangles[candidate.triangle_index];
+                if (triangles_intersect(triangle1, triangle2, index_triangle_plate, index_bv_plate)) {
+                    return true;
+                }
                 /*
                 int trindex = candidate.triangle_index;
-                //bool check = is_in_tri(needle, quat_rot(triangle_points[3 * trindex + 0], transform), quat_rot(triangle_points[3 * trindex + 1], transform), quat_rot(triangle_points[3 * trindex + 2], transform));
-                bool check = is_in_tri(needle_transformed, triangle_points[3 * trindex + 0], triangle_points[3 * trindex + 1], triangle_points[3 * trindex + 2]);
+                float3 t1_a = crust_triangles[crust_border_triangles[index_triangle]].a;
+                float3 t1_b = crust_triangles[crust_border_triangles[index_triangle]].b;
+                float3 t1_c = crust_triangles[crust_border_triangles[index_triangle]].c;
+                float3 t2_a = crust_triangles[trindex].a;
+                float3 t2_b = crust_triangles[trindex].b;
+                float3 t2_c = crust_triangles[trindex].c;
+                bool check = false;
+                //bool check = triangles_intersect(crust_border_triangles[index_triangle], trindex, plate_transforms[index_bv_plate]);
                 if (check) {
-                    return trindex;
+                    return true;
                 }
+                s_triangle triangle1 = crust_triangles[crust_border_triangles[index_triangle]];
+                s_triangle triangle2 = crust_triangles[i];
+                //if (triangles_intersect(crust_border_triangles[index_triangle], i, plate_transforms[index_bv_plate])) {
                 */
+            }
+        }
+        current_index++;
+    }
+    return false;
+}
+
+bool find_triangle_in_plate_bruteforce(int index_triangle, int index_triangle_plate, int index_bv_plate) {
+    if (index_triangle_plate == index_bv_plate) {
+        return false;
+    }
+    for (int i = 0; i < n_triangles; i++) {
+        if (crust_triangle_plates[i] == index_bv_plate) {
+            s_triangle triangle1 = crust_triangles[crust_border_triangles[index_triangle]];
+            s_triangle triangle2 = crust_triangles[i];
+            //if (triangles_intersect(crust_border_triangles[index_triangle], i, plate_transforms[index_bv_plate])) {
+            if (triangles_intersect(triangle1, triangle2, index_triangle_plate, index_bv_plate)) {
+                return true;
+            }
+        }
+    }
+    return false;
+    /*
+    if (index_bv_plate == 2) {
+        //return true;
+    }
+    int searched_indices_buffer[MAX_BVS_SEARCHED];
+    int border_index = 0;
+    int current_index = 0;
+
+    searched_indices_buffer[border_index] = 0;
+    border_index++;
+
+    float3 iv_cc = quat_rot(crust_border_triangle_circumcenters[index_triangle], plate_transforms[index_bv_plate] * float4(-1, -1, -1, 1));
+    //float3 iv_cc = crust_border_triangle_circumcenters[index_triangle];
+    float iv_cr = crust_border_triangle_circumradii[index_triangle];
+    int offset = crust_BVH_sps[index_bv_plate];
+
+    while (current_index < min(border_index, MAX_BVS_SEARCHED)) {
+        int candidate_index = searched_indices_buffer[current_index];
+        BV candidate = crust_BVH[offset + candidate_index];
+
+        float dot_prod = dot(iv_cc, candidate.circumcenter);
+
+        float dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
+        if (dist <= iv_cr + candidate.circumradius) {
+            if (candidate.n_children == 2) {
+                searched_indices_buffer[border_index] = candidate.left_child;
+                border_index++;
+                searched_indices_buffer[border_index] = candidate.right_child;
+                border_index++;
+            }
+            else {
+                //return true;
                 int trindex = candidate.triangle_index;
-                bool check = is_in_tri(needle_transformed, triangle_vertices[3 * trindex + 0], triangle_vertices[3 * trindex + 1], triangle_vertices[3 * trindex + 2]);
+                float3 t1_a = triangle_vertices[3 * crust_border_triangles[index_triangle] + 0];
+                float3 t1_b = triangle_vertices[3 * crust_border_triangles[index_triangle] + 1];
+                float3 t1_c = triangle_vertices[3 * crust_border_triangles[index_triangle] + 2];
+                float3 t2_a = triangle_vertices[3 * trindex + 0];
+                float3 t2_b = triangle_vertices[3 * trindex + 1];
+                float3 t2_c = triangle_vertices[3 * trindex + 2];
+                bool check = triangles_intersect(crust_border_triangles[index_triangle], trindex, plate_transforms[index_bv_plate]);
                 if (check) {
-                    return trindex;
+                    return true;
                 }
             }
         }
         current_index++;
     }
-    return found_index;
+    return false;
+    */
 }
-
 
 
 [numthreads(64,1,1)]
 void CSPlateCollisions(uint3 dID : SV_DispatchThreadID)
 {
-    // TODO: insert actual code here!
-
-    //Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 0.0);
     int ivi = dID.x; // interpolated vertex index
     if (ivi >= n_crust_border_triangles) {
         return;
     }
     int main_plate_index = 0;
-    //while (main_plate_index <)
+    while (ivi >= crust_border_triangles_sps[main_plate_index+1]) {
+        main_plate_index++;
+    }
 
-    //float3 iv = data_vertices[ivi];
-    //int found_index = -1;
-    //int found_plate = -1;
-    //int offset = 0;
+    for (int i = 0; i < n_plates; i++) {
+        if (i == main_plate_index) {
+            continue;
+        }
+        //collisions[main_plate_index * n_plates * maxn_border_triangles + i * maxn_border_triangles + ivi - crust_border_triangles_sps[main_plate_index]] = (triangle_collides_with_bv(ivi, main_plate_index, i) ? 1 : 0);
+        //collisions[main_plate_index * n_plates * maxn_border_triangles + i * maxn_border_triangles + ivi - crust_border_triangles_sps[main_plate_index]] = (find_triangle_in_plate_bruteforce(ivi, main_plate_index, i) ? 1 : 0);        
+        //collisions[i * n_crust_border_triangles + ivi] = (find_triangle_in_plate_bruteforce(ivi, main_plate_index, i) ? 1 : 0);
+        collisions[i * n_crust_border_triangles + ivi] = (triangle_collides_with_bv(ivi, main_plate_index, i) ? 1 : 0);
+    }
+
 }

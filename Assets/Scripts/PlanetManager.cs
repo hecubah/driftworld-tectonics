@@ -23,6 +23,9 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_CrustToDataShader = null;
     public ComputeShader m_DataToRenderShader = null;
     public ComputeShader m_TerrainesConstructShader = null;
+    public ComputeShader m_SubductionShader = null;
+    public ComputeShader m_PlateCollisionsShader = null;
+    public ComputeShader m_DebugTextureShader = null;
     //public ComputeShader m_BVHContureTestShader = null;
 
     public uint m_RandomSeed = 0;
@@ -77,10 +80,86 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction2()
     {
+        List<Vector3> points_list = new List<Vector3>();
+        for (int i = 0; i < m_Planet.m_TectonicPlatesCount; i++)
+        {
+            for (int j = 0; j < m_Planet.m_TectonicPlates[i].m_BorderTriangles.Count; j++)
+            {
+                points_list.Add(m_Planet.m_CrustTriangles[m_Planet.m_TectonicPlates[i].m_BorderTriangles[j]].m_BCenter);
+            }
+        }
+
+
+        int kernelHandle = m_DebugTextureShader.FindKernel("CSCirclePointsTexture");
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+        Vector3[] points_array = points_list.ToArray();
+
+        ComputeBuffer points_buffer = new ComputeBuffer(points_array.Length, 12, ComputeBufferType.Default);
+        points_buffer.SetData(points_array);
+
+        m_DebugTextureShader.SetBuffer(kernelHandle, "points", points_buffer);
+
+        m_DebugTextureShader.SetInt("points_count", points_array.Length);
+        m_DebugTextureShader.SetFloat("point_radius", 0.05f);
+
+        m_DebugTextureShader.SetTexture(kernelHandle, "Result", com_tex);
+        m_DebugTextureShader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        points_buffer.Release();
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+        m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+
     }
 
     public void DebugFunction3()
     {
+        List<Vector3> points_list = m_Planet.SubductionStep();
+
+        if (points_list.Count > 0)
+        {
+            int kernelHandle = m_DebugTextureShader.FindKernel("CSCirclePointsTexture");
+
+            RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+            com_tex.enableRandomWrite = true;
+            com_tex.Create();
+
+            Vector3[] points_array = points_list.ToArray();
+
+            ComputeBuffer points_buffer = new ComputeBuffer(points_array.Length, 12, ComputeBufferType.Default);
+            points_buffer.SetData(points_array);
+
+            m_DebugTextureShader.SetBuffer(kernelHandle, "points", points_buffer);
+
+            m_DebugTextureShader.SetInt("points_count", points_array.Length);
+            //m_DebugTextureShader.SetFloat("point_radius", 0.005f);
+            m_DebugTextureShader.SetFloat("point_radius", 0.022f);
+
+            m_DebugTextureShader.SetTexture(kernelHandle, "Result", com_tex);
+            m_DebugTextureShader.Dispatch(kernelHandle, 256, 1024, 1);
+
+            points_buffer.Release();
+
+            RenderTexture.active = com_tex;
+            Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+            tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+            RenderTexture.active = null;
+            com_tex.Release();
+            tex.Apply();
+            GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+            m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+        }
+
     }
 
     public void DebugFunction4()
