@@ -46,6 +46,8 @@ public class TectonicPlanet
 
     public int[,] m_PlatesOverlap;
 
+    public ComputeBuffer m_GPUBufferCrustBVH = null;
+
     public TectonicPlanet(float radius)
     {
         m_PlanetManager = (PlanetManager)GameObject.Find("Planet").GetComponent(typeof(PlanetManager));
@@ -84,6 +86,7 @@ public class TectonicPlanet
 
         m_TectonicPlates = new List<Plate>();
         m_PlatesOverlap = null;
+
     }
 
     public static float UnitSphereDistance(Vector3 a, Vector3 b)
@@ -447,7 +450,7 @@ public class TectonicPlanet
             {
                 elevation = 0;
             }
-            vertices_array[i] = (m_Radius + elevation) * (m_TectonicPlates[m_CrustPointData[i].plate].m_Transform * m_CrustVertices[i]);
+            vertices_array[i] = (m_Radius + elevation * m_PlanetManager.m_ElevationScaleFactor) * (m_TectonicPlates[m_CrustPointData[i].plate].m_Transform * m_CrustVertices[i]);
         }
         List<int> triangles = new List<int>();
         for (int i = 0; i < m_TectonicPlatesCount; i++)
@@ -479,7 +482,7 @@ public class TectonicPlanet
             {
                 elevation = 0;
             }
-            vertices_array[i] = (m_Radius + elevation) * vertices_array[i];
+            vertices_array[i] = (m_Radius + elevation * m_PlanetManager.m_ElevationScaleFactor) * vertices_array[i];
         }
         List<int> triangles = new List<int>();
         for (int i = 0; i < m_TrianglesCount; i++)
@@ -507,7 +510,7 @@ public class TectonicPlanet
             {
                 elevation = 0;
             }
-            vertices_array[i] = (m_Radius + elevation) * vertices_array[i];
+            vertices_array[i] = (m_Radius + elevation * m_PlanetManager.m_ElevationScaleFactor) * vertices_array[i];
         }
         List<int> triangles = new List<int>();
         for (int i = 0; i < m_RenderTrianglesCount; i++)
@@ -740,7 +743,7 @@ public class TectonicPlanet
             centroids.Add(new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized); // set the centroid vector
             Plate new_plate = new Plate(this); // create a new plate
             new_plate.m_RotationAxis = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized; // randomized rotation axis
-            new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, APR.MaxPlateAngularSpeed); // angular speed of the plate
+            new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, APR.MaximumPlateSpeed); // angular speed of the plate
             if (m_Random.Range(0f, 1f) < APR.PlateInitLandRatio)
             {
                 new_plate.m_InitElevation = APR.AverageContinentalElevation; // plate is continental
@@ -1209,11 +1212,11 @@ public class TectonicPlanet
 
     }
 
-    public List<Vector3> SubductionStep ()
+    public List<Vector3> PlateContactPoints ()
     {
-        ComputeShader work_shader = m_PlanetManager.m_PlateCollisionsShader;
+        ComputeShader work_shader = m_PlanetManager.m_PlateInteractionsShader;
 
-        int kernelHandle = work_shader.FindKernel("CSPlateCollisions");
+        int kernelHandle = work_shader.FindKernel("CSPlateContacts");
 
         List<BoundingVolumeStruct> crust_BVH_list = new List<BoundingVolumeStruct>();
         int[] crust_BVH_sps_array = new int[m_TectonicPlatesCount + 1];
@@ -1234,7 +1237,7 @@ public class TectonicPlanet
 
         for (int i = 0; i < m_TrianglesCount; i++)
         {
-            crust_triangles_array[i] = new CS_Triangle(m_CrustVertices[m_CrustTriangles[i].m_A], m_CrustVertices[m_CrustTriangles[i].m_B], m_CrustVertices[m_CrustTriangles[i].m_C]);
+            crust_triangles_array[i] = new CS_Triangle(m_CrustVertices[m_CrustTriangles[i].m_A], m_CrustVertices[m_CrustTriangles[i].m_B], m_CrustVertices[m_CrustTriangles[i].m_C], m_CrustPointData[m_CrustTriangles[i].m_A].elevation, m_CrustPointData[m_CrustTriangles[i].m_B].elevation, m_CrustPointData[m_CrustTriangles[i].m_C].elevation, m_CrustPointData[m_CrustTriangles[i].m_A].plate, m_CrustPointData[m_CrustTriangles[i].m_B].plate, m_CrustPointData[m_CrustTriangles[i].m_C].plate, m_CrustTriangles[i].m_Neighbours[0], m_CrustTriangles[i].m_Neighbours[1], m_CrustTriangles[i].m_Neighbours[2]);
         }
 
         crust_border_triangles_sps_list.Add(0);
@@ -1275,9 +1278,9 @@ public class TectonicPlanet
         Vector3[] crust_border_triangle_circumcenters_array = crust_border_triangle_circumcenters_list.ToArray();
         float[] crust_border_triangle_circumradii_array = crust_border_triangle_circumradii_list.ToArray();
         int[] crust_border_triangles_sps_array = crust_border_triangles_sps_list.ToArray();
-        int[,] collisions_output = new int[m_TectonicPlatesCount, total_border_triangles_count];
+        CS_PlateContact [] contact_points_output = new CS_PlateContact[m_TectonicPlatesCount * total_border_triangles_count];
 
-        ComputeBuffer crust_triangles_buffer = new ComputeBuffer(crust_triangles_array.Length, 36, ComputeBufferType.Default);
+        ComputeBuffer crust_triangles_buffer = new ComputeBuffer(crust_triangles_array.Length, 72, ComputeBufferType.Default);
         ComputeBuffer crust_triangle_plates_buffer = new ComputeBuffer(crust_triangle_plates_array.Length, 4, ComputeBufferType.Default);
         ComputeBuffer overlap_matrix_buffer = new ComputeBuffer(overlap_matrix.Length, 4, ComputeBufferType.Default);
         ComputeBuffer crust_BVH_buffer = new ComputeBuffer(crust_BVH_array.Length, 32, ComputeBufferType.Default);
@@ -1287,7 +1290,7 @@ public class TectonicPlanet
         ComputeBuffer crust_border_triangle_circumcenters_buffer = new ComputeBuffer(crust_border_triangle_circumcenters_array.Length, 12, ComputeBufferType.Default);
         ComputeBuffer crust_border_triangle_circumradii_buffer = new ComputeBuffer(crust_border_triangle_circumradii_array.Length, 4, ComputeBufferType.Default);
         ComputeBuffer crust_border_triangles_sps_buffer = new ComputeBuffer(crust_border_triangles_sps_array.Length, 4, ComputeBufferType.Default);
-        ComputeBuffer collisions_buffer = new ComputeBuffer(collisions_output.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer contact_points_buffer = new ComputeBuffer(contact_points_output.Length, 28, ComputeBufferType.Default);
 
         crust_triangles_buffer.SetData(crust_triangles_array);
         crust_triangle_plates_buffer.SetData(crust_triangle_plates_array);
@@ -1299,7 +1302,6 @@ public class TectonicPlanet
         crust_border_triangle_circumcenters_buffer.SetData(crust_border_triangle_circumcenters_array);
         crust_border_triangle_circumradii_buffer.SetData(crust_border_triangle_circumradii_array);
         crust_border_triangles_sps_buffer.SetData(crust_border_triangles_sps_array);
-        collisions_buffer.SetData(collisions_output);
 
 
         work_shader.SetInt("n_triangles", crust_triangle_plates_array.Length);
@@ -1316,9 +1318,12 @@ public class TectonicPlanet
         work_shader.SetBuffer(kernelHandle, "crust_border_triangle_circumcenters", crust_border_triangle_circumcenters_buffer);
         work_shader.SetBuffer(kernelHandle, "crust_border_triangle_circumradii", crust_border_triangle_circumradii_buffer);
         work_shader.SetBuffer(kernelHandle, "crust_border_triangles_sps", crust_border_triangles_sps_buffer);
-        work_shader.SetBuffer(kernelHandle, "collisions", collisions_buffer);
+
+        work_shader.SetBuffer(kernelHandle, "contact_points", contact_points_buffer);
 
         work_shader.Dispatch(kernelHandle, total_border_triangles_count / 64 + (total_border_triangles_count % 64 != 0 ? 1 : 0), 1, 1);
+
+        contact_points_buffer.GetData(contact_points_output);        
 
         crust_triangles_buffer.Release();
         crust_triangle_plates_buffer.Release();
@@ -1331,10 +1336,9 @@ public class TectonicPlanet
         crust_border_triangle_circumradii_buffer.Release();
         crust_border_triangles_sps_buffer.Release();
 
-        collisions_buffer.GetData(collisions_output);
+        contact_points_buffer.Release();
 
-        collisions_buffer.Release();
-
+        /*
         int[,] collision_counts = new int[m_TectonicPlatesCount, m_TectonicPlatesCount];
 
         for (int i = 0; i < m_TectonicPlatesCount; i++)
@@ -1342,7 +1346,7 @@ public class TectonicPlanet
             for (int j = 0; j < total_border_triangles_count; j++)
             {
                 int triangle_plate = crust_triangle_plates_array[crust_border_triangles_array[j]];
-                if (collisions_output[i,j] != 0)
+                if (meh_output[i,j] != 0)
                 {
                     collision_counts[triangle_plate, i]++;
                 }
@@ -1359,17 +1363,24 @@ public class TectonicPlanet
             collisions_debug += "\n";
         }
         Debug.Log(collisions_debug);
-
-        collisions_buffer.Release(); // release output buffer
+        */
 
         List<Vector3> out_points = new List<Vector3>();
 
+        foreach (CS_PlateContact it in contact_points_output)
+        {
+            if (it.contact_occured == 1)
+            {
+                out_points.Add(m_TectonicPlates[it.contacting_plate].m_Transform * it.contact_point);
+            }
+        }
+/*
         for (int j = 0; j < total_border_triangles_count; j++)
         {
             bool check = false;
             for (int i = 0; i < m_TectonicPlatesCount; i++)
             {
-                if (collisions_output[i, j] != 0)
+                if (meh_output[i, j] != 0)
                 {
                     check = true;
                 }
@@ -1379,8 +1390,357 @@ public class TectonicPlanet
                 out_points.Add(m_TectonicPlates[crust_triangle_plates_array[crust_border_triangles_array[j]]].m_Transform * m_CrustTriangles[crust_border_triangles_array[j]].m_BCenter);
             }
         }
-
+*/
         return out_points;
+    }
+
+    public float DebugDistanceUplift(float distance)
+    {
+        if (distance > APR.SubductionDistanceTransferMaxDistance)
+        {
+            return 0;
+        }
+        float subduction_control_distance = APR.SubductionDistanceTransferControlDistance;
+        float subduction_max_distance = APR.SubductionDistanceTransferMaxDistance;
+
+        float normal = ((Mathf.Pow(subduction_max_distance, 3) - Mathf.Pow(subduction_control_distance, 3))/6.0f + (Mathf.Pow(subduction_control_distance, 2) * subduction_max_distance - Mathf.Pow(subduction_max_distance, 2) * subduction_control_distance)*0.5f);
+        float value = Mathf.Pow(distance, 3) / 3.0f - (subduction_control_distance + subduction_max_distance) * Mathf.Pow(distance, 2) * 0.5f + subduction_control_distance * subduction_max_distance * distance + Mathf.Pow(subduction_max_distance, 3) / 6.0f - Mathf.Pow(subduction_max_distance, 2) * subduction_control_distance * 0.5f;
+        return value / normal;
+        //return value;
+    }
+
+    public void TectonicStep()
+    {
+        if (m_PlanetManager.m_StepMovePlates)
+        {
+            MovePlates();
+        }
+        ComputeShader work_shader = m_PlanetManager.m_PlateInteractionsShader;
+
+        int plateContactsKernelHandle = work_shader.FindKernel("CSTrianglePlateContacts");
+
+        List<BoundingVolumeStruct> crust_BVH_list = new List<BoundingVolumeStruct>();
+        int[] crust_BVH_sps_array = new int[m_TectonicPlatesCount + 1];
+        List<int> crust_border_triangles_list = new List<int>();
+        List<Vector3> crust_border_triangle_circumcenters_list = new List<Vector3>();
+        List<float> crust_border_triangle_circumradii_list = new List<float>();
+        List<int> crust_border_triangles_sps_list = new List<int>();
+
+
+        CS_Triangle[] crust_triangles_array = new CS_Triangle[m_TrianglesCount];
+        int[] crust_triangle_plates_array = new int[m_CrustTriangles.Count];
+        for (int i = 0; i < crust_triangle_plates_array.Length; i++)
+        {
+            crust_triangle_plates_array[i] = 5000;
+        }
+        int[] overlap_matrix = new int[m_TectonicPlatesCount * m_TectonicPlatesCount];
+        Vector4[] plate_transforms = new Vector4[m_TectonicPlatesCount];
+
+        for (int i = 0; i < m_TrianglesCount; i++)
+        {
+            crust_triangles_array[i] = new CS_Triangle(m_CrustVertices[m_CrustTriangles[i].m_A], m_CrustVertices[m_CrustTriangles[i].m_B], m_CrustVertices[m_CrustTriangles[i].m_C], m_CrustPointData[m_CrustTriangles[i].m_A].elevation, m_CrustPointData[m_CrustTriangles[i].m_B].elevation, m_CrustPointData[m_CrustTriangles[i].m_C].elevation, m_CrustPointData[m_CrustTriangles[i].m_A].plate, m_CrustPointData[m_CrustTriangles[i].m_B].plate, m_CrustPointData[m_CrustTriangles[i].m_C].plate, m_CrustTriangles[i].m_Neighbours[0], m_CrustTriangles[i].m_Neighbours[1], m_CrustTriangles[i].m_Neighbours[2]);
+        }
+
+        crust_border_triangles_sps_list.Add(0);
+        crust_BVH_sps_array[0] = 0;
+        string debug_bortri_counts = "";
+        int total_border_triangles_count = 0;
+        for (int i = 0; i < m_TectonicPlatesCount; i++)
+        {
+            for (int j = 0; j < m_TectonicPlatesCount; j++)
+            {
+                overlap_matrix[i * m_TectonicPlatesCount + j] = m_PlatesOverlap[i, j];
+            }
+            crust_BVH_list.AddRange(m_TectonicPlates[i].m_BVHArray);
+            crust_BVH_sps_array[i + 1] = crust_BVH_sps_array[i] + m_TectonicPlates[i].m_BVHArray.Count;
+            Vector4 added_transform = new Vector4();
+            added_transform.x = m_TectonicPlates[i].m_Transform.x;
+            added_transform.y = m_TectonicPlates[i].m_Transform.y;
+            added_transform.z = m_TectonicPlates[i].m_Transform.z;
+            added_transform.w = m_TectonicPlates[i].m_Transform.w;
+            plate_transforms[i] = added_transform;
+            crust_border_triangles_list.AddRange(m_TectonicPlates[i].m_BorderTriangles);
+            debug_bortri_counts += m_TectonicPlates[i].m_BorderTriangles.Count + "\t";
+            crust_border_triangles_sps_list.Add(crust_border_triangles_sps_list[i] + m_TectonicPlates[i].m_BorderTriangles.Count);
+            for (int j = 0; j < m_TectonicPlates[i].m_BorderTriangles.Count; j++)
+            {
+                crust_border_triangle_circumcenters_list.Add(m_CrustTriangles[m_TectonicPlates[i].m_BorderTriangles[j]].m_CCenter);
+                crust_border_triangle_circumradii_list.Add(m_CrustTriangles[m_TectonicPlates[i].m_BorderTriangles[j]].m_CUnitRadius);
+            }
+            for (int j = 0; j < m_TectonicPlates[i].m_PlateTriangles.Count; j++)
+            {
+                crust_triangle_plates_array[m_TectonicPlates[i].m_PlateTriangles[j]] = i;
+            }
+
+            total_border_triangles_count += m_TectonicPlates[i].m_BorderTriangles.Count;
+        }
+
+        BoundingVolumeStruct[] crust_BVH_array = crust_BVH_list.ToArray();
+        int[] crust_border_triangles_array = crust_border_triangles_list.ToArray();
+        Vector3[] crust_border_triangle_circumcenters_array = crust_border_triangle_circumcenters_list.ToArray();
+        float[] crust_border_triangle_circumradii_array = crust_border_triangle_circumradii_list.ToArray();
+        int[] crust_border_triangles_sps_array = crust_border_triangles_sps_list.ToArray();
+        CS_PlateContact[] contact_points_output = new CS_PlateContact[m_TectonicPlatesCount * total_border_triangles_count];
+
+        ComputeBuffer crust_triangles_buffer = new ComputeBuffer(crust_triangles_array.Length, 72, ComputeBufferType.Default);
+        ComputeBuffer crust_triangle_plates_buffer = new ComputeBuffer(crust_triangle_plates_array.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer overlap_matrix_buffer = new ComputeBuffer(overlap_matrix.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer crust_BVH_buffer = new ComputeBuffer(crust_BVH_array.Length, 32, ComputeBufferType.Default);
+        ComputeBuffer crust_BVH_sps_buffer = new ComputeBuffer(crust_BVH_sps_array.Length, 4, ComputeBufferType.Default); // prefix sum of whol BVH
+        ComputeBuffer plate_transforms_buffer = new ComputeBuffer(plate_transforms.Length, 16, ComputeBufferType.Default);
+        ComputeBuffer crust_border_triangles_buffer = new ComputeBuffer(crust_border_triangles_array.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer crust_border_triangle_circumcenters_buffer = new ComputeBuffer(crust_border_triangle_circumcenters_array.Length, 12, ComputeBufferType.Default);
+        ComputeBuffer crust_border_triangle_circumradii_buffer = new ComputeBuffer(crust_border_triangle_circumradii_array.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer crust_border_triangles_sps_buffer = new ComputeBuffer(crust_border_triangles_sps_array.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer contact_points_buffer = new ComputeBuffer(contact_points_output.Length, 28, ComputeBufferType.Default);
+
+        crust_triangles_buffer.SetData(crust_triangles_array);
+        crust_triangle_plates_buffer.SetData(crust_triangle_plates_array);
+        overlap_matrix_buffer.SetData(overlap_matrix);
+        crust_BVH_buffer.SetData(crust_BVH_array);
+        crust_BVH_sps_buffer.SetData(crust_BVH_sps_array);
+        plate_transforms_buffer.SetData(plate_transforms);
+        crust_border_triangles_buffer.SetData(crust_border_triangles_array);
+        crust_border_triangle_circumcenters_buffer.SetData(crust_border_triangle_circumcenters_array);
+        crust_border_triangle_circumradii_buffer.SetData(crust_border_triangle_circumradii_array);
+        crust_border_triangles_sps_buffer.SetData(crust_border_triangles_sps_array);
+
+
+        work_shader.SetInt("n_triangles", crust_triangle_plates_array.Length);
+        work_shader.SetInt("n_plates", m_TectonicPlatesCount);
+        work_shader.SetInt("maxn_border_triangles", APR.MaxBorderTrianglesCount);
+        work_shader.SetInt("n_crust_border_triangles", total_border_triangles_count);
+        work_shader.SetBuffer(plateContactsKernelHandle, "crust_triangles", crust_triangles_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "crust_triangle_plates", crust_triangle_plates_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "overlap_matrix", overlap_matrix_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "crust_BVH", crust_BVH_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "crust_BVH_sps", crust_BVH_sps_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "plate_transforms", plate_transforms_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "crust_border_triangles", crust_border_triangles_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "crust_border_triangle_circumcenters", crust_border_triangle_circumcenters_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "crust_border_triangle_circumradii", crust_border_triangle_circumradii_buffer);
+        work_shader.SetBuffer(plateContactsKernelHandle, "crust_border_triangles_sps", crust_border_triangles_sps_buffer);
+
+        work_shader.SetBuffer(plateContactsKernelHandle, "contact_points", contact_points_buffer);
+
+        work_shader.Dispatch(plateContactsKernelHandle, total_border_triangles_count / 64 + (total_border_triangles_count % 64 != 0 ? 1 : 0), 1, 1);
+
+        Vector3[] vertex_locations_array = m_CrustVertices.ToArray();
+
+        ComputeBuffer vertex_locations_buffer = new ComputeBuffer(m_VerticesCount, 12, ComputeBufferType.Default);
+
+        vertex_locations_buffer.SetData(vertex_locations_array);
+
+        if (m_PlanetManager.m_StepSubductionUplift)
+        {
+            contact_points_buffer.GetData(contact_points_output);
+
+            int subductionKernelHandle = work_shader.FindKernel("CSSubductionUplift");
+            work_shader.SetInt("n_vertices", m_VerticesCount);
+            work_shader.SetFloat("subduction_control_distance", APR.SubductionDistanceTransferControlDistance);
+            work_shader.SetFloat("subduction_max_distance", APR.SubductionDistanceTransferMaxDistance);
+
+            float[] uplift_output = new float[m_VerticesCount];
+            int[] vertex_plates_array = new int[m_VerticesCount];
+            for (int i = 0; i < m_VerticesCount; i++)
+            {
+                vertex_plates_array[i] = m_CrustPointData[i].plate;
+            }
+            Vector3[] plate_motion_axes_array = new Vector3[m_TectonicPlatesCount];
+            float[] plate_motion_angular_speeds_array = new float[m_TectonicPlatesCount];
+
+            for (int i = 0; i < m_TectonicPlatesCount; i++)
+            {
+                plate_motion_axes_array[i] = m_TectonicPlates[i].m_RotationAxis;
+                plate_motion_angular_speeds_array[i] = m_TectonicPlates[i].m_PlateAngularSpeed;
+            }
+
+            ComputeBuffer vertex_plates_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+            ComputeBuffer plate_motion_axes_buffer = new ComputeBuffer(m_TectonicPlatesCount, 12, ComputeBufferType.Default);
+            ComputeBuffer plate_motion_angular_speeds_buffer = new ComputeBuffer(m_TectonicPlatesCount, 4, ComputeBufferType.Default);
+            ComputeBuffer uplift_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+
+            vertex_plates_buffer.SetData(vertex_plates_array);
+            plate_motion_axes_buffer.SetData(plate_motion_axes_array);
+            plate_motion_angular_speeds_buffer.SetData(plate_motion_angular_speeds_array);
+            uplift_buffer.SetData(uplift_output);
+
+            work_shader.SetFloat("subduction_uplift", APR.SubductionUplift);
+            work_shader.SetFloat("oceanic_trench_elevation", APR.OceanicTrenchElevation);
+            work_shader.SetFloat("highest_continental_altitude", APR.HighestContinentalAltitude);
+            work_shader.SetFloat("maximum_plate_speed", APR.MaximumPlateSpeed);
+
+            work_shader.SetBuffer(subductionKernelHandle, "plate_transforms", plate_transforms_buffer);
+            work_shader.SetBuffer(subductionKernelHandle, "contact_points", contact_points_buffer);
+            work_shader.SetBuffer(subductionKernelHandle, "overlap_matrix", overlap_matrix_buffer);
+            work_shader.SetBuffer(subductionKernelHandle, "vertex_locations", vertex_locations_buffer);
+            work_shader.SetBuffer(subductionKernelHandle, "vertex_plates", vertex_plates_buffer);
+            work_shader.SetBuffer(subductionKernelHandle, "plate_motion_axes", plate_motion_axes_buffer);
+            work_shader.SetBuffer(subductionKernelHandle, "plate_motion_angular_speeds", plate_motion_angular_speeds_buffer);
+
+            work_shader.SetBuffer(subductionKernelHandle, "uplift", uplift_buffer);
+
+            work_shader.Dispatch(subductionKernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1);
+
+
+            uplift_buffer.GetData(uplift_output);
+            //Debug.Log("Extrema of uplift - min: " + Mathf.Min(uplift_output) + "; max: " + Mathf.Max(uplift_output));
+            for (int i = 0; i < m_VerticesCount; i++)
+            {
+                m_CrustPointData[i].elevation += uplift_output[i] * APR.TectonicIterationStepTime;
+            }
+            vertex_plates_buffer.Release();
+            plate_motion_axes_buffer.Release();
+            plate_motion_angular_speeds_buffer.Release();
+            uplift_buffer.Release();
+        }
+
+        if (m_PlanetManager.m_StepErosionDamping)
+        {
+            int erosionDampingSedimentKernelHandle = work_shader.FindKernel("CSErosionDampingSediments");
+            work_shader.SetInt("n_vertices", m_VerticesCount);
+            work_shader.SetFloat("oceanic_trench_elevation", APR.OceanicTrenchElevation);
+            work_shader.SetFloat("highest_continental_altitude", APR.HighestContinentalAltitude);
+            work_shader.SetFloat("oceanic_elevation_damping", APR.OceanicElevationDamping);
+            work_shader.SetFloat("continental_erosion", APR.ContinentalErosion);
+            work_shader.SetFloat("sediment_accretion", APR.SedimentAccretion);
+
+
+
+            float[] vertex_elevations_array = new float[m_VerticesCount];
+            float[] erosion_damping_output = new float[m_VerticesCount];
+            float[] sediment_output = new float[m_VerticesCount];
+            for (int i = 0; i < m_VerticesCount; i++)
+            {
+                vertex_elevations_array[i] = m_CrustPointData[i].elevation;
+            }
+
+            ComputeBuffer vertex_elevations_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+            ComputeBuffer erosion_damping_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+            ComputeBuffer sediment_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+
+            vertex_elevations_buffer.SetData(vertex_elevations_array);
+            erosion_damping_buffer.SetData(erosion_damping_output);
+            sediment_buffer.SetData(sediment_output);
+
+            work_shader.SetBuffer(erosionDampingSedimentKernelHandle, "vertex_locations", vertex_locations_buffer);
+
+            work_shader.SetBuffer(erosionDampingSedimentKernelHandle, "vertex_elevations", vertex_elevations_buffer);
+            work_shader.SetBuffer(erosionDampingSedimentKernelHandle, "erosion_damping", erosion_damping_buffer);
+            work_shader.SetBuffer(erosionDampingSedimentKernelHandle, "sediment", sediment_buffer);
+
+            work_shader.Dispatch(erosionDampingSedimentKernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1);
+
+
+            erosion_damping_buffer.GetData(erosion_damping_output);
+            sediment_buffer.GetData(sediment_output);
+            for (int i = 0; i < m_VerticesCount; i++)
+            {
+                m_CrustPointData[i].elevation += (erosion_damping_output[i] + (m_PlanetManager.m_SedimentAccretion ? sediment_output[i] : 0.0f)) * APR.TectonicIterationStepTime;
+            }
+            vertex_elevations_buffer.Release();
+            erosion_damping_buffer.Release();
+            sediment_buffer.Release();
+        }
+
+        vertex_locations_buffer.Release();
+        crust_triangles_buffer.Release();
+        crust_triangle_plates_buffer.Release();
+        overlap_matrix_buffer.Release();
+        crust_BVH_buffer.Release();
+        crust_BVH_sps_buffer.Release();
+        plate_transforms_buffer.Release();
+        crust_border_triangles_buffer.Release();
+        crust_border_triangle_circumcenters_buffer.Release();
+        crust_border_triangle_circumradii_buffer.Release();
+        crust_border_triangles_sps_buffer.Release();
+
+        contact_points_buffer.Release();
+
+    }
+
+    public void BVHDiagnostics ()
+    {
+        Debug.Log("---------Data BVH Diagnostics---------");
+        int max_depth = 0;
+        Stack<BoundingVolume> searchstack = new Stack<BoundingVolume>();
+        searchstack.Push(m_DataBVH);
+        BoundingVolume cand;
+        max_depth = searchstack.Count;
+        while (searchstack.Count > 0)
+        {
+            cand = searchstack.Peek();
+            if (cand.m_Children.Count > 0)
+            {
+                searchstack.Push(cand.m_Children[0]);
+            } else
+            {
+                cand = searchstack.Pop();
+                if (cand == searchstack.Peek().m_Children[0])
+                {
+                    searchstack.Push(searchstack.Peek().m_Children[1]);
+                } else
+                {
+                    do
+                    {
+                        cand = searchstack.Pop();
+                    } while ((searchstack.Count > 0) && (cand != searchstack.Peek().m_Children[0]));
+                    if (searchstack.Count > 0)
+                    {
+                        searchstack.Push(searchstack.Peek().m_Children[1]);
+                    } else
+                    {
+                        break;
+                    }
+                }
+            }
+            max_depth = Mathf.Max(max_depth, searchstack.Count);
+        }
+        Debug.Log("BVH binary tree depth is " + max_depth);
+        if (m_TectonicPlatesCount > 0)
+        {
+            Debug.Log("---------Crust BVH Diagnostics---------");
+
+            for (int i = 0; i < m_TectonicPlatesCount; i++)
+            {
+                searchstack.Clear();
+                searchstack.Push(m_TectonicPlates[i].m_BVHPlate);
+                max_depth = searchstack.Count;
+                while (searchstack.Count > 0)
+                {
+                    cand = searchstack.Peek();
+                    if (cand.m_Children.Count > 0)
+                    {
+                        searchstack.Push(cand.m_Children[0]);
+                    }
+                    else
+                    {
+                        cand = searchstack.Pop();
+                        if (cand == searchstack.Peek().m_Children[0])
+                        {
+                            searchstack.Push(searchstack.Peek().m_Children[1]);
+                        }
+                        else
+                        {
+                            do
+                            {
+                                cand = searchstack.Pop();
+                            } while ((searchstack.Count > 0) && (cand != searchstack.Peek().m_Children[0]));
+                            if (searchstack.Count > 0)
+                            {
+                                searchstack.Push(searchstack.Peek().m_Children[1]);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    max_depth = Mathf.Max(max_depth, searchstack.Count);
+                }
+                Debug.Log("BVH binary tree depth for plate " + i + " is " + max_depth);
+            }
+        }
     }
 
 }

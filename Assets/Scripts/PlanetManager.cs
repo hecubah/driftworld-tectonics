@@ -6,8 +6,8 @@ using UnityEngine;
 [Serializable]
 public class PlanetManager : MonoBehaviour
 {
-    public float m_Radius = 1.0f; // multiple of 1000 km
     [HideInInspector] public GameObject m_Surface = null;
+    [Header("asdohijasdohi")]
     public TectonicPlanet m_DataMathSphere = null;
     public TectonicPlanet m_RenderMathSphere = null;
     public TectonicPlanet m_Planet = null;
@@ -23,18 +23,13 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_CrustToDataShader = null;
     public ComputeShader m_DataToRenderShader = null;
     public ComputeShader m_TerrainesConstructShader = null;
-    public ComputeShader m_SubductionShader = null;
-    public ComputeShader m_PlateCollisionsShader = null;
+    public ComputeShader m_PlateInteractionsShader = null;
     public ComputeShader m_DebugTextureShader = null;
     //public ComputeShader m_BVHContureTestShader = null;
 
     public uint m_RandomSeed = 0;
-
-    public uint m_BVHTreeDebugLevel = 0;
-    public float m_BVHTreeDebugBand = 0.1f;
-    public int m_DebugTreeLevel = 0;
-    public float m_DebugPointRange = 0.1f;
-    public int m_NumberOfMissing = 0;
+    public int m_TectonicIterationSteps = 10;
+    public float m_ElevationScaleFactor = 1;
 
     public RandomMersenne m_Random;
 
@@ -43,6 +38,12 @@ public class PlanetManager : MonoBehaviour
     [HideInInspector] public bool m_PropagateData = false;
     [HideInInspector] public bool m_ClampToOceanLevel = false;
 
+    [HideInInspector] public bool m_StepMovePlates = false;
+    [HideInInspector] public bool m_StepSubductionUplift = false;
+    [HideInInspector] public bool m_StepSlabPull = false;
+    [HideInInspector] public bool m_StepErosionDamping = false;
+    [HideInInspector] public bool m_SedimentAccretion = false;
+    [HideInInspector] public bool m_CAPTerrainOnStep = false;
 
     public void DebugFunction()
     {
@@ -80,51 +81,140 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction2()
     {
-        List<Vector3> points_list = new List<Vector3>();
+
+
+        ComputeShader work_shader = m_PlateInteractionsShader;
+
+        int debugKernelHandle = work_shader.FindKernel("CSDebugTest");
+        int total_border_triangles_count = 0;
+        List<BoundingVolumeStruct> crust_BVH_list = new List<BoundingVolumeStruct>();
+        int[] crust_BVH_sps_array = new int[m_Planet.m_TectonicPlatesCount + 1];
+
+
+        CS_Triangle[] crust_triangles_array = new CS_Triangle[m_Planet.m_TrianglesCount];
+        int[] crust_triangle_plates_array = new int[m_Planet.m_CrustTriangles.Count];
+        for (int i = 0; i < crust_triangle_plates_array.Length; i++)
+        {
+            crust_triangle_plates_array[i] = 5000;
+        }
+        Vector4[] plate_transforms = new Vector4[m_Planet.m_TectonicPlatesCount];
+
+        for (int i = 0; i < m_Planet.m_TrianglesCount; i++)
+        {
+            crust_triangles_array[i] = new CS_Triangle(m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_A], m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_B], m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_C], m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_A].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_B].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_C].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_A].plate, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_B].plate, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_C].plate, m_Planet.m_CrustTriangles[i].m_Neighbours[0], m_Planet.m_CrustTriangles[i].m_Neighbours[1], m_Planet.m_CrustTriangles[i].m_Neighbours[2]);
+        }
+
+        crust_BVH_sps_array[0] = 0;
         for (int i = 0; i < m_Planet.m_TectonicPlatesCount; i++)
         {
-            for (int j = 0; j < m_Planet.m_TectonicPlates[i].m_BorderTriangles.Count; j++)
+            crust_BVH_list.AddRange(m_Planet.m_TectonicPlates[i].m_BVHArray);
+            crust_BVH_sps_array[i + 1] = crust_BVH_sps_array[i] + m_Planet.m_TectonicPlates[i].m_BVHArray.Count;
+            Vector4 added_transform = new Vector4();
+            added_transform.x = m_Planet.m_TectonicPlates[i].m_Transform.x;
+            added_transform.y = m_Planet.m_TectonicPlates[i].m_Transform.y;
+            added_transform.z = m_Planet.m_TectonicPlates[i].m_Transform.z;
+            added_transform.w = m_Planet.m_TectonicPlates[i].m_Transform.w;
+            plate_transforms[i] = added_transform;
+            for (int j = 0; j < m_Planet.m_TectonicPlates[i].m_PlateTriangles.Count; j++)
             {
-                points_list.Add(m_Planet.m_CrustTriangles[m_Planet.m_TectonicPlates[i].m_BorderTriangles[j]].m_BCenter);
+                crust_triangle_plates_array[m_Planet.m_TectonicPlates[i].m_PlateTriangles[j]] = i;
             }
+
+            total_border_triangles_count += m_Planet.m_TectonicPlates[i].m_BorderTriangles.Count;
+        }
+
+        BoundingVolumeStruct[] crust_BVH_array = crust_BVH_list.ToArray();
+
+
+
+
+
+
+        Vector3[] vertex_locations_array = m_Planet.m_CrustVertices.ToArray();
+
+        ComputeBuffer vertex_locations_buffer = new ComputeBuffer(m_Planet.m_VerticesCount, 12, ComputeBufferType.Default);
+
+        vertex_locations_buffer.SetData(vertex_locations_array);
+
+        int[] vertex_plates_array = new int[m_Planet.m_VerticesCount];
+        for (int i = 0; i < m_Planet.m_VerticesCount; i++)
+        {
+            vertex_plates_array[i] = m_Planet.m_CrustPointData[i].plate;
+        }
+        ComputeBuffer vertex_plates_buffer = new ComputeBuffer(m_Planet.m_VerticesCount, 4, ComputeBufferType.Default);
+
+
+        vertex_plates_buffer.SetData(vertex_plates_array);
+
+
+
+
+
+        ComputeBuffer crust_triangles_buffer = new ComputeBuffer(crust_triangles_array.Length, 72, ComputeBufferType.Default);
+        ComputeBuffer crust_triangle_plates_buffer = new ComputeBuffer(crust_triangle_plates_array.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer crust_BVH_buffer = new ComputeBuffer(crust_BVH_array.Length, 32, ComputeBufferType.Default);
+        ComputeBuffer crust_BVH_sps_buffer = new ComputeBuffer(crust_BVH_sps_array.Length, 4, ComputeBufferType.Default); // prefix sum of whol BVH
+        ComputeBuffer plate_transforms_buffer = new ComputeBuffer(plate_transforms.Length, 16, ComputeBufferType.Default);
+        ComputeBuffer out_debug_buffer = new ComputeBuffer(m_Planet.m_VerticesCount*m_Planet.m_TectonicPlatesCount, 4, ComputeBufferType.Default);
+
+        crust_triangles_buffer.SetData(crust_triangles_array);
+        crust_triangle_plates_buffer.SetData(crust_triangle_plates_array);
+        crust_BVH_buffer.SetData(crust_BVH_array);
+        crust_BVH_sps_buffer.SetData(crust_BVH_sps_array);
+        plate_transforms_buffer.SetData(plate_transforms);
+
+
+        work_shader.SetBuffer(debugKernelHandle, "vertex_locations", vertex_locations_buffer);
+        work_shader.SetBuffer(debugKernelHandle, "vertex_plates", vertex_plates_buffer);
+        work_shader.SetInt("n_vertices", m_Planet.m_VerticesCount);
+        work_shader.SetInt("n_triangles", crust_triangle_plates_array.Length);
+        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
+        work_shader.SetInt("maxn_border_triangles", APR.MaxBorderTrianglesCount);
+        work_shader.SetInt("n_crust_border_triangles", total_border_triangles_count);
+        work_shader.SetBuffer(debugKernelHandle, "crust_triangles", crust_triangles_buffer);
+        work_shader.SetBuffer(debugKernelHandle, "crust_triangle_plates", crust_triangle_plates_buffer);
+        work_shader.SetBuffer(debugKernelHandle, "crust_BVH", crust_BVH_buffer);
+        work_shader.SetBuffer(debugKernelHandle, "crust_BVH_sps", crust_BVH_sps_buffer);
+        work_shader.SetBuffer(debugKernelHandle, "plate_transforms", plate_transforms_buffer);
+        work_shader.SetBuffer(debugKernelHandle, "out_debug", out_debug_buffer);
+
+        work_shader.Dispatch(debugKernelHandle, total_border_triangles_count / 64 + (total_border_triangles_count % 64 != 0 ? 1 : 0), 1, 1);
+
+        vertex_locations_buffer.Release();
+        vertex_plates_buffer.Release();
+        crust_triangles_buffer.Release();
+        crust_triangle_plates_buffer.Release();
+        crust_BVH_buffer.Release();
+        crust_BVH_sps_buffer.Release();
+        plate_transforms_buffer.Release();
+
+        int[,] outik = new int[m_Planet.m_TectonicPlatesCount, m_Planet.m_VerticesCount];
+        out_debug_buffer.GetData(outik);
+        int[] platy = new int[m_Planet.m_TectonicPlatesCount];
+        for (int i = 0; i < m_Planet.m_TectonicPlatesCount; i++)
+        {
+            for (int j = 0; j < m_Planet.m_VerticesCount; j++)
+            {
+                platy[i] += outik[i, j];
+            }
+            Debug.Log(platy[i]);
+
+
         }
 
 
-        int kernelHandle = m_DebugTextureShader.FindKernel("CSCirclePointsTexture");
-
-        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
-        com_tex.enableRandomWrite = true;
-        com_tex.Create();
-
-        Vector3[] points_array = points_list.ToArray();
-
-        ComputeBuffer points_buffer = new ComputeBuffer(points_array.Length, 12, ComputeBufferType.Default);
-        points_buffer.SetData(points_array);
-
-        m_DebugTextureShader.SetBuffer(kernelHandle, "points", points_buffer);
-
-        m_DebugTextureShader.SetInt("points_count", points_array.Length);
-        m_DebugTextureShader.SetFloat("point_radius", 0.05f);
-
-        m_DebugTextureShader.SetTexture(kernelHandle, "Result", com_tex);
-        m_DebugTextureShader.Dispatch(kernelHandle, 256, 1024, 1);
-
-        points_buffer.Release();
-
-        RenderTexture.active = com_tex;
-        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
-        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
-        RenderTexture.active = null;
-        com_tex.Release();
-        tex.Apply();
-        GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
-        m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+        out_debug_buffer.Release();
+        /*
+        StructuredBuffer<float3> vertex_locations;
+        StructuredBuffer<int> vertex_plates;
+        int n_vertices;
+        */
 
     }
 
     public void DebugFunction3()
     {
-        List<Vector3> points_list = m_Planet.SubductionStep();
+        List<Vector3> points_list = m_Planet.PlateContactPoints();
 
         if (points_list.Count > 0)
         {
@@ -164,6 +254,12 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction4()
     {
+        float[] elevations = new float[m_Planet.m_VerticesCount];
+        for (int i = 0; i < m_Planet.m_VerticesCount; i++)
+        {
+            elevations[i] = m_Planet.m_CrustPointData[i].elevation;
+        }
+        Debug.Log(Mathf.Max(elevations) + "; " + Mathf.Min(elevations));
     }
 
     // Start is called before the first frame update
@@ -192,7 +288,7 @@ public class PlanetManager : MonoBehaviour
         {
             m_Random = new RandomMersenne(m_RandomSeed);
         }
-        m_Planet = new TectonicPlanet(m_Radius);
+        m_Planet = new TectonicPlanet(APR.PlanetRadius);
         m_Planet.LoadDefaultTopology(m_DataMeshFilename, m_RenderMeshFilename);
         m_RenderMode = "normal";
         RenderSurfaceMesh();

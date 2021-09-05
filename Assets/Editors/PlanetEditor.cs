@@ -22,7 +22,10 @@ public class PlanetEditor : Editor
             {
                 GUILayout.Label("Tectonic plates count: " + m_PlanetManager.m_Planet.m_TectonicPlates.Count.ToString()); // number of tectonic plates
             }
-            m_PlanetManager.m_PropagateCrust = GUILayout.Toggle(m_PlanetManager.m_PropagateCrust, "Auto-propagate crust"); // toggle if the crust data should propagate automatically to main data
+            if (m_PlanetManager.m_Planet.m_TectonicPlatesCount > 0)
+            {
+                m_PlanetManager.m_PropagateCrust = GUILayout.Toggle(m_PlanetManager.m_PropagateCrust, "Auto-propagate crust"); // toggle if the crust data should propagate automatically to main data
+            }
             m_PlanetManager.m_PropagateData = GUILayout.Toggle(m_PlanetManager.m_PropagateData, "Auto-propagate data"); // toggle if the main data should propagate automatically to render data
             m_PlanetManager.m_ClampToOceanLevel = GUILayout.Toggle(m_PlanetManager.m_ClampToOceanLevel, "Clamp to ocean level"); // toggle if the elevation is to be clamped to ocean level
         }
@@ -76,10 +79,31 @@ public class PlanetEditor : Editor
             GUILayout.Label("Tectonic surface tools:");
             if (m_PlanetManager.m_Planet.m_TectonicPlates.Count > 0) // if there is at least one tectonic plate
             {
-                if (GUILayout.Button("Move tectonic plates")) // iterate tectonic motion
+                m_PlanetManager.m_StepMovePlates = GUILayout.Toggle(m_PlanetManager.m_StepMovePlates, "Move plates on step");
+                m_PlanetManager.m_StepSubductionUplift = GUILayout.Toggle(m_PlanetManager.m_StepSubductionUplift, "Subduction uplift on step");
+                if (m_PlanetManager.m_StepSubductionUplift)
                 {
-                    m_PlanetManager.m_Planet.MovePlates(); // move plates
+                    m_PlanetManager.m_StepSlabPull = GUILayout.Toggle(m_PlanetManager.m_StepSlabPull, "Slab pull on step");
+                }
+                m_PlanetManager.m_StepErosionDamping = GUILayout.Toggle(m_PlanetManager.m_StepErosionDamping, "Erosion and damping");
+                if (m_PlanetManager.m_StepErosionDamping)
+                {
+                    m_PlanetManager.m_SedimentAccretion = GUILayout.Toggle(m_PlanetManager.m_SedimentAccretion, "Sediment accretion on step");
+                }
+                m_PlanetManager.m_CAPTerrainOnStep = GUILayout.Toggle(m_PlanetManager.m_CAPTerrainOnStep, "Draw terrain texture on step");
+
+
+                if (GUILayout.Button("Tectonic step")) // iterate tectonic motion
+                {
+                    for (int i = 0; i < m_PlanetManager.m_TectonicIterationSteps; i++)
+                    {
+                        m_PlanetManager.m_Planet.TectonicStep(); // do stuff
+                    }
                     m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
+                    if (m_PlanetManager.m_CAPTerrainOnStep)
+                    {
+                        m_PlanetManager.CAPTerrainTexture(m_PlanetManager.m_Planet);
+                    }
                 }
                 if (GUILayout.Button("Paint plate borders"))
                 {
@@ -155,6 +179,10 @@ public class PlanetEditor : Editor
             if (GUILayout.Button("Initialize RNG"))
             {
                 m_PlanetManager.m_Random.RandomInit(m_PlanetManager.m_RandomSeed); // initialize Mersenne RNG using given seed
+            }
+            if (GUILayout.Button("BVH Diagnostics"))
+            {
+                m_PlanetManager.m_Planet.BVHDiagnostics();
             }
         }
         GUILayout.EndVertical(); // work in progress tools box end

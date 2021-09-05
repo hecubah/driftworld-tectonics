@@ -70,6 +70,7 @@
     <Compile Include="Assets\Scripts\Crust.cs" />
     <Compile Include="Assets\Scripts\MT19997.cs" />
     <Compile Include="Assets\Scripts\Planet.cs" />
+    <Compile Include="Assets\Scripts\PlanetBehaviour.cs" />
     <Compile Include="Assets\Scripts\PlanetManager.cs" />
     <Compile Include="Assets\Scripts\ShaderStructs.cs" />
     <Compile Include="Assets\Scripts\TopoMeshInterpreter.cs" />
@@ -77,14 +78,13 @@
     <None Include="Assets\Shaders\CSTriangleCollisionTest.compute" />
     <None Include="Assets\Shaders\CSDefaultTerrainTexture.compute" />
     <None Include="Assets\Shaders\CSFractalTerrain.compute" />
-    <None Include="Assets\Shaders\CSPlateCollisions.compute" />
+    <None Include="Assets\Shaders\CSPlateInteractions.compute" />
     <None Include="Assets\Shaders\CSDebugTexture.compute" />
     <None Include="Assets\Shaders\CSCircleMerge.compute" />
     <None Include="Assets\Shaders\CSBVHNN.compute" />
     <None Include="Assets\Shaders\SphereTextureShader.shader" />
     <None Include="Assets\Shaders\CSBVHContureTest.compute" />
     <None Include="Assets\Shaders\CSPlatesAreaTexture.compute" />
-    <None Include="Assets\Shaders\CSSubduction.compute" />
     <None Include="Assets\Shaders\CSTrianglePath.compute" />
     <None Include="Assets\Shaders\CSDataToRender.compute" />
     <None Include="Assets\Shaders\CSTerrainesConstruct.compute" />
