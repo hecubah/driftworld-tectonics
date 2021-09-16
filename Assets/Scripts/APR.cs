@@ -8,7 +8,7 @@ public static class APR
     public static float FractalTerrainElevationStep = 0.003f; // minimal elevation in every fractal terrain generation iteration
     public static float MarkupElevation = 0.1f; // uniform elevation for mark-ups
     public static float PlateInitElevationRange = 0.1f; // maximum interval of uniform elevation for new plates
-    public static int PlateInitNumberOfCentroids = 20; // number of initial tectonic plates (Voronoi centers)
+    public static int PlateInitNumberOfCentroids = 7; // number of initial tectonic plates (Voronoi centers)
     public static float PlateInitLandRatio = 0.0f;// 0.33f; // land to sea ratio
     //public static float MaxPlateAngularSpeed = 0.03f; // per million years;
 

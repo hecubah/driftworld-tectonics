@@ -7,11 +7,11 @@ using UnityEngine;
 public class PlanetManager : MonoBehaviour
 {
     [HideInInspector] public GameObject m_Surface = null;
-    [Header("asdohijasdohi")]
     public TectonicPlanet m_DataMathSphere = null;
     public TectonicPlanet m_RenderMathSphere = null;
     public TectonicPlanet m_Planet = null;
 
+    [Header("asdohijasdohi")]
     public string m_DataMeshFilename = "";
     public string m_RenderMeshFilename = "";
     public ComputeShader m_DefaultTerrainTextureCShader = null;
@@ -81,7 +81,7 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction2()
     {
-
+        m_Planet.UpdateCBBuffers();
 
         ComputeShader work_shader = m_PlateInteractionsShader;
 
@@ -91,7 +91,7 @@ public class PlanetManager : MonoBehaviour
         int[] crust_BVH_sps_array = new int[m_Planet.m_TectonicPlatesCount + 1];
 
 
-        CS_Triangle[] crust_triangles_array = new CS_Triangle[m_Planet.m_TrianglesCount];
+        CS_TriangleY[] crust_triangles_array = new CS_TriangleY[m_Planet.m_TrianglesCount];
         int[] crust_triangle_plates_array = new int[m_Planet.m_CrustTriangles.Count];
         for (int i = 0; i < crust_triangle_plates_array.Length; i++)
         {
@@ -101,7 +101,7 @@ public class PlanetManager : MonoBehaviour
 
         for (int i = 0; i < m_Planet.m_TrianglesCount; i++)
         {
-            crust_triangles_array[i] = new CS_Triangle(m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_A], m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_B], m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_C], m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_A].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_B].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_C].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_A].plate, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_B].plate, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_C].plate, m_Planet.m_CrustTriangles[i].m_Neighbours[0], m_Planet.m_CrustTriangles[i].m_Neighbours[1], m_Planet.m_CrustTriangles[i].m_Neighbours[2]);
+            crust_triangles_array[i] = new CS_TriangleY(m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_A], m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_B], m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_C], m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_A].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_B].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_C].elevation, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_A].plate, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_B].plate, m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_C].plate, m_Planet.m_CrustTriangles[i].m_Neighbours[0], m_Planet.m_CrustTriangles[i].m_Neighbours[1], m_Planet.m_CrustTriangles[i].m_Neighbours[2]);
         }
 
         crust_BVH_sps_array[0] = 0;
@@ -254,12 +254,17 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction4()
     {
-        float[] elevations = new float[m_Planet.m_VerticesCount];
-        for (int i = 0; i < m_Planet.m_VerticesCount; i++)
+        Vector4[] omd = new Vector4 [m_Planet.m_TectonicPlatesCount];
+        if (m_Planet.m_CBuffers["plate_transforms"] != null)
         {
-            elevations[i] = m_Planet.m_CrustPointData[i].elevation;
+            m_Planet.m_CBuffers["plate_transforms"].GetData(omd);
         }
-        Debug.Log(Mathf.Max(elevations) + "; " + Mathf.Min(elevations));
+        string dbg = "";
+        for (int i = 0; i < m_Planet.m_TectonicPlatesCount; i++)
+        {
+            dbg += omd[i] + "\t";
+        }
+        Debug.Log(dbg);
     }
 
     // Start is called before the first frame update
@@ -294,6 +299,7 @@ public class PlanetManager : MonoBehaviour
         RenderSurfaceMesh();
         m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
         GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
+        m_Planet.InitializeCBuffers();
     }
 
     public void RenderSurfaceMesh()

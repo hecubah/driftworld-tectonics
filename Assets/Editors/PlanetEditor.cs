@@ -39,9 +39,18 @@ public class PlanetEditor : Editor
         }
         bool plates_render, data_render, default_render; // variables for button switching between render modes
 
+        if (planet_is_loaded) // if a planet is loaded
+        {
+            if (GUILayout.Button("Clear/initialize buffers"))
+            {
+                m_PlanetManager.m_Planet.InitializeCBuffers();
+            }
+        }
+
         GUILayout.BeginHorizontal(); // render mode switching box begin
         if (planet_is_loaded) // if a planet is loaded
         {
+
             GUILayout.Label("Set render mode:");
             if (m_PlanetManager.m_Planet.m_TectonicPlates.Count > 0) // if there is at least one tectonic plate
             {

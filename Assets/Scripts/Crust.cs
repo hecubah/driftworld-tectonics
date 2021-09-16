@@ -57,12 +57,3 @@ public class Crust
 
 }
 
-public struct BoundingVolumeStruct
-{
-    public int n_children;
-    public int left_child;
-    public int right_child;
-    public int triangle_index;
-    public Vector3 circumcenter;
-    public float circumradius;
-}

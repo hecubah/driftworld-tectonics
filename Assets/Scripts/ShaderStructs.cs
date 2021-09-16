@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-struct CS_Triangle // size of 72 B
+public struct CS_TriangleY // size of 72 B
 {
     public Vector3 A;
     public Vector3 B;
@@ -16,7 +16,7 @@ struct CS_Triangle // size of 72 B
     public int neigh_1;
     public int neigh_2;
     public int neigh_3;
-    public CS_Triangle(Vector3 A_p, Vector3 B_p, Vector3 C_p, float eA_p, float eB_p, float eC_p, int pA_p, int pB_p, int pC_p, int n1_p, int n2_p, int n3_p)
+    public CS_TriangleY(Vector3 A_p, Vector3 B_p, Vector3 C_p, float eA_p, float eB_p, float eC_p, int pA_p, int pB_p, int pC_p, int n1_p, int n2_p, int n3_p)
     {
         A = A_p;
         B = B_p;
@@ -33,7 +33,48 @@ struct CS_Triangle // size of 72 B
     }
 }
 
-struct CS_PlateContact // size of 28 B
+public struct CS_Triangle // size of 40 B
+{
+    public int A;
+    public int B;
+    public int C;
+    public int neigh_1;
+    public int neigh_2;
+    public int neigh_3;
+    public Vector3 circumcenter;
+    public float circumradius;
+    public CS_Triangle(int A_p, int B_p, int C_p, int n1_p, int n2_p, int n3_p, Vector3 cc_p, float cr_p)
+    {
+        A = A_p;
+        B = B_p;
+        C = C_p;
+        neigh_1 = n1_p;
+        neigh_2 = n2_p;
+        neigh_3 = n3_p;
+        circumcenter = cc_p;
+        circumradius = cr_p;
+    }
+}
+
+public struct CS_VertexData // size of 8 B
+{
+    public float elevation;
+    public int plate;
+
+    public CS_VertexData(float elevation_p, int plate_p)
+    {
+        elevation = elevation_p;
+        plate = plate_p;
+    }
+
+    public CS_VertexData(PointData source)
+    {
+        elevation = source.elevation;
+        plate = source.plate;
+    }
+}
+
+public struct CS_PlateContact // size of 28 B
 {
     public int contact_occured;
     public Vector3 contact_point;
@@ -48,4 +89,14 @@ struct CS_PlateContact // size of 28 B
         contacting_plate = contacting_plate_p;
         contacted_plate = contacted_plate_p;
     }
+}
+
+public struct BoundingVolumeStruct // size of 32 B
+{
+    public int n_children;
+    public int left_child;
+    public int right_child;
+    public int triangle_index;
+    public Vector3 circumcenter;
+    public float circumradius;
 }

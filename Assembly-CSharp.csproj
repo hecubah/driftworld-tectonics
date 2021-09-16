@@ -9,7 +9,7 @@
     <ProductVersion>10.0.20506</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <RootNamespace></RootNamespace>
-    <ProjectGuid>{221DD665-4347-6E58-AB74-77E76EC4A316}</ProjectGuid>
+    <ProjectGuid>{9BBCF955-C42F-20F2-4FB6-D53E7F7E9688}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <AssemblyName>Assembly-CSharp</AssemblyName>
@@ -85,6 +85,8 @@
     <None Include="Assets\Shaders\SphereTextureShader.shader" />
     <None Include="Assets\Shaders\CSBVHContureTest.compute" />
     <None Include="Assets\Shaders\CSPlatesAreaTexture.compute" />
+    <None Include="Assets\Shaders\CSSubduction.compute" />
+    <None Include="Assets\Shaders\CSPlateCollisions.compute" />
     <None Include="Assets\Shaders\CSTrianglePath.compute" />
     <None Include="Assets\Shaders\CSDataToRender.compute" />
     <None Include="Assets\Shaders\CSTerrainesConstruct.compute" />
@@ -617,31 +619,31 @@
       <HintPath>C:/Program Files/Unity/Hub/Editor/2019.4.11f1/Editor/Data/NetStandard/compat/2.0.0/shims/netfx/System.Xml.Serialization.dll</HintPath>
     </Reference>
     <Reference Include="Unity.Timeline.Editor">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/Unity.Timeline.Editor.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/Unity.Timeline.Editor.dll</HintPath>
     </Reference>
     <Reference Include="Unity.VSCode.Editor">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/Unity.VSCode.Editor.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/Unity.VSCode.Editor.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TextMeshPro.Editor">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/Unity.TextMeshPro.Editor.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/Unity.TextMeshPro.Editor.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/UnityEngine.UI.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/UnityEngine.UI.dll</HintPath>
     </Reference>
     <Reference Include="Unity.Timeline">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/Unity.Timeline.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/Unity.Timeline.dll</HintPath>
     </Reference>
     <Reference Include="Unity.CollabProxy.Editor">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/Unity.CollabProxy.Editor.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/Unity.CollabProxy.Editor.dll</HintPath>
     </Reference>
     <Reference Include="Unity.Rider.Editor">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/Unity.Rider.Editor.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/Unity.Rider.Editor.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/Unity.TextMeshPro.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/Unity.TextMeshPro.dll</HintPath>
     </Reference>
     <Reference Include="UnityEditor.UI">
-      <HintPath>C:/Users/Abyss/Documents/Unity projects/Driftworld/Library/ScriptAssemblies/UnityEditor.UI.dll</HintPath>
+      <HintPath>C:/Users/Abyss/Documents/Unity projects/driftworld/Library/ScriptAssemblies/UnityEditor.UI.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup></ItemGroup>
