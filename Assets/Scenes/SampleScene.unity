@@ -1002,8 +1002,7 @@ MonoBehaviour:
   m_CircleMergeShader: {fileID: 7200000, guid: 67c0f866e7f0ae3409d5fdcdbf218cf9, type: 3}
   m_BVHNearestNeighbourShader: {fileID: 7200000, guid: d8a0db6cc20fea742bd3c959f9b06a30,
     type: 3}
-  m_CrustToDataShader: {fileID: 7200000, guid: 016dc696076448a4191e63bc1afd279f, type: 3}
-  m_DataToRenderShader: {fileID: 7200000, guid: bea1c3ff193a97842bde00d04d94518f,
+  m_VertexDataInterpolationShader: {fileID: 7200000, guid: 016dc696076448a4191e63bc1afd279f,
     type: 3}
   m_TerrainesConstructShader: {fileID: 7200000, guid: 1fe41ac217945204cb44b70706acb1c2,
     type: 3}
@@ -1013,14 +1012,14 @@ MonoBehaviour:
     type: 3}
   m_RandomSeed: 120
   m_TectonicIterationSteps: 1
-  m_ElevationScaleFactor: 1
+  m_ElevationScaleFactor: 100
   m_RenderMode: normal
   m_PropagateCrust: 0
   m_PropagateData: 0
   m_ClampToOceanLevel: 0
   m_StepMovePlates: 1
   m_StepSubductionUplift: 1
-  m_StepSlabPull: 0
+  m_StepSlabPull: 1
   m_StepErosionDamping: 0
   m_SedimentAccretion: 0
   m_CAPTerrainOnStep: 1

@@ -1,0 +1,638 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSCrustToData
+#pragma kernel CSDataToRender
+#define MAX_DISTANCE 1000 // initialization protection
+#define MAX_DFS_STACK_SIZE 40
+#define DISTANCE_TOLERANCE 0.001f
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+
+
+struct BV {
+    int n_children;
+    int left_child;
+    int right_child;
+    int triangle_index;
+    float3 circumcenter;
+    float circumradius;
+};
+
+struct s_triangle {
+    int a;
+    int b;
+    int c;
+    int neigh_1;
+    int neigh_2;
+    int neigh_3;
+    float3 circumcenter;
+    float circumradius;
+};
+
+struct vertex_data {
+    float elevation;
+    int plate;
+};
+
+int n_plates;
+
+StructuredBuffer<int> overlap_matrix;
+
+StructuredBuffer<BV> BVH_array;
+StructuredBuffer<float4> plate_transforms;
+
+int n_data_vertices;
+float ocean_base_floor;
+
+StructuredBuffer<int> crust_border_triangles_array;
+StructuredBuffer<int> crust_border_triangles_array_sizes;
+StructuredBuffer<float3> crust_border_triangles_array_bcenters;
+
+float highest_oceanic_ridge_elevation;
+float abyssal_plains_elevation;
+float oceanic_ridge_elevation_falloff;
+
+StructuredBuffer<float3> crust_vertex_locations;
+StructuredBuffer<s_triangle> crust_triangles;
+StructuredBuffer<vertex_data> crust_vertex_data;
+
+StructuredBuffer<BV> crust_BVH;
+StructuredBuffer<int> crust_BVH_sps;
+StructuredBuffer<float3> data_vertex_locations;
+RWStructuredBuffer<vertex_data> data_vertex_data;
+StructuredBuffer<s_triangle> crust_border_triangles;
+StructuredBuffer<int> crust_border_triangles_sps;
+
+int n_render_vertices;
+StructuredBuffer<BV> data_BVH;
+StructuredBuffer<s_triangle> data_triangles;
+StructuredBuffer<float3> render_vertex_locations;
+RWStructuredBuffer<vertex_data> render_vertex_data;
+
+
+float4 qmul(float4 q1, float4 q2) {
+    return float4(
+        q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
+        q1.w * q2.w - dot(q1.xyz, q2.xyz)
+        );
+}
+
+float3 quat_rot(float3 v, float4 r) {
+    float4 r_c = r * float4(-1, -1, -1, 1);
+    return qmul(r, qmul(float4(v, 0), r_c)).xyz;
+}
+
+bool is_point_in_crust_tri(float3 vertex_location, s_triangle tested_triangle) {
+    float3 abcross, bccross, cacross, triangle_barycenter;
+    float abplane_test, bcplane_test, caplane_test;
+    float3 A, B, C;
+    A = crust_vertex_locations[tested_triangle.a];
+    B = crust_vertex_locations[tested_triangle.b];
+    C = crust_vertex_locations[tested_triangle.c];
+    abcross = cross(A, B);
+    bccross = cross(B, C);
+    cacross = cross(C, A);
+    abplane_test = dot(abcross, vertex_location);
+    bcplane_test = dot(bccross, vertex_location);
+    caplane_test = dot(cacross, vertex_location);
+    return ((abplane_test + DISTANCE_TOLERANCE >= 0) && (bcplane_test + DISTANCE_TOLERANCE >= 0) && (caplane_test + DISTANCE_TOLERANCE >= 0));
+}
+
+int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
+{
+    int candidate_triangle_index = -1;
+    int dfs_stack[MAX_DFS_STACK_SIZE];
+    int stack_index = 0;
+
+    dfs_stack[stack_index] = 0;
+
+    float3 vl = data_vertex_locations[vertex_index];
+    float3 vlt = quat_rot(data_vertex_locations[vertex_index], plate_transforms[index_bv_plate] * float4(-1, -1, -1, 1));
+    int offset = crust_BVH_sps[index_bv_plate];
+
+    s_triangle candidate, candidate_neighbour; // maybe delete
+
+    float dot_prod, dist, barycenter_dot_product, barycenter_dot_max;
+
+    bool nearest_barycenter_found, plate_check;
+
+    while (stack_index >= 0) {
+        dot_prod = dot(vlt, crust_BVH[offset + dfs_stack[stack_index]].circumcenter);
+
+        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
+
+        if (dist > crust_BVH[offset + dfs_stack[stack_index]].circumradius * 1.01f) {
+            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) {
+                stack_index--;
+            }
+            if (stack_index == 0) {
+                return -1;
+            }
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
+            continue;
+        }
+        if (crust_BVH[offset + dfs_stack[stack_index]].n_children == 2) {
+            dfs_stack[stack_index + 1] = crust_BVH[offset + dfs_stack[stack_index]].left_child;
+            stack_index++;
+        }
+        else {
+            // triangle test START
+            if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) {
+                // TODO - search by barycenters, test nearest barycenter triangle and its neighbours
+                candidate_triangle_index = crust_BVH[offset + dfs_stack[stack_index]].triangle_index;
+                if (is_point_in_crust_tri(vlt, crust_triangles[candidate_triangle_index])) {
+                    return candidate_triangle_index;
+                }
+                
+                candidate = crust_triangles[candidate_triangle_index];
+                barycenter_dot_max = dot(vlt, normalize(crust_vertex_locations[candidate.a] + crust_vertex_locations[candidate.b] + crust_vertex_locations[candidate.c]));
+                nearest_barycenter_found = false;
+                while (!nearest_barycenter_found) {
+                    nearest_barycenter_found = true;
+                    candidate_neighbour = crust_triangles[candidate.neigh_1];
+                    plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
+                    barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
+                    if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
+                        barycenter_dot_max = barycenter_dot_product;
+                        candidate_triangle_index = candidate.neigh_1;
+                        candidate = candidate_neighbour;
+                        nearest_barycenter_found = false;
+                        continue;
+                    }
+                    candidate_neighbour = crust_triangles[candidate.neigh_2];
+                    plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
+                    barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
+                    if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
+                        barycenter_dot_max = barycenter_dot_product;
+                        candidate_triangle_index = candidate.neigh_2;
+                        candidate = candidate_neighbour;
+                        nearest_barycenter_found = false;
+                        continue;
+                    }
+                    candidate_neighbour = crust_triangles[candidate.neigh_3];
+                    plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
+                    barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
+                    if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
+                        barycenter_dot_max = barycenter_dot_product;
+                        candidate_triangle_index = candidate.neigh_3;
+                        candidate = candidate_neighbour;
+                        nearest_barycenter_found = false;
+                        continue;
+                    }
+                }
+                if (is_point_in_crust_tri(vlt, candidate)) {
+                    return candidate_triangle_index;
+                }
+                candidate_neighbour = crust_triangles[candidate.neigh_1];
+                plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
+                barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
+                if ((plate_check) && (is_point_in_crust_tri(vlt, candidate_neighbour))) {
+                    return candidate.neigh_1;
+                }
+                candidate_neighbour = crust_triangles[candidate.neigh_2];
+                plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
+                barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
+                if ((plate_check) && (is_point_in_crust_tri(vlt, candidate_neighbour))) {
+                    return candidate.neigh_2;
+                }
+                candidate_neighbour = crust_triangles[candidate.neigh_3];
+                plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
+                barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
+                if ((plate_check) && (is_point_in_crust_tri(vlt, candidate_neighbour))) {
+                    return candidate.neigh_3;
+                }
+                
+                
+            }
+            // triangle test END
+            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
+            {
+                stack_index--;
+            }
+            if (stack_index == 0) {
+                return -1;
+            }
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;            
+        }
+        
+    }
+    return -1;
+}
+
+vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, float4 triangle_transformation) {
+    float3 a = crust_vertex_locations[crust_triangles[triangle_index].a];
+    float3 b = crust_vertex_locations[crust_triangles[triangle_index].b];
+    float3 c = crust_vertex_locations[crust_triangles[triangle_index].c];
+    float u, v, w;
+    float3 v0 = b - a;
+    float3 v1 = c - a;
+    float3 v2 = quat_rot(ipoint, triangle_transformation * float4(-1, -1, -1, 1)) - a;
+    float d00 = dot(v0, v0);
+    float d01 = dot(v0, v1);
+    float d11 = dot(v1, v1);
+    float d20 = dot(v2, v0);
+    float d21 = dot(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+    v = (d11 * d20 - d01 * d21) / denom;
+    w = (d00 * d21 - d01 * d20) / denom;
+    u = 1.0f - v - w;
+    vertex_data ret;
+
+    float e1, e2, e3;
+    e1 = crust_vertex_data[crust_triangles[triangle_index].a].elevation;
+    e2 = crust_vertex_data[crust_triangles[triangle_index].b].elevation;
+    e3 = crust_vertex_data[crust_triangles[triangle_index].c].elevation;
+
+    ret.elevation = (u * e1 + v * e2 + w * e3);
+    ret.plate = crust_vertex_data[crust_triangles[triangle_index].a].plate;
+    if (v > u) {
+        ret.plate = crust_vertex_data[crust_triangles[triangle_index].b].plate;
+    }
+    if (w > v) {
+        ret.plate = crust_vertex_data[crust_triangles[triangle_index].c].plate;
+    }
+    return ret;
+}
+
+[numthreads(64, 1, 1)]
+void CSCrustToData(uint3 dID : SV_DispatchThreadID)
+{
+    
+    int ivi = dID.x; // interpolated vertex index
+    if (ivi >= n_data_vertices) {
+        return;
+    }
+
+    float3 iv = data_vertex_locations[ivi];
+    int found_index = -1;
+    int found_plate = -1;
+
+    for (int i = 0; i < n_plates; i++) {
+        int help_index;
+        if ((found_plate == -1) || (overlap_matrix[i * n_plates + found_plate] != -1)) {
+            
+            help_index = search_plate_bvh_for_point(ivi, i);
+            if (help_index != -1) {
+                found_index = help_index;
+                found_plate = i;
+            }
+        }
+    }
+    float3 iv_transformed;
+    if (found_index == -1) {
+        float dist_1 = MAX_DISTANCE; // start from far
+        int plate_1 = -1; // no plate yet
+        s_triangle triangle_1 = crust_border_triangles[0]; // dummy init
+        float elevation_1 = abyssal_plains_elevation;
+        float dist_2 = MAX_DISTANCE; // start from far
+        int plate_2 = -1; // no plate yet
+        s_triangle triangle_2 = crust_border_triangles[0];
+        float elevation_2 = abyssal_plains_elevation;
+        float check_dist = MAX_DISTANCE;
+        s_triangle check_triangle;
+        float3 check_bcenter;
+        s_triangle control_triangle = crust_border_triangles[0];
+
+        for (int i = 0; i < n_plates; i++) {
+            float check_dist = MAX_DISTANCE;
+            int crust_border_loop_size = crust_border_triangles_sps[i + 1] - crust_border_triangles_sps[i];            
+            iv_transformed = quat_rot(iv, plate_transforms[i] * float4(-1, -1, -1, 1));
+
+            for (int j = 0; j < crust_border_loop_size; j++) {
+                check_triangle = crust_border_triangles[crust_border_triangles_sps[i] + j];
+                check_bcenter = normalize(crust_vertex_locations[check_triangle.a] + crust_vertex_locations[check_triangle.b] + crust_vertex_locations[check_triangle.c]);
+                float dot_product = dot(check_bcenter, iv_transformed);
+                if ((dot_product <= 1 ? acos(dot_product) : 0) < check_dist) {
+                    check_dist = (dot_product <= 1 ? acos(dot_product) : 0);
+                    control_triangle = check_triangle;
+                }
+            }
+            if (i == 0) {
+                dist_1 = check_dist;
+                plate_1 = 0;
+                triangle_1 = control_triangle;
+            } else if (i == 1) {
+                if (check_dist < dist_1) {
+                    dist_2 = dist_1;
+                    plate_2 = 0;
+                    triangle_2 = triangle_1;
+                    dist_1 = check_dist;
+                    plate_1 = 1;
+                    triangle_1 = control_triangle;
+                }
+                else {
+                    dist_2 = check_dist;
+                    plate_2 = 1;
+                    triangle_2 = control_triangle;
+                }
+            }
+            else if (check_dist < dist_2) {
+                if (check_dist < dist_1) {
+                    dist_2 = dist_1;
+                    plate_2 = plate_1;
+                    triangle_2 = triangle_1;
+                    dist_1 = check_dist;
+                    plate_1 = i;
+                    triangle_1 = control_triangle;
+                }
+                else {
+                    dist_2 = check_dist;
+                    plate_2 = i;
+                    triangle_2 = control_triangle;
+                }
+            }
+            
+            float3 control_point = crust_vertex_locations[triangle_1.a];
+            float dot_product = dot(control_point, iv_transformed);
+            float max_dot_product = dot_product;
+            elevation_1 = crust_vertex_data[triangle_1.a].elevation;
+
+            control_point = crust_vertex_locations[triangle_1.b];
+            dot_product = dot(control_point, iv_transformed);
+            if (dot_product > max_dot_product) {
+                elevation_1 = crust_vertex_data[triangle_1.b].elevation;
+                max_dot_product = dot_product;
+            }
+
+            control_point = crust_vertex_locations[triangle_1.c];
+            dot_product = dot(control_point, iv_transformed);
+            if (dot_product > max_dot_product) {
+                elevation_1 = crust_vertex_data[triangle_1.c].elevation;
+                max_dot_product = dot_product;
+            }
+            
+            // second plate
+
+            control_point = crust_vertex_locations[triangle_1.a];
+            dot_product = dot(control_point, iv_transformed);
+            max_dot_product = dot_product;
+            elevation_2 = crust_vertex_data[triangle_2.a].elevation;
+
+            control_point = crust_vertex_locations[triangle_1.b];
+            dot_product = dot(control_point, iv_transformed);
+            if (dot_product > max_dot_product) {
+                elevation_2 = crust_vertex_data[triangle_2.b].elevation;
+                max_dot_product = dot_product;
+            }
+
+            control_point = crust_vertex_locations[triangle_1.c];
+            dot_product = dot(control_point, iv_transformed);
+            if (dot_product > max_dot_product) {
+                elevation_2 = crust_vertex_data[triangle_2.c].elevation;
+                max_dot_product = dot_product;
+            }
+
+        }
+        
+        float dist_ridge = 0.5f * (dist_1 + dist_2) - dist_1;
+        float alpha = dist_ridge / (dist_ridge + dist_1);
+
+        //float plates_contribution = 0.5f * alpha * elevation_1 + (1 - 0.5f * alpha) * elevation_2;
+        float plates_contribution = alpha * elevation_1;
+        float ridge_contribution = (highest_oceanic_ridge_elevation - abyssal_plains_elevation) * exp2(-dist_ridge / oceanic_ridge_elevation_falloff) + abyssal_plains_elevation;
+
+        data_vertex_data[ivi].elevation = alpha * plates_contribution + (1 - alpha) * ridge_contribution;
+        data_vertex_data[ivi].plate = plate_1;
+    }
+    else {
+
+        data_vertex_data[ivi] = crust_barycentric_interpolation(iv, found_index, plate_transforms[found_plate]);
+    }
+}
+
+bool is_point_in_data_tri(float3 vertex_location, s_triangle tested_triangle) {
+    float3 abcross, bccross, cacross, triangle_barycenter;
+    float abplane_test, bcplane_test, caplane_test;
+    float3 A, B, C;
+    A = data_vertex_locations[tested_triangle.a];
+    B = data_vertex_locations[tested_triangle.b];
+    C = data_vertex_locations[tested_triangle.c];
+    abcross = cross(A, B);
+    bccross = cross(B, C);
+    cacross = cross(C, A);
+    abplane_test = dot(abcross, vertex_location);
+    bcplane_test = dot(bccross, vertex_location);
+    caplane_test = dot(cacross, vertex_location);
+    return ((abplane_test + DISTANCE_TOLERANCE >= 0) && (bcplane_test + DISTANCE_TOLERANCE >= 0) && (caplane_test + DISTANCE_TOLERANCE >= 0));
+}
+
+int search_data_bvh_for_point(int vertex_index)
+{
+    int candidate_triangle_index = -1;
+    int dfs_stack[MAX_DFS_STACK_SIZE];
+    int stack_index = 0;
+
+    dfs_stack[stack_index] = 0;
+
+    float3 vl = render_vertex_locations[vertex_index];
+
+    s_triangle candidate, candidate_neighbour; // maybe delete
+
+    float dot_prod, dist, barycenter_dot_product, barycenter_dot_max;
+
+    bool nearest_barycenter_found;
+
+    while (stack_index >= 0) {
+        dot_prod = dot(vl, data_BVH[dfs_stack[stack_index]].circumcenter);
+
+        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
+
+        if (dist > data_BVH[dfs_stack[stack_index]].circumradius * 1.01f) {
+            if (stack_index > 0) {
+                while ((stack_index > 0) && (data_BVH[dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) {
+                    stack_index--;
+                }
+            }
+            if (stack_index == 0) {
+                return -1;
+            }
+            dfs_stack[stack_index] = data_BVH[dfs_stack[stack_index - 1]].right_child;
+            continue;
+        }
+        if (data_BVH[dfs_stack[stack_index]].n_children == 2) {
+            dfs_stack[stack_index + 1] = data_BVH[dfs_stack[stack_index]].left_child;
+            stack_index++;
+        }
+        else {
+            // triangle test START
+            if (data_BVH[dfs_stack[stack_index]].triangle_index != -1) {
+                // TODO - search by barycenters, test nearest barycenter triangle and its neighbours
+                candidate_triangle_index = data_BVH[dfs_stack[stack_index]].triangle_index;
+                if (is_point_in_data_tri(vl, data_triangles[candidate_triangle_index])) {
+                    return candidate_triangle_index;
+                }
+
+                candidate = data_triangles[candidate_triangle_index];
+                barycenter_dot_max = dot(vl, normalize(data_vertex_locations[candidate.a] + data_vertex_locations[candidate.b] + data_vertex_locations[candidate.c]));
+                nearest_barycenter_found = false;
+                while (!nearest_barycenter_found) {
+                    nearest_barycenter_found = true;
+                    candidate_neighbour = data_triangles[candidate.neigh_1];
+                    barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
+                    if (barycenter_dot_product > barycenter_dot_max) {
+                        barycenter_dot_max = barycenter_dot_product;
+                        candidate_triangle_index = candidate.neigh_1;
+                        candidate = candidate_neighbour;
+                        nearest_barycenter_found = false;
+                        continue;
+                    }
+                    candidate_neighbour = data_triangles[candidate.neigh_2];
+                    barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
+                    if (barycenter_dot_product > barycenter_dot_max) {
+                        barycenter_dot_max = barycenter_dot_product;
+                        candidate_triangle_index = candidate.neigh_2;
+                        candidate = candidate_neighbour;
+                        nearest_barycenter_found = false;
+                        continue;
+                    }
+                    candidate_neighbour = data_triangles[candidate.neigh_3];
+                    barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
+                    if (barycenter_dot_product > barycenter_dot_max) {
+                        barycenter_dot_max = barycenter_dot_product;
+                        candidate_triangle_index = candidate.neigh_3;
+                        candidate = candidate_neighbour;
+                        nearest_barycenter_found = false;
+                        continue;
+                    }
+                }
+                if (is_point_in_data_tri(vl, candidate)) {
+                    return candidate_triangle_index;
+                }
+                candidate_neighbour = data_triangles[candidate.neigh_1];
+                barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
+                if (is_point_in_data_tri(vl, candidate_neighbour)) {
+                    return candidate.neigh_1;
+                }
+                candidate_neighbour = data_triangles[candidate.neigh_2];
+                barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
+                if (is_point_in_data_tri(vl, candidate_neighbour)) {
+                    return candidate.neigh_2;
+                }
+                candidate_neighbour = data_triangles[candidate.neigh_3];
+                barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
+                if (is_point_in_data_tri(vl, candidate_neighbour)) {
+                    return candidate.neigh_3;
+                }
+            }
+            // triangle test END
+            while ((stack_index > 0) && (data_BVH[dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
+            {
+                stack_index--;
+            }
+            if (stack_index == 0) {
+                return -1;
+            }
+            dfs_stack[stack_index] = data_BVH[dfs_stack[stack_index - 1]].right_child;
+        }
+
+    }
+    return -1;
+}
+
+vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
+    float3 a = data_vertex_locations[data_triangles[triangle_index].a];
+    float3 b = data_vertex_locations[data_triangles[triangle_index].b];
+    float3 c = data_vertex_locations[data_triangles[triangle_index].c];
+    float u, v, w;
+    float3 v0 = b - a;
+    float3 v1 = c - a;
+    float3 v2 = ipoint - a;
+    float d00 = dot(v0, v0);
+    float d01 = dot(v0, v1);
+    float d11 = dot(v1, v1);
+    float d20 = dot(v2, v0);
+    float d21 = dot(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+    v = (d11 * d20 - d01 * d21) / denom;
+    w = (d00 * d21 - d01 * d20) / denom;
+    u = 1.0f - v - w;
+    vertex_data ret;
+
+    float e1, e2, e3;
+    e1 = data_vertex_data[data_triangles[triangle_index].a].elevation;
+    e2 = data_vertex_data[data_triangles[triangle_index].b].elevation;
+    e3 = data_vertex_data[data_triangles[triangle_index].c].elevation;
+
+    ret.elevation = (u * e1 + v * e2 + w * e3);
+    ret.plate = data_vertex_data[data_triangles[triangle_index].a].plate;
+    if (v > u) {
+        ret.plate = data_vertex_data[data_triangles[triangle_index].b].plate;
+    }
+    if (w > v) {
+        ret.plate = data_vertex_data[data_triangles[triangle_index].c].plate;
+    }
+    return ret;
+}
+
+[numthreads(64, 1, 1)]
+void CSDataToRender(uint3 dID : SV_DispatchThreadID)
+{
+
+    int ivi = dID.x; // interpolated vertex index
+    if (ivi >= n_render_vertices) {
+        return;
+    }
+
+    float3 iv = render_vertex_locations[ivi];
+    int found_index = search_data_bvh_for_point(ivi);
+
+    if (found_index == -1) {
+        render_vertex_data[ivi].elevation = 0.0f; // should not happen, but hey
+        render_vertex_data[ivi].plate = 0;
+    }
+    else {
+        render_vertex_data[ivi] = data_barycentric_interpolation(iv, found_index);
+    }
+}
+
+/*
+[numthreads(4, 4, 4)]
+void CSDefaultTerrainTexture(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    int loop = 0;
+    int MAX_LOOP = trianglesNumber;
+    float phi, theta, aside, bside, cside;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y + 0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+    float3 abcross, bccross, cacross, triangle_barycenter, neigh1_barycenter, neigh2_barycenter, neigh3_barycenter;
+    float abplane_test, bcplane_test, caplane_test;
+    int triangle_pointer = 0;
+    triangle_barycenter = bcenter(triangle_points[0], triangle_points[1], triangle_points[2]);
+    float triangle_pointer_dist = dist(triangle_barycenter, w_pixelpoint);
+    bool closest_barycenter;
+    int3 neighbours_indices;
+    bool found = false;
+
+    do {
+        closest_barycenter = true;
+        neighbours_indices.x = triangle_neighbours[3 * triangle_pointer];
+        neighbours_indices.y = triangle_neighbours[3 * triangle_pointer + 1];
+        neighbours_indices.z = triangle_neighbours[3 * triangle_pointer + 2];
+        neigh1_barycenter = bcenter(triangle_points[3 * neighbours_indices.x], triangle_points[3 * neighbours_indices.x + 1], triangle_points[3 * neighbours_indices.x + 2]);
+        neigh2_barycenter = bcenter(triangle_points[3 * neighbours_indices.y], triangle_points[3 * neighbours_indices.y + 1], triangle_points[3 * neighbours_indices.y + 2]);
+        neigh3_barycenter = bcenter(triangle_points[3 * neighbours_indices.z], triangle_points[3 * neighbours_indices.z + 1], triangle_points[3 * neighbours_indices.z + 2]);
+
+        if (dist(neigh1_barycenter, w_pixelpoint) < triangle_pointer_dist) {
+            triangle_pointer_dist = dist(neigh1_barycenter, w_pixelpoint);
+            triangle_pointer = neighbours_indices.x;
+            closest_barycenter = false;
+        }
+        if (dist(neigh2_barycenter, w_pixelpoint) < triangle_pointer_dist) {
+            triangle_pointer_dist = dist(neigh2_barycenter, w_pixelpoint);
+            triangle_pointer = neighbours_indices.y;
+            closest_barycenter = false;
+        }
+        if (dist(neigh3_barycenter, w_pixelpoint) < triangle_pointer_dist) {
+            triangle_pointer_dist = dist(neigh3_barycenter, w_pixelpoint);
+            triangle_pointer = neighbours_indices.z;
+            closest_barycenter = false;
+        }
+        loop++;
+    } while ((!closest_barycenter) && (loop < MAX_LOOP));
+    float grey_value = float(loop) / float(250);
+    Result[pix_coords] = float4(grey_value, grey_value, grey_value, 1);
+}
+*/

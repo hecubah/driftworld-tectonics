@@ -74,7 +74,7 @@
     <Compile Include="Assets\Scripts\PlanetManager.cs" />
     <Compile Include="Assets\Scripts\ShaderStructs.cs" />
     <Compile Include="Assets\Scripts\TopoMeshInterpreter.cs" />
-    <None Include="Assets\Shaders\CSCrustToData.compute" />
+    <None Include="Assets\Shaders\CSVertexDataInterpolation.compute" />
     <None Include="Assets\Shaders\CSTriangleCollisionTest.compute" />
     <None Include="Assets\Shaders\CSDefaultTerrainTexture.compute" />
     <None Include="Assets\Shaders\CSFractalTerrain.compute" />
@@ -88,7 +88,6 @@
     <None Include="Assets\Shaders\CSSubduction.compute" />
     <None Include="Assets\Shaders\CSPlateCollisions.compute" />
     <None Include="Assets\Shaders\CSTrianglePath.compute" />
-    <None Include="Assets\Shaders\CSDataToRender.compute" />
     <None Include="Assets\Shaders\CSTerrainesConstruct.compute" />
     <Reference Include="UnityEngine">
       <HintPath>C:/Program Files/Unity/Hub/Editor/2019.4.11f1/Editor/Data/Managed/UnityEngine/UnityEngine.dll</HintPath>

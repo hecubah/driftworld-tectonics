@@ -11,7 +11,6 @@ public class PlanetManager : MonoBehaviour
     public TectonicPlanet m_RenderMathSphere = null;
     public TectonicPlanet m_Planet = null;
 
-    [Header("asdohijasdohi")]
     public string m_DataMeshFilename = "";
     public string m_RenderMeshFilename = "";
     public ComputeShader m_DefaultTerrainTextureCShader = null;
@@ -20,8 +19,7 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_TriangleCollisionTestCShader = null;
     public ComputeShader m_CircleMergeShader = null;
     public ComputeShader m_BVHNearestNeighbourShader = null;
-    public ComputeShader m_CrustToDataShader = null;
-    public ComputeShader m_DataToRenderShader = null;
+    public ComputeShader m_VertexDataInterpolationShader = null;
     public ComputeShader m_TerrainesConstructShader = null;
     public ComputeShader m_PlateInteractionsShader = null;
     public ComputeShader m_DebugTextureShader = null;
