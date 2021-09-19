@@ -1,6 +1,7 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSCrustToData
 #pragma kernel CSDataToRender
+#pragma warning(disable : 3557)
 #define MAX_DISTANCE 1000 // initialization protection
 #define MAX_DFS_STACK_SIZE 40
 #define DISTANCE_TOLERANCE 0.001f
@@ -44,10 +45,6 @@ StructuredBuffer<float4> plate_transforms;
 int n_data_vertices;
 float ocean_base_floor;
 
-StructuredBuffer<int> crust_border_triangles_array;
-StructuredBuffer<int> crust_border_triangles_array_sizes;
-StructuredBuffer<float3> crust_border_triangles_array_bcenters;
-
 float highest_oceanic_ridge_elevation;
 float abyssal_plains_elevation;
 float oceanic_ridge_elevation_falloff;
@@ -60,7 +57,7 @@ StructuredBuffer<BV> crust_BVH;
 StructuredBuffer<int> crust_BVH_sps;
 StructuredBuffer<float3> data_vertex_locations;
 RWStructuredBuffer<vertex_data> data_vertex_data;
-StructuredBuffer<s_triangle> crust_border_triangles;
+StructuredBuffer<int> crust_border_triangles;
 StructuredBuffer<int> crust_border_triangles_sps;
 
 int n_render_vertices;
@@ -282,16 +279,16 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
     if (found_index == -1) {
         float dist_1 = MAX_DISTANCE; // start from far
         int plate_1 = -1; // no plate yet
-        s_triangle triangle_1 = crust_border_triangles[0]; // dummy init
+        s_triangle triangle_1 = crust_triangles[crust_border_triangles[0]]; // dummy init
         float elevation_1 = abyssal_plains_elevation;
         float dist_2 = MAX_DISTANCE; // start from far
         int plate_2 = -1; // no plate yet
-        s_triangle triangle_2 = crust_border_triangles[0];
+        s_triangle triangle_2 = crust_triangles[crust_border_triangles[0]];
         float elevation_2 = abyssal_plains_elevation;
         float check_dist = MAX_DISTANCE;
         s_triangle check_triangle;
         float3 check_bcenter;
-        s_triangle control_triangle = crust_border_triangles[0];
+        s_triangle control_triangle = crust_triangles[crust_border_triangles[0]];
 
         for (int i = 0; i < n_plates; i++) {
             float check_dist = MAX_DISTANCE;
@@ -299,7 +296,7 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
             iv_transformed = quat_rot(iv, plate_transforms[i] * float4(-1, -1, -1, 1));
 
             for (int j = 0; j < crust_border_loop_size; j++) {
-                check_triangle = crust_border_triangles[crust_border_triangles_sps[i] + j];
+                check_triangle = crust_triangles[crust_border_triangles[crust_border_triangles_sps[i] + j]];
                 check_bcenter = normalize(crust_vertex_locations[check_triangle.a] + crust_vertex_locations[check_triangle.b] + crust_vertex_locations[check_triangle.c]);
                 float dot_product = dot(check_bcenter, iv_transformed);
                 if ((dot_product <= 1 ? acos(dot_product) : 0) < check_dist) {

@@ -41,7 +41,7 @@ public class PlanetEditor : Editor
 
         if (planet_is_loaded) // if a planet is loaded
         {
-            if (GUILayout.Button("Clear/initialize buffers"))
+            if (GUILayout.Button("Clear/reinitialize buffers"))
             {
                 m_PlanetManager.m_Planet.InitializeCBuffers();
             }

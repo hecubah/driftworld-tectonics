@@ -85,7 +85,6 @@
     <None Include="Assets\Shaders\SphereTextureShader.shader" />
     <None Include="Assets\Shaders\CSBVHContureTest.compute" />
     <None Include="Assets\Shaders\CSPlatesAreaTexture.compute" />
-    <None Include="Assets\Shaders\CSSubduction.compute" />
     <None Include="Assets\Shaders\CSPlateCollisions.compute" />
     <None Include="Assets\Shaders\CSTrianglePath.compute" />
     <None Include="Assets\Shaders\CSTerrainesConstruct.compute" />
