@@ -1,6 +1,7 @@
 ﻿#pragma kernel CSTrianglePlateContacts
 #pragma kernel CSSubductionUplift
 #pragma kernel CSErosionDampingSediments
+#pragma kernel CSPlateVerticesSlabContributions
 
 #pragma warning( disable : 3557 ) // loop unroll
 #define MAX_DISTANCE 500
@@ -321,7 +322,8 @@ void CSSubductionUplift(uint3 dID : SV_DispatchThreadID)
         }
         if (found_contact_index != -1) {
             if (dist < subduction_max_distance) {
-                uplift_sum += subduction_distance_transfer(dist);
+                //uplift_sum += subduction_distance_transfer(dist) * subduction_speed_transfer(iv, ivi_plate, i) * subduction_height_transfer(contact_points[i * n_crust_border_triangles + found_contact_index].elevation);
+                uplift_sum += subduction_distance_transfer(dist) * subduction_speed_transfer(iv, ivi_plate, i); // WIP
             }
         }
     }
@@ -352,5 +354,99 @@ void CSErosionDampingSediments(uint3 dID : SV_DispatchThreadID)
     else {
         erosion_damping[ivi] = -(1 - crust_vertex_data[ivi].elevation / oceanic_trench_elevation) * oceanic_elevation_damping;
         sediment[ivi] = (crust_vertex_data[ivi].elevation < average_oceanic_depth ? sediment_accretion : 0.0f);
+    }
+}
+
+RWStructuredBuffer<int> pull_contributions;
+
+int search_plate_bvh_for_point(int vertex_index, int index_bv_plate) // no barycenter or neighbour zeroing in!
+{
+    int candidate_triangle_index = -1;
+    int dfs_stack[MAX_DFS_STACK_SIZE];
+    int stack_index = 0;
+
+    dfs_stack[stack_index] = 0;
+
+    struct vertex_data{
+    float elevation;
+    int plate;
+    };
+    float3 vl = quat_rot(crust_vertex_locations[vertex_index], plate_transforms[crust_vertex_data[vertex_index].plate]);
+    int offset = crust_BVH_sps[index_bv_plate];
+
+    s_triangle candidate, candidate_neighbour; // maybe delete
+
+    float dot_prod, dist, barycenter_dot_product, barycenter_dot_max;
+
+    bool nearest_barycenter_found, plate_check;
+
+    while (stack_index >= 0) {
+        float3 searched_cc = quat_rot(crust_BVH[offset + dfs_stack[stack_index]].circumcenter, plate_transforms[index_bv_plate]);
+        dot_prod = dot(vl, searched_cc);
+
+        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
+
+        if (dist > crust_BVH[offset + dfs_stack[stack_index]].circumradius * 1.01f) {
+            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) {
+                stack_index--;
+            }
+            if (stack_index == 0) {
+                return -1;
+            }
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
+            continue;
+        }
+        if (crust_BVH[offset + dfs_stack[stack_index]].n_children == 2) {
+            dfs_stack[stack_index + 1] = crust_BVH[offset + dfs_stack[stack_index]].left_child;
+            stack_index++;
+        }
+        else {
+            // triangle test START
+            if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) {
+                candidate_triangle_index = crust_BVH[offset + dfs_stack[stack_index]].triangle_index;
+                float3 t_a, t_b, t_c;
+                t_a = quat_rot(crust_vertex_locations[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].a], plate_transforms[index_bv_plate]);
+                t_b = quat_rot(crust_vertex_locations[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].b], plate_transforms[index_bv_plate]);
+                t_c = quat_rot(crust_vertex_locations[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].c], plate_transforms[index_bv_plate]);
+                if (is_point_in_crust_tri_transformed(vl, t_a, t_b, t_c)) {
+                    return candidate_triangle_index;
+                }
+            }
+            // triangle test END
+            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
+            {
+                stack_index--;
+            }
+            if (stack_index == 0) {
+                return -1;
+            }
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
+        }
+
+    }
+    return -1;
+}
+
+[numthreads(64, 1, 1)]
+void CSPlateVerticesSlabContributions(uint3 dID : SV_DispatchThreadID)
+{
+    int ivi = dID.x;
+    if (ivi >= n_crust_vertices) {
+        return;
+    }
+    int ivi_plate = crust_vertex_data[ivi].plate;
+    float3 vl = quat_rot(crust_vertex_locations[ivi], plate_transforms[crust_vertex_data[ivi].plate]);
+    for (int i = 0; i < n_plates; i++) {
+        if (overlap_matrix[ivi_plate * n_plates + i] > -1) {
+            continue;
+        }
+
+        if (crust_vertex_data[ivi].plate == i) {
+            continue;
+        }
+        if (search_plate_bvh_for_point(ivi, i) != -1) {
+            pull_contributions[ivi] = 1;
+            break;
+        }
     }
 }

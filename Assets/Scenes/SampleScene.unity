@@ -989,8 +989,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Surface: {fileID: 1510037103}
-  m_DataMeshFilename: topomesh1000.dat
-  m_RenderMeshFilename: topomesh1000.dat
+  m_DataMeshFilename: topomesh10000.dat
+  m_RenderMeshFilename: topomesh10000.dat
   m_DefaultTerrainTextureCShader: {fileID: 7200000, guid: e256be65a63892248be3dcb5e1716797,
     type: 3}
   m_PlatesAreaTextureCShader: {fileID: 7200000, guid: abe531b600a520f48961f96322926a37,
@@ -1010,16 +1010,69 @@ MonoBehaviour:
     type: 3}
   m_DebugTextureShader: {fileID: 7200000, guid: 467e9e4abde699c4c9b05143894db562,
     type: 3}
-  m_RandomSeed: 120
+  m_RandomSeed: 0
   m_TectonicIterationSteps: 1
-  m_ElevationScaleFactor: 100
+  m_ElevationScaleFactor: 10
+  m_Settings:
+    FractalTerrainIterations: 10000
+    FractalTerrainElevationStep: 0.003
+    MarkupElevation: 0.1
+    PlateInitElevationRange: 0.1
+    PlateInitNumberOfCentroids: 7
+    PlateInitLandRatio: 0
+    CrustThicknessMin: 0.04
+    CrustThicknessMax: 0.06
+    CrustElevationRandomThicknessRange: 0.01
+    OceanBaseFloor: -0.004
+    OceanicRidgeElevationFalloff: 0.05
+    BVHConstructionRadius: 20
+    AverageContinentalElevation: 0.001
+    AverageOceanicDepth: -0.004
+    MaxBorderTrianglesCount: 1500
+    TectonicIterationStepTime: 2
+    PlanetRadius: 6.37
+    HighestOceanicRidgeElevation: -0.001
+    OceanicTrenchElevation: -0.01
+    AbyssalPlainsElevation: -0.006
+    HighestContinentalAltitude: 0.01
+    SubductionDistanceTransferControlDistance: 0.1
+    SubductionDistanceTransferMaxDistance: 0.28
+    CollisionDistance: 0.66
+    CollisionCoefficient: 0.013
+    MaximumPlateSpeed: 0.0157
+    OceanicElevationDamping: 0.00004
+    ContinentalErosion: 0.00003
+    SedimentAccretion: 0.0003
+    SubductionUplift: 0.0006
+    SlabPullPerturbation: 0.1
+  m_Shaders:
+    m_DefaultTerrainTextureCShader: {fileID: 7200000, guid: e256be65a63892248be3dcb5e1716797,
+      type: 3}
+    m_PlatesAreaTextureCShader: {fileID: 7200000, guid: abe531b600a520f48961f96322926a37,
+      type: 3}
+    m_FractalTerrainCShader: {fileID: 7200000, guid: 45a8ab396e49c2340957752c7f7cea01,
+      type: 3}
+    m_TriangleCollisionTestCShader: {fileID: 7200000, guid: 5258b061de61b6343b3f0e01f149e5ef,
+      type: 3}
+    m_CircleMergeShader: {fileID: 7200000, guid: 67c0f866e7f0ae3409d5fdcdbf218cf9,
+      type: 3}
+    m_BVHNearestNeighbourShader: {fileID: 7200000, guid: d8a0db6cc20fea742bd3c959f9b06a30,
+      type: 3}
+    m_VertexDataInterpolationShader: {fileID: 7200000, guid: 016dc696076448a4191e63bc1afd279f,
+      type: 3}
+    m_TerrainesConstructShader: {fileID: 7200000, guid: 1fe41ac217945204cb44b70706acb1c2,
+      type: 3}
+    m_PlateInteractionsShader: {fileID: 7200000, guid: 559f56f2fe2dcbe4a8b2569a4231c812,
+      type: 3}
+    m_DebugTextureShader: {fileID: 7200000, guid: 467e9e4abde699c4c9b05143894db562,
+      type: 3}
   m_RenderMode: normal
   m_PropagateCrust: 0
   m_PropagateData: 0
   m_ClampToOceanLevel: 0
   m_StepMovePlates: 1
   m_StepSubductionUplift: 1
-  m_StepSlabPull: 0
+  m_StepSlabPull: 1
   m_StepErosionDamping: 1
   m_SedimentAccretion: 1
   m_CAPTerrainOnStep: 1

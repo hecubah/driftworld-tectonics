@@ -17,13 +17,19 @@ public class RandomMersenne
 	uint mti;                            // index into mt
 
 	private RandomMersenne() { }
+
 	public RandomMersenne(uint seed)
 	{       // constructor
 		RandomInit(seed);
 	}
 	public void RandomInit(uint seed)
 	{
-		mt[0] = seed;
+		uint used_seed = seed; // adaptation for seed = 0
+		if (seed == 0)
+        {
+			used_seed = (uint)DateTime.Now.Ticks;
+        }
+		mt[0] = used_seed;
 		for (mti = 1; mti < MERS_N; mti++)
 			mt[mti] = (1812433253U * (mt[mti - 1] ^ (mt[mti - 1] >> 30)) + mti);
 	}

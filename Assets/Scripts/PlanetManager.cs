@@ -13,6 +13,7 @@ public class PlanetManager : MonoBehaviour
 
     public string m_DataMeshFilename = "";
     public string m_RenderMeshFilename = "";
+    /*
     public ComputeShader m_DefaultTerrainTextureCShader = null;
     public ComputeShader m_PlatesAreaTextureCShader = null;
     public ComputeShader m_FractalTerrainCShader = null;
@@ -23,6 +24,7 @@ public class PlanetManager : MonoBehaviour
     public ComputeShader m_TerrainesConstructShader = null;
     public ComputeShader m_PlateInteractionsShader = null;
     public ComputeShader m_DebugTextureShader = null;
+    */
     //public ComputeShader m_BVHContureTestShader = null;
 
     public uint m_RandomSeed = 0;
@@ -30,6 +32,9 @@ public class PlanetManager : MonoBehaviour
     public float m_ElevationScaleFactor = 1;
 
     public RandomMersenne m_Random;
+
+    public SimulationSettings m_Settings = new SimulationSettings();
+    public SimulationShaders m_Shaders = new SimulationShaders();
 
     [HideInInspector] public string m_RenderMode = "";
     [HideInInspector] public bool m_PropagateCrust = false;
@@ -62,7 +67,6 @@ public class PlanetManager : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        m_Random = new RandomMersenne(m_RandomSeed);
     }
 
     // Update is called once per frame
@@ -85,7 +89,7 @@ public class PlanetManager : MonoBehaviour
         {
             m_Random = new RandomMersenne(m_RandomSeed);
         }
-        m_Planet = new TectonicPlanet(APR.PlanetRadius);
+        m_Planet = new TectonicPlanet(m_Settings.PlanetRadius);
         m_Planet.LoadDefaultTopology(m_DataMeshFilename, m_RenderMeshFilename);
         m_RenderMode = "normal";
         RenderSurfaceMesh();
@@ -123,7 +127,7 @@ public class PlanetManager : MonoBehaviour
 
     public void CAPTerrainTexture(TectonicPlanet sphere)
     {
-        int kernelHandle = m_DefaultTerrainTextureCShader.FindKernel("CSDefaultTerrainTexture");
+        int kernelHandle = m_Shaders.m_DefaultTerrainTextureCShader.FindKernel("CSDefaultTerrainTexture");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
         com_tex.enableRandomWrite = true;
@@ -152,12 +156,12 @@ public class PlanetManager : MonoBehaviour
         point_values_buffer.SetData(point_values);
         triangle_neighbours_buffer.SetData(triangle_neighbours);
 
-        m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
-        m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
-        m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
-        m_DefaultTerrainTextureCShader.SetInt("trianglesNumber", sphere.m_TrianglesCount);
-        m_DefaultTerrainTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
-        m_DefaultTerrainTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetInt("trianglesNumber", sphere.m_TrianglesCount);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
+        m_Shaders.m_DefaultTerrainTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
         triangle_points_buffer.Release();
         point_values_buffer.Release();
         triangle_neighbours_buffer.Release();
@@ -176,7 +180,7 @@ public class PlanetManager : MonoBehaviour
     {
 
 
-        int kernelHandle = m_PlatesAreaTextureCShader.FindKernel("CSPlatesAreaTexture");
+        int kernelHandle = m_Shaders.m_PlatesAreaTextureCShader.FindKernel("CSPlatesAreaTexture");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
         com_tex.enableRandomWrite = true;
@@ -247,19 +251,19 @@ public class PlanetManager : MonoBehaviour
         BVArray_finished_buffer.SetData(BVArray_finished);
         plate_transforms_buffer.SetData(plate_transforms);
 
-        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
-        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
-        m_PlatesAreaTextureCShader.SetInt("n_plates", sphere.m_TectonicPlatesCount);
+        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
+        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
+        m_Shaders.m_PlatesAreaTextureCShader.SetInt("n_plates", sphere.m_TectonicPlatesCount);
 
-        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "overlap_matrix", overlap_matrix_buffer);
-        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
-        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array", BVArray_finished_buffer);
-        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "plate_transforms", plate_transforms_buffer);
-        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
-        m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "vertex_plates", vertex_plates_buffer);
+        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "overlap_matrix", overlap_matrix_buffer);
+        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
+        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array", BVArray_finished_buffer);
+        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "plate_transforms", plate_transforms_buffer);
+        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
+        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "vertex_plates", vertex_plates_buffer);
 
-        m_PlatesAreaTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
-        m_PlatesAreaTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
+        m_Shaders.m_PlatesAreaTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
+        m_Shaders.m_PlatesAreaTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
 
         triangle_points_buffer.Release();
         point_values_buffer.Release();
@@ -317,7 +321,7 @@ public class PlanetManager : MonoBehaviour
 
         Debug.Log(DRTriangle.Collision(a,b).ToString());
 
-        int kernelHandle = m_TriangleCollisionTestCShader.FindKernel("CSTriangleCollisionTest");
+        int kernelHandle = m_Shaders.m_TriangleCollisionTestCShader.FindKernel("CSTriangleCollisionTest");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
         com_tex.enableRandomWrite = true;
@@ -340,10 +344,10 @@ public class PlanetManager : MonoBehaviour
         triangle_points_buffer.SetData(triangle_points);
         triangle_vertices_buffer.SetData(triangle_vertices);
 
-        m_TriangleCollisionTestCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
-        m_TriangleCollisionTestCShader.SetBuffer(kernelHandle, "triangle_vertices", triangle_vertices_buffer);
-        m_TriangleCollisionTestCShader.SetTexture(kernelHandle, "Result", com_tex);
-        m_TriangleCollisionTestCShader.Dispatch(kernelHandle, 256, 1024, 1);
+        m_Shaders.m_TriangleCollisionTestCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
+        m_Shaders.m_TriangleCollisionTestCShader.SetBuffer(kernelHandle, "triangle_vertices", triangle_vertices_buffer);
+        m_Shaders.m_TriangleCollisionTestCShader.SetTexture(kernelHandle, "Result", com_tex);
+        m_Shaders.m_TriangleCollisionTestCShader.Dispatch(kernelHandle, 256, 1024, 1);
         triangle_points_buffer.Release();
         triangle_vertices_buffer.Release();
         RenderTexture.active = com_tex;

@@ -44,7 +44,7 @@ public class TectonicPlanet
     public int m_TectonicPlatesCount;
     public List<Plate> m_TectonicPlates;
 
-    public int[,] m_PlatesOverlap;
+    public int[,] m_PlatesOverlap; // matrix saying if row overlaps column (1 if it does, -1 if it goes under)
 
     public ComputeBuffer m_GPUBufferCrustBVH = null;
 
@@ -549,7 +549,7 @@ public class TectonicPlanet
     public void CrustToData()
     {
 
-        ComputeShader work_shader = m_PlanetManager.m_VertexDataInterpolationShader;
+        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_VertexDataInterpolationShader;
 
         int kernelHandle = work_shader.FindKernel("CSCrustToData");
 
@@ -567,11 +567,11 @@ public class TectonicPlanet
 
         work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_CBuffers["data_vertex_locations"]);
         work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_CBuffers["data_vertex_data"]);
-        work_shader.SetFloat("ocean_base_floor", APR.OceanBaseFloor);
+        work_shader.SetFloat("ocean_base_floor", m_PlanetManager.m_Settings.OceanBaseFloor);
 
-        work_shader.SetFloat("highest_oceanic_ridge_elevation", APR.HighestOceanicRidgeElevation);
-        work_shader.SetFloat("abyssal_plains_elevation", APR.AbyssalPlainsElevation);
-        work_shader.SetFloat("oceanic_ridge_elevation_falloff", APR.OceanicRidgeElevationFalloff);
+        work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation);
+        work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation);
+        work_shader.SetFloat("oceanic_ridge_elevation_falloff", m_PlanetManager.m_Settings.OceanicRidgeElevationFalloff);
 
         work_shader.SetInt("n_data_vertices", m_VerticesCount);
 
@@ -600,7 +600,7 @@ public class TectonicPlanet
             CrustToData();
         }
 
-        ComputeShader work_shader = m_PlanetManager.m_VertexDataInterpolationShader;
+        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_VertexDataInterpolationShader;
 
         int kernelHandle = work_shader.FindKernel("CSDataToRender");
 
@@ -877,7 +877,7 @@ public class TectonicPlanet
             mark = mark || ((point.y > -0.1f) && (point.y < 0.1f));
             mark = mark || (UnitSphereDistance(point, pointSouthHemi) < Math.PI / 12);
             if (mark)
-                m_DataPointData[i].elevation = APR.MarkupElevation*m_Radius;
+                m_DataPointData[i].elevation = m_PlanetManager.m_Settings.MarkupElevation*m_Radius;
             else
                 m_DataPointData[i].elevation = 0.0f;
         }
@@ -886,10 +886,10 @@ public class TectonicPlanet
     public void GenerateFractalTerrain ()
     {
         
-        int kernelHandle = m_PlanetManager.m_FractalTerrainCShader.FindKernel("CSFractalTerrain");
+        int kernelHandle = m_PlanetManager.m_Shaders.m_FractalTerrainCShader.FindKernel("CSFractalTerrain");
 
         Vector3[] vertices_input = new Vector3[m_VerticesCount];
-        Vector3[] random_input = new Vector3[64*APR.FractalTerrainIterations];
+        Vector3[] random_input = new Vector3[64* m_PlanetManager.m_Settings.FractalTerrainIterations];
         float[] elevations_output = new float[m_VerticesCount];
 
         for (int i = 0; i < m_VerticesCount; i++)
@@ -897,7 +897,7 @@ public class TectonicPlanet
             vertices_input[i] = m_DataVertices[i];
         }
 
-        for (int i = 0; i < 64*APR.FractalTerrainIterations; i++)
+        for (int i = 0; i < 64* m_PlanetManager.m_Settings.FractalTerrainIterations; i++)
         {
             random_input[i] = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f));
         }
@@ -908,12 +908,12 @@ public class TectonicPlanet
         vertices_input_buffer.SetData(vertices_input);
         random_input_buffer.SetData(random_input);
 
-        m_PlanetManager.m_FractalTerrainCShader.SetBuffer(kernelHandle, "vertices_input", vertices_input_buffer);
-        m_PlanetManager.m_FractalTerrainCShader.SetBuffer(kernelHandle, "random_input", random_input_buffer);
-        m_PlanetManager.m_FractalTerrainCShader.SetBuffer(kernelHandle, "elevations_output", elevations_output_buffer);
-        m_PlanetManager.m_FractalTerrainCShader.SetInt("vertices_number", m_VerticesCount);
-        m_PlanetManager.m_FractalTerrainCShader.SetFloat("elevation_step", APR.FractalTerrainElevationStep);
-        m_PlanetManager.m_FractalTerrainCShader.Dispatch(kernelHandle, APR.FractalTerrainIterations, 1, 1);
+        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetBuffer(kernelHandle, "vertices_input", vertices_input_buffer);
+        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetBuffer(kernelHandle, "random_input", random_input_buffer);
+        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetBuffer(kernelHandle, "elevations_output", elevations_output_buffer);
+        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetInt("vertices_number", m_VerticesCount);
+        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetFloat("elevation_step", m_PlanetManager.m_Settings.FractalTerrainElevationStep);
+        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.Dispatch(kernelHandle, m_PlanetManager.m_Settings.FractalTerrainIterations, 1, 1);
 
         vertices_input_buffer.Release();
         random_input_buffer.Release();
@@ -931,19 +931,21 @@ public class TectonicPlanet
     {
         List<Vector3> centroids = new List<Vector3>(); // vertices are assigned around these centroids
         List<Plate> plates = new List<Plate>(); // formal partition objects
-        for (int i = 0; i < APR.PlateInitNumberOfCentroids; i++) // for each centroid
+        for (int i = 0; i < m_PlanetManager.m_Settings.PlateInitNumberOfCentroids; i++) // for each centroid
         {
-            centroids.Add(new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized); // set the centroid vector
+            Vector3 added_centroid = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
+            centroids.Add(added_centroid); // set the centroid vector
             Plate new_plate = new Plate(this); // create a new plate
             new_plate.m_RotationAxis = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized; // randomized rotation axis
-            new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, APR.MaximumPlateSpeed); // angular speed of the plate
-            if (m_Random.Range(0f, 1f) < APR.PlateInitLandRatio)
+            new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, m_PlanetManager.m_Settings.MaximumPlateSpeed); // angular speed of the plate
+            if (m_Random.Range(0f, 1f) < m_PlanetManager.m_Settings.PlateInitLandRatio)
             {
-                new_plate.m_InitElevation = APR.AverageContinentalElevation; // plate is continental
+                new_plate.m_InitElevation = m_PlanetManager.m_Settings.AverageContinentalElevation; // plate is continental
             } else
             {
-                new_plate.m_InitElevation = APR.AverageOceanicDepth; // plate is oceanic
+                new_plate.m_InitElevation = m_PlanetManager.m_Settings.AverageOceanicDepth; // plate is oceanic
             }
+            new_plate.m_Centroid = added_centroid;
             plates.Add(new_plate); // add new plate to the list
         }
         m_CrustVertices = new List<Vector3>();
@@ -963,7 +965,7 @@ public class TectonicPlanet
             }
             float el, thick;
             el = plates[plate_index].m_InitElevation;
-            thick = m_Random.Range(APR.CrustThicknessMin, APR.CrustThicknessMax);
+            thick = m_Random.Range(m_PlanetManager.m_Settings.CrustThicknessMin, m_PlanetManager.m_Settings.CrustThicknessMax);
             plates[plate_index].m_Mass += thick;
             plates[plate_index].m_Type += el;
             m_DataPointData[i].elevation = el;
@@ -1099,7 +1101,7 @@ public class TectonicPlanet
     {
         for (int i = 0; i < m_TectonicPlatesCount; i++)
         {
-            m_TectonicPlates[i].m_Transform *= Quaternion.AngleAxis(APR.TectonicIterationStepTime * m_TectonicPlates[i].m_PlateAngularSpeed * 180.0f / Mathf.PI, m_TectonicPlates[i].m_RotationAxis);
+            m_TectonicPlates[i].m_Transform *= Quaternion.AngleAxis(m_PlanetManager.m_Settings.TectonicIterationStepTime * m_TectonicPlates[i].m_PlateAngularSpeed * 180.0f / Mathf.PI, m_TectonicPlates[i].m_RotationAxis);
         }
         m_CBufferUpdatesNeeded["plate_transforms"] = true;
     }
@@ -1122,7 +1124,7 @@ public class TectonicPlanet
 
             int[] nearest_neighbours = new int[list_size];
 
-            int kernelHandle = m_PlanetManager.m_BVHNearestNeighbourShader.FindKernel("CSBVHNN");
+            int kernelHandle = m_PlanetManager.m_Shaders.m_BVHNearestNeighbourShader.FindKernel("CSBVHNN");
 
             Vector3[] cluster_positions = new Vector3[list_size];
             for (int i = 0; i < list_size; i++)
@@ -1135,12 +1137,12 @@ public class TectonicPlanet
 
             cluster_positions_buffer.SetData(cluster_positions);
 
-            m_PlanetManager.m_BVHNearestNeighbourShader.SetBuffer(kernelHandle, "cluster_positions", cluster_positions_buffer);
-            m_PlanetManager.m_BVHNearestNeighbourShader.SetBuffer(kernelHandle, "nearest_neighbours", nearest_neighbours_buffer);
+            m_PlanetManager.m_Shaders.m_BVHNearestNeighbourShader.SetBuffer(kernelHandle, "cluster_positions", cluster_positions_buffer);
+            m_PlanetManager.m_Shaders.m_BVHNearestNeighbourShader.SetBuffer(kernelHandle, "nearest_neighbours", nearest_neighbours_buffer);
 
-            m_PlanetManager.m_BVHNearestNeighbourShader.SetInt("array_size", list_size);
-            m_PlanetManager.m_BVHNearestNeighbourShader.SetInt("BVH_radius", APR.BVHConstructionRadius);
-            m_PlanetManager.m_BVHNearestNeighbourShader.Dispatch(kernelHandle, (list_size/64) + 1, 1, 1);
+            m_PlanetManager.m_Shaders.m_BVHNearestNeighbourShader.SetInt("array_size", list_size);
+            m_PlanetManager.m_Shaders.m_BVHNearestNeighbourShader.SetInt("BVH_radius", m_PlanetManager.m_Settings.BVHConstructionRadius);
+            m_PlanetManager.m_Shaders.m_BVHNearestNeighbourShader.Dispatch(kernelHandle, (list_size/64) + 1, 1, 1);
 
             cluster_positions_buffer.Release();
             nearest_neighbours_buffer.GetData(nearest_neighbours);
@@ -1193,6 +1195,7 @@ public class TectonicPlanet
 
     public void ResampleCrust ()
     {
+        Vector3[] centroids = new Vector3[m_TectonicPlatesCount];
         foreach (Plate it in m_TectonicPlates)
         {
             it.m_BorderTriangles.Clear();
@@ -1203,6 +1206,11 @@ public class TectonicPlanet
         {
             m_TectonicPlates[m_DataPointData[i].plate].m_PlateVertices.Add(i);
             m_CrustPointData[i] = new PointData(m_DataPointData[i]);
+            centroids[m_DataPointData[i].plate] += m_DataVertices[i];
+        }
+        for (int i = 0; i < m_TectonicPlatesCount; i++)
+        {
+            m_TectonicPlates[i].m_Centroid = (centroids[i].magnitude == 0.0f ? new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized : centroids[i].normalized);
         }
         for (int i = 0; i < m_DataTriangles.Count; i++) // for all triangles
         {
@@ -1239,7 +1247,7 @@ public class TectonicPlanet
 
     public List<Vector3> PlateContactPoints ()
     {
-        ComputeShader work_shader = m_PlanetManager.m_PlateInteractionsShader;
+        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_PlateInteractionsShader;
 
         int kernelHandle = work_shader.FindKernel("CSPlateContacts");
 
@@ -1331,7 +1339,7 @@ public class TectonicPlanet
 
         work_shader.SetInt("n_triangles", crust_triangle_plates_array.Length);
         work_shader.SetInt("n_plates", m_TectonicPlatesCount);
-        work_shader.SetInt("maxn_border_triangles", APR.MaxBorderTrianglesCount);
+        work_shader.SetInt("maxn_border_triangles", m_PlanetManager.m_Settings.MaxBorderTrianglesCount);
         work_shader.SetInt("n_crust_border_triangles", total_border_triangles_count);
         work_shader.SetBuffer(kernelHandle, "crust_triangles", crust_triangles_buffer);
         work_shader.SetBuffer(kernelHandle, "crust_triangle_plates", crust_triangle_plates_buffer);
@@ -1421,12 +1429,12 @@ public class TectonicPlanet
 
     public float DebugDistanceUplift(float distance)
     {
-        if (distance > APR.SubductionDistanceTransferMaxDistance)
+        if (distance > m_PlanetManager.m_Settings.SubductionDistanceTransferMaxDistance)
         {
             return 0;
         }
-        float subduction_control_distance = APR.SubductionDistanceTransferControlDistance;
-        float subduction_max_distance = APR.SubductionDistanceTransferMaxDistance;
+        float subduction_control_distance = m_PlanetManager.m_Settings.SubductionDistanceTransferControlDistance;
+        float subduction_max_distance = m_PlanetManager.m_Settings.SubductionDistanceTransferMaxDistance;
 
         float normal = ((Mathf.Pow(subduction_max_distance, 3) - Mathf.Pow(subduction_control_distance, 3))/6.0f + (Mathf.Pow(subduction_control_distance, 2) * subduction_max_distance - Mathf.Pow(subduction_max_distance, 2) * subduction_control_distance)*0.5f);
         float value = Mathf.Pow(distance, 3) / 3.0f - (subduction_control_distance + subduction_max_distance) * Mathf.Pow(distance, 2) * 0.5f + subduction_control_distance * subduction_max_distance * distance + Mathf.Pow(subduction_max_distance, 3) / 6.0f - Mathf.Pow(subduction_max_distance, 2) * subduction_control_distance * 0.5f;
@@ -1441,7 +1449,7 @@ public class TectonicPlanet
             MovePlates();
         }
         UpdateCBBuffers();
-        ComputeShader work_shader = m_PlanetManager.m_PlateInteractionsShader;
+        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_PlateInteractionsShader;
 
         int plateContactsKernelHandle = work_shader.FindKernel("CSTrianglePlateContacts");
 
@@ -1498,17 +1506,17 @@ public class TectonicPlanet
             
             work_shader.SetInt("n_crust_vertices", m_VerticesCount);
             work_shader.SetInt("n_crust_border_triangles", n_total_border_triangles);
-            work_shader.SetFloat("subduction_control_distance", APR.SubductionDistanceTransferControlDistance);
-            work_shader.SetFloat("subduction_max_distance", APR.SubductionDistanceTransferMaxDistance);
+            work_shader.SetFloat("subduction_control_distance", m_PlanetManager.m_Settings.SubductionDistanceTransferControlDistance);
+            work_shader.SetFloat("subduction_max_distance", m_PlanetManager.m_Settings.SubductionDistanceTransferMaxDistance);
             
 
             float[] uplift_output = new float[m_VerticesCount];
             ComputeBuffer uplift_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
 
-            work_shader.SetFloat("subduction_uplift", APR.SubductionUplift);
-            work_shader.SetFloat("oceanic_trench_elevation", APR.OceanicTrenchElevation);
-            work_shader.SetFloat("highest_continental_altitude", APR.HighestContinentalAltitude);
-            work_shader.SetFloat("maximum_plate_speed", APR.MaximumPlateSpeed);
+            work_shader.SetFloat("subduction_uplift", m_PlanetManager.m_Settings.SubductionUplift);
+            work_shader.SetFloat("oceanic_trench_elevation", m_PlanetManager.m_Settings.OceanicTrenchElevation);
+            work_shader.SetFloat("highest_continental_altitude", m_PlanetManager.m_Settings.HighestContinentalAltitude);
+            work_shader.SetFloat("maximum_plate_speed", m_PlanetManager.m_Settings.MaximumPlateSpeed);
 
             work_shader.SetBuffer(subductionKernelHandle, "crust_vertex_locations", m_CBuffers["crust_vertex_locations"]);
             work_shader.SetBuffer(subductionKernelHandle, "crust_vertex_data", m_CBuffers["crust_vertex_data"]);
@@ -1527,7 +1535,7 @@ public class TectonicPlanet
             //Debug.Log("Extrema of uplift - min: " + Mathf.Min(uplift_output) + "; max: " + Mathf.Max(uplift_output));
             for (int i = 0; i < m_VerticesCount; i++)
             {
-                m_CrustPointData[i].elevation += uplift_output[i] * APR.TectonicIterationStepTime;
+                m_CrustPointData[i].elevation += uplift_output[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime;
             }
             uplift_buffer.Release();
             m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
@@ -1537,12 +1545,12 @@ public class TectonicPlanet
             UpdateCBBuffers();
             int erosionDampingSedimentKernelHandle = work_shader.FindKernel("CSErosionDampingSediments");
             work_shader.SetInt("n_crust_vertices", m_VerticesCount);
-            work_shader.SetFloat("oceanic_trench_elevation", APR.OceanicTrenchElevation);
-            work_shader.SetFloat("highest_continental_altitude", APR.HighestContinentalAltitude);
-            work_shader.SetFloat("oceanic_elevation_damping", APR.OceanicElevationDamping);
-            work_shader.SetFloat("continental_erosion", APR.ContinentalErosion);
-            work_shader.SetFloat("sediment_accretion", APR.SedimentAccretion);
-            work_shader.SetFloat("average_oceanic_depth", APR.AverageOceanicDepth);
+            work_shader.SetFloat("oceanic_trench_elevation", m_PlanetManager.m_Settings.OceanicTrenchElevation);
+            work_shader.SetFloat("highest_continental_altitude", m_PlanetManager.m_Settings.HighestContinentalAltitude);
+            work_shader.SetFloat("oceanic_elevation_damping", m_PlanetManager.m_Settings.OceanicElevationDamping);
+            work_shader.SetFloat("continental_erosion", m_PlanetManager.m_Settings.ContinentalErosion);
+            work_shader.SetFloat("sediment_accretion", m_PlanetManager.m_Settings.SedimentAccretion);
+            work_shader.SetFloat("average_oceanic_depth", m_PlanetManager.m_Settings.AverageOceanicDepth);
 
 
             float[] erosion_damping_output = new float[m_VerticesCount];
@@ -1562,15 +1570,60 @@ public class TectonicPlanet
             sediment_buffer.GetData(sediment_output);
             for (int i = 0; i < m_VerticesCount; i++)
             {
-                m_CrustPointData[i].elevation += (erosion_damping_output[i] + (m_PlanetManager.m_SedimentAccretion ? sediment_output[i] : 0.0f)) * APR.TectonicIterationStepTime;
+                m_CrustPointData[i].elevation += (erosion_damping_output[i] + (m_PlanetManager.m_SedimentAccretion ? sediment_output[i] : 0.0f)) * m_PlanetManager.m_Settings.TectonicIterationStepTime;
             }
             erosion_damping_buffer.Release();
             sediment_buffer.Release();
             m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
         }
 
+        if (m_PlanetManager.m_StepSlabPull)
+        {
+            UpdateCBBuffers();
+            int slabContributionsKernelHandle = work_shader.FindKernel("CSPlateVerticesSlabContributions");
+            work_shader.SetInt("n_crust_vertices", m_VerticesCount);
+
+
+            Vector3[] pull_contributions_output = new Vector3[m_VerticesCount];
+
+            ComputeBuffer pull_contributions_buffer = new ComputeBuffer(m_VerticesCount, 12, ComputeBufferType.Default);
+
+            pull_contributions_buffer.SetData(pull_contributions_output);
+
+            work_shader.SetBuffer(slabContributionsKernelHandle, "crust_vertex_locations", m_CBuffers["crust_vertex_locations"]);
+            work_shader.SetBuffer(slabContributionsKernelHandle, "crust_vertex_data", m_CBuffers["crust_vertex_data"]);
+            work_shader.SetBuffer(slabContributionsKernelHandle, "crust_triangles", m_CBuffers["crust_triangles"]);
+            work_shader.SetBuffer(slabContributionsKernelHandle, "plate_transforms", m_CBuffers["plate_transforms"]);
+            work_shader.SetBuffer(slabContributionsKernelHandle, "overlap_matrix", m_CBuffers["overlap_matrix"]);
+            work_shader.SetBuffer(slabContributionsKernelHandle, "crust_BVH", m_CBuffers["crust_BVH"]);
+            work_shader.SetBuffer(slabContributionsKernelHandle, "crust_BVH_sps", m_CBuffers["crust_BVH_sps"]);
+
+
+            work_shader.SetBuffer(slabContributionsKernelHandle, "pull_contributions", pull_contributions_buffer);
+            work_shader.Dispatch(slabContributionsKernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1);
+
+            pull_contributions_buffer.GetData(pull_contributions_output);
+            Vector3[] axis_corrections = new Vector3[m_TectonicPlatesCount];
+            for (int i = 0; i < m_VerticesCount; i++)
+            {
+                Vector3 correction = Vector3.Cross(m_TectonicPlates[m_CrustPointData[i].plate].m_Centroid, m_CrustVertices[i]);
+                if (correction.magnitude > 0)
+                {
+                    axis_corrections[m_CrustPointData[i].plate] += pull_contributions_output[i].normalized;
+                }
+            }
+            for (int i = 0; i < m_TectonicPlatesCount; i++)
+            {
+                Vector3 new_axis = m_TectonicPlates[i].m_RotationAxis + m_PlanetManager.m_Settings.SlabPullPerturbation * axis_corrections[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime;
+                m_TectonicPlates[i].m_RotationAxis = (new_axis.magnitude > 0 ? new_axis.normalized : new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized);
+            }
+            pull_contributions_buffer.Release();
+            m_CBufferUpdatesNeeded["plate_motion_axes"] = true;
+        }
+
         contact_points_buffer.Release();
     }
+
 
     public void BVHDiagnostics ()
     {

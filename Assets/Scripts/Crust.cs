@@ -36,6 +36,7 @@ public class Plate // maximal tectonic unit, the parameters drive certain decisi
     public float m_Mass; // total mass of the plate, sum of thickness values
     public float m_Type; // oceanic or continental plate, sum of elevation values
     public Quaternion m_Transform; // Relative transform caused by the motion of the plate
+    public Vector3 m_Centroid; // centroid of the plate because it is called centroid not a cup of coffee
     public List<BoundingVolumeStruct> m_BVHArray; // List representing the BVH for array buffer feeding of the compute buffers
     
     public Plate (TectonicPlanet planet) // new plate with zeroed parameters
@@ -46,6 +47,7 @@ public class Plate // maximal tectonic unit, the parameters drive certain decisi
         m_BorderTriangles = new List<int>();
         m_BVHPlate = null;
         m_Transform = Quaternion.identity;
+        m_Centroid = Vector3.zero;
         m_BVHArray = new List<BoundingVolumeStruct>();
         m_Type = 0.0f;
         m_Mass = 0.0f;
