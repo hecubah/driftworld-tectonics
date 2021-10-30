@@ -7,3 +7,5 @@ Assembly-CSharp.csproj
 Driftworld.sln
 driftworld.sln
 .vsconfig
+Assets/Scenes/SampleSceneSettings.lighting*
+Assets/Scenes/WorkScene.unity*
