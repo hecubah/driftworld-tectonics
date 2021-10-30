@@ -9,3 +9,5 @@ driftworld.sln
 .vsconfig
 Assets/Scenes/SampleSceneSettings.lighting*
 Assets/Scenes/WorkScene.unity*
+Assets/Scenes/AScene.unity*
+UserSettings*
