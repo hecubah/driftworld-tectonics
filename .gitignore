@@ -3,7 +3,7 @@ Temp*
 .vs*
 obj*
 Logs*
-./Assembly-CSharp.csproj
-./Driftworld.sln
-./driftworld.sln
-./.vsconfig
+Assembly-CSharp.csproj
+Driftworld.sln
+driftworld.sln
+.vsconfig
