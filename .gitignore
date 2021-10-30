@@ -2,3 +2,7 @@ Library*
 Temp*
 .vs*
 obj*
+Logs*
+Assembly-CSharp.csproj
+driftworld.sln
+.vsconfig
