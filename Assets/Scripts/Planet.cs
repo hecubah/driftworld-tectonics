@@ -14,7 +14,7 @@ public class TectonicPlanet
     public RandomMersenne m_Random; // reference object to manager RNG
 
     public List<Vector3> m_CrustVertices; // vertices belonging to the crust layer
-    public List<DRTriangle> m_CrustTriangles;
+    public List<DRTriangle> m_CrustTriangles; // All triangles belonging to the crust layer - crust movement flips some of them
     public List<List<int>> m_CrustVerticesNeighbours;
     public List<List<int>> m_CrustTrianglesOfVertices;
     public List<PointData> m_CrustPointData;
