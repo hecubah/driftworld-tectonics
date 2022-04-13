@@ -211,7 +211,8 @@ s_platecontact triangle_contact_with_plate_bvh(int triangle_index, int triangle_
                 if (crust_triangles_intersect(triangle_index, crust_BVH[offset + dfs_stack[stack_index]].triangle_index, triangle_plate_index, bv_plate_index)) {
                     retval.contact_occured = 1;
                     retval.contact_point = normalize(crust_vertex_locations[crust_triangles[triangle_index].a] + crust_vertex_locations[crust_triangles[triangle_index].b] + crust_vertex_locations[crust_triangles[triangle_index].c]);
-                    retval.elevation = (crust_vertex_data[crust_triangles[triangle_index].a].elevation + crust_vertex_data[crust_triangles[triangle_index].b].elevation + crust_vertex_data[crust_triangles[triangle_index].c].elevation) / 3.0f;
+                    //retval.elevation = (crust_vertex_data[crust_triangles[triangle_index].a].elevation + crust_vertex_data[crust_triangles[triangle_index].b].elevation + crust_vertex_data[crust_triangles[triangle_index].c].elevation) / 3.0f;
+                    retval.elevation = (crust_vertex_data[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].a].elevation + crust_vertex_data[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].b].elevation + crust_vertex_data[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].c].elevation) / 3.0f;
                     /*
                     int contacting_plate = ;
                     int contacted_plate;
@@ -322,8 +323,8 @@ void CSSubductionUplift(uint3 dID : SV_DispatchThreadID)
         }
         if (found_contact_index != -1) {
             if (dist < subduction_max_distance) {
-                //uplift_sum += subduction_distance_transfer(dist) * subduction_speed_transfer(iv, ivi_plate, i) * subduction_height_transfer(contact_points[i * n_crust_border_triangles + found_contact_index].elevation);
-                uplift_sum += subduction_distance_transfer(dist) * subduction_speed_transfer(iv, ivi_plate, i); // WIP
+                uplift_sum += subduction_distance_transfer(dist) * subduction_speed_transfer(iv, ivi_plate, i) * subduction_height_transfer(contact_points[i * n_crust_border_triangles + found_contact_index].elevation);
+                //uplift_sum += subduction_distance_transfer(dist) * subduction_speed_transfer(iv, ivi_plate, i); // WIP
             }
         }
     }

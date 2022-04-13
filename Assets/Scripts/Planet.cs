@@ -1193,6 +1193,58 @@ public class TectonicPlanet
         return bvlist_in[0];
     }
 
+    public void CleanUpPlates()
+    {
+        bool overlap_matrix_recalculation_need = false;
+        int n_iterations = m_TectonicPlatesCount;
+        for (int i = n_iterations - 1; i >= 0; i--)
+        {
+            if (m_TectonicPlates[i].m_PlateVertices.Count < 1)
+            {
+                Debug.Log("Cleaning plate " + i + "...");
+                overlap_matrix_recalculation_need = true;
+                Debug.Log("Checking clean triangle sets...");
+                if (m_TectonicPlates[i].m_PlateTriangles.Count > 0)
+                {
+                    Debug.Log("Error: empty plate with non-empty triangle set!");
+                }
+                if (m_TectonicPlates[i].m_BorderTriangles.Count > 0)
+                {
+                    Debug.Log("Error: empty plate with non-empty border triangle set!");
+                }
+                Debug.Log("Correcting vertex plate indices...");
+                for (int j = 0; j < m_CrustVertices.Count; j++)
+                {
+                    if (m_CrustPointData[j].plate >= i) { 
+                        if (m_CrustPointData[j].plate == i)
+                        {
+                            Debug.Log("Error: crust vertex registered to an empty plate!");
+                        }
+                        m_CrustPointData[j].plate--;
+                    }
+                }
+                Debug.Log("Removing plate " + i + "...");
+                m_TectonicPlates.RemoveAt(i);
+                m_TectonicPlatesCount--;
+                Debug.Log("Plate " + i + " removed");
+            }
+        }
+        if (overlap_matrix_recalculation_need)
+        {
+            Debug.Log("Recalculating overlap matrix...");
+            m_PlatesOverlap = CalculatePlatesVP();
+            m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
+        }
+        /*
+        m_CBufferUpdatesNeeded["plate_transforms"] = true;
+        m_CBufferUpdatesNeeded["crust_BVH"] = true;
+        m_CBufferUpdatesNeeded["crust_BVH_sps"] = true;
+        m_CBufferUpdatesNeeded["crust_border_triangles"] = true;
+        m_CBufferUpdatesNeeded["crust_border_triangles_sps"] = true;
+        */
+        Debug.Log("Plate clean-up complete.");
+    }
+
     public void ResampleCrust ()
     {
         Vector3[] centroids = new Vector3[m_TectonicPlatesCount];
@@ -1232,10 +1284,14 @@ public class TectonicPlanet
                 m_CrustTriangles[tri_index].m_BVolume = new_bb; // denote the leaf to the respective triangle
                 bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
             }
-            it.m_BVHPlate = ConstructBVH(bvt_leaves);
-            it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
+            if (bvt_leaves.Count > 0)
+            {
+                it.m_BVHPlate = ConstructBVH(bvt_leaves);
+                it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
+            }
         }
 
+        CleanUpPlates();
         DetermineBorderTriangles();
         m_CBufferUpdatesNeeded["plate_transforms"] = true;
         m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
@@ -1584,9 +1640,9 @@ public class TectonicPlanet
             work_shader.SetInt("n_crust_vertices", m_VerticesCount);
 
 
-            Vector3[] pull_contributions_output = new Vector3[m_VerticesCount];
+            int[] pull_contributions_output = new int[m_VerticesCount];
 
-            ComputeBuffer pull_contributions_buffer = new ComputeBuffer(m_VerticesCount, 12, ComputeBufferType.Default);
+            ComputeBuffer pull_contributions_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
 
             pull_contributions_buffer.SetData(pull_contributions_output);
 
@@ -1606,10 +1662,13 @@ public class TectonicPlanet
             Vector3[] axis_corrections = new Vector3[m_TectonicPlatesCount];
             for (int i = 0; i < m_VerticesCount; i++)
             {
-                Vector3 correction = Vector3.Cross(m_TectonicPlates[m_CrustPointData[i].plate].m_Centroid, m_CrustVertices[i]);
-                if (correction.magnitude > 0)
+                if (pull_contributions_output[i] == 1)
                 {
-                    axis_corrections[m_CrustPointData[i].plate] += pull_contributions_output[i].normalized;
+                    Vector3 correction = Vector3.Cross(m_TectonicPlates[m_CrustPointData[i].plate].m_Centroid, m_CrustVertices[i]);
+                    if (correction.magnitude > 0)
+                    {
+                        axis_corrections[m_CrustPointData[i].plate] += correction.normalized;
+                    }
                 }
             }
             for (int i = 0; i < m_TectonicPlatesCount; i++)
