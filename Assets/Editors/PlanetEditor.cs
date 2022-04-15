@@ -12,7 +12,7 @@ public class PlanetEditor : Editor
         GUILayout.Space(20);
         GUILayout.BeginVertical("box"); // info box begin
         bool planet_is_loaded = (m_PlanetManager.m_Planet != null); // planet load check variable
-        GUILayout.Label("Planet: " + (planet_is_loaded ? "none" : "present")); // check if a planet is loaded
+        GUILayout.Label("Planet: " + (planet_is_loaded ? "present" : "none")); // check if a planet is loaded
         if (planet_is_loaded) // if a planet is loaded
         {
             GUILayout.Label("Mesh/RenderMesh vertices count: " + (m_PlanetManager.m_Planet.m_DataVertices != null ? m_PlanetManager.m_Planet.m_VerticesCount.ToString() : "null") + "/" + (m_PlanetManager.m_Planet.m_RenderVertices != null ? m_PlanetManager.m_Planet.m_RenderVerticesCount.ToString() : "null")); // number of vertices
