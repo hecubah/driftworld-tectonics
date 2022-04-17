@@ -2,6 +2,7 @@
 #pragma kernel CSSubductionUplift
 #pragma kernel CSErosionDampingSediments
 #pragma kernel CSPlateVerticesSlabContributions
+#pragma kernel CSContinentalContacts
 
 #pragma warning( disable : 3557 ) // loop unroll
 #define MAX_DISTANCE 500
@@ -238,7 +239,7 @@ s_platecontact triangle_contact_with_plate_bvh(int triangle_index, int triangle_
 [numthreads(64,1,1)]
 void CSTrianglePlateContacts(uint3 dID : SV_DispatchThreadID)
 {
-    int ivi = dID.x; // interpolated vertex index
+    int ivi = dID.x; // interpolated triangle index
     if (ivi >= n_crust_border_triangles) {
         return;
     }
@@ -448,6 +449,105 @@ void CSPlateVerticesSlabContributions(uint3 dID : SV_DispatchThreadID)
         if (search_plate_bvh_for_point(ivi, i) != -1) {
             pull_contributions[ivi] = 1;
             break;
+        }
+    }
+}
+
+RWStructuredBuffer<int> continental_triangle_contacts_table; // array of triangle contact results
+RWStructuredBuffer<int> continental_triangle_contacts; // array of triangle contact results
+
+int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle_plate_index, int bv_plate_index) {
+    int candidate_triangle_index = -1;
+    int dfs_stack[MAX_DFS_STACK_SIZE];
+    int stack_index = 0;
+    int candidate_index = 0;
+
+    dfs_stack[stack_index] = 0;
+
+    float3 needle_circumcenter = crust_triangles[triangle_index].circumcenter;
+    float needle_circumradius = crust_triangles[triangle_index].circumradius;
+    float3 needle_circumcenter_tr = quat_rot(needle_circumcenter, plate_transforms[triangle_plate_index]);
+    int offset = crust_BVH_sps[bv_plate_index];
+
+    s_triangle candidate, candidate_neighbour; // maybe delete
+
+    float dot_prod, dist, barycenter_dot_product, barycenter_dot_max;
+
+    bool nearest_barycenter_found, plate_check;
+
+    while (stack_index >= 0) {
+        dot_prod = dot(needle_circumcenter_tr, quat_rot(crust_BVH[offset + dfs_stack[stack_index]].circumcenter, plate_transforms[bv_plate_index]));
+
+        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
+
+
+        if (dist > (needle_circumradius + crust_BVH[offset + dfs_stack[stack_index]].circumradius) * 1.01f) {
+            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) {
+                stack_index--;
+            }
+            if (stack_index == 0) {
+                return 0;
+            }
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
+            continue;
+        }
+        
+        if (crust_BVH[offset + dfs_stack[stack_index]].n_children == 2) {
+            dfs_stack[stack_index + 1] = crust_BVH[offset + dfs_stack[stack_index]].left_child;
+            stack_index++;
+        }
+        else {
+            // triangle test START
+            if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) {
+                if (crust_triangles_intersect(triangle_index, crust_BVH[offset + dfs_stack[stack_index]].triangle_index, triangle_plate_index, bv_plate_index)) {
+                    candidate_index = crust_BVH[offset + dfs_stack[stack_index]].triangle_index;
+                    if ((crust_vertex_data[crust_triangles[candidate_index].a].elevation >= 0) || (crust_vertex_data[crust_triangles[candidate_index].b].elevation >= 0) || (crust_vertex_data[crust_triangles[candidate_index].c].elevation >= 0)) {
+                        return 1;
+                    }
+
+                }
+            }
+            // triangle test END
+            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
+            {
+                stack_index--;
+            }
+            if (stack_index == 0) {
+                return 0;
+            }
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
+        }
+    }
+    return 0;
+
+}
+
+
+[numthreads(64, 1, 1)]
+void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
+{
+    int ivi = dID.x; // interpolated triangle index
+    if (ivi >= n_crust_triangles) {
+        return;
+    }
+    if ((crust_vertex_data[crust_triangles[ivi].a].plate != crust_vertex_data[crust_triangles[ivi].b].plate) || (crust_vertex_data[crust_triangles[ivi].b].plate != crust_vertex_data[crust_triangles[ivi].c].plate)) {
+        return;
+    }
+    if ((crust_vertex_data[crust_triangles[ivi].a].elevation < 0) || (crust_vertex_data[crust_triangles[ivi].b].elevation < 0) || (crust_vertex_data[crust_triangles[ivi].c].elevation < 0)) {
+        return;
+    }
+    
+    int main_plate_index = crust_vertex_data[crust_triangles[ivi].a].plate;
+    for (int i = 0; i < n_plates; i++) {
+        if (i == main_plate_index) {
+            continue;
+        }
+        if (overlap_matrix[i * n_plates + main_plate_index] < 1) { // only plates above can tear out terraines
+            continue;
+        }
+        if (continental_triangle_contact_with_plate_bvh(ivi, main_plate_index, i) != 0) {
+            continental_triangle_contacts_table[i * n_crust_triangles + ivi] = 1;
+            continental_triangle_contacts[ivi] = 1;
         }
     }
 }

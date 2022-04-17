@@ -100,6 +100,7 @@ public class PlanetEditor : Editor
                     m_PlanetManager.m_SedimentAccretion = GUILayout.Toggle(m_PlanetManager.m_SedimentAccretion, "Sediment accretion on step");
                 }
                 m_PlanetManager.m_CAPTerrainOnStep = GUILayout.Toggle(m_PlanetManager.m_CAPTerrainOnStep, "Draw terrain texture on step");
+                m_PlanetManager.m_ContinentalCollisions = GUILayout.Toggle(m_PlanetManager.m_ContinentalCollisions, "Continental collisions");
 
 
                 if (GUILayout.Button("Tectonic step")) // iterate tectonic motion

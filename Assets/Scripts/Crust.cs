@@ -54,8 +54,11 @@ public class Plate // maximal tectonic unit, the parameters drive certain decisi
     }
 
 }
-public class Crust
+public class Terraine
 {
+    public int plate = 0; // Dangerous definition
+    public int index = 0;
+    public List<int> m_Vertices = new List<int>();
 
 }
 

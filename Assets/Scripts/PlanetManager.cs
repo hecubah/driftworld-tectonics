@@ -47,9 +47,72 @@ public class PlanetManager : MonoBehaviour
     [HideInInspector] public bool m_StepErosionDamping = false;
     [HideInInspector] public bool m_SedimentAccretion = false;
     [HideInInspector] public bool m_CAPTerrainOnStep = false;
+    [HideInInspector] public bool m_ContinentalCollisions = false;
 
     public void DebugFunction()
     {
+        Debug.Log("Determining terraines...");
+        List<Terraine> terraines = new List<Terraine>();
+        int [] terraine_indices = new int[m_Planet.m_CrustVertices.Count];
+        int terraine_count_index = 0;
+        if (m_Planet.m_CrustVertices.Count > 0)
+        {
+            Debug.Log("Starting vertex loop...");
+            for (int i = 0; i < m_Planet.m_CrustVertices.Count; i++)
+            {
+                if (m_Planet.m_CrustPointData[i].elevation >= 0)
+                {
+                    if (terraine_indices[i] == 0)
+                    {
+                        terraine_count_index++;
+                        //Debug.Log("Adding new terraine, index " + terraine_count_index);
+                        int active_plate = m_Planet.m_CrustPointData[i].plate;
+                        Terraine new_terraine = new Terraine();
+                        Queue<int> to_search = new Queue<int>();
+                        to_search.Enqueue(i);
+                        terraine_indices[i] = terraine_count_index;
+                        int active_vertex_index;
+                        //Debug.Log("While loop start...");
+                        int debug_count = 0;
+                        while ((to_search.Count > 0) && (debug_count < 100))
+                        {
+                            debug_count++;
+                            active_vertex_index = to_search.Dequeue();
+                            new_terraine.m_Vertices.Add(active_vertex_index);
+                            foreach (int j in m_Planet.m_DataVerticesNeighbours[active_vertex_index]) // Data should be initialized and filled
+                            {
+                                if ((terraine_indices[j] == 0) && (m_Planet.m_CrustPointData[j].elevation >= 0) && (m_Planet.m_CrustPointData[j].plate == active_plate))
+                                {
+                                    to_search.Enqueue(j);
+                                    terraine_indices[j] = terraine_count_index;
+                                }
+                            }
+
+                        }
+                        //Debug.Log("...while loop finished");
+                        //Debug.Log("Finalizing terraine " + terraine_count_index);
+                        new_terraine.plate = active_plate;
+                        new_terraine.index = terraine_count_index;
+                        terraines.Add(new_terraine);
+                    }
+
+                }
+            }
+        }
+        /*
+        string ter_ind = "";
+        for (int i = 0; i < m_Planet.m_CrustVertices.Count; i++)
+        {
+            ter_ind += terraine_indices[i] + " ";
+        }
+        Debug.Log(ter_ind);
+        */
+        Debug.Log("Terraine count: " + terraine_count_index);
+        Debug.Log("Terraine count check: " + terraines.Count);
+        foreach (Terraine it in terraines)
+        {
+            //Debug.Log("Terraine " + it.index + ": " + it.m_Vertices.Count + " vertices");
+        }
     }
 
     public void DebugFunction2()
