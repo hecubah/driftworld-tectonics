@@ -29,6 +29,7 @@ public class TectonicPlanet
 
     public int m_VerticesCount;
     public int m_TrianglesCount;
+    public int m_TectonicStepsTaken;
 
     public List<int> m_LookupStartTriangles;
 
@@ -92,6 +93,8 @@ public class TectonicPlanet
         m_CBuffers = new Dictionary<string, ComputeBuffer>();
         m_CBufferUpdatesNeeded = new Dictionary<string, bool>();
 
+        m_TectonicStepsTaken = 0;
+
         InitializeCBuffers();
     }
 
@@ -111,6 +114,7 @@ public class TectonicPlanet
         reload_keys.Add("crust_triangles");
         reload_keys.Add("crust_vertex_data");
         reload_keys.Add("plate_transforms");
+        reload_keys.Add("plate_transforms_predictive");
         reload_keys.Add("overlap_matrix");
         reload_keys.Add("crust_BVH");
         reload_keys.Add("crust_BVH_sps");
@@ -197,6 +201,31 @@ public class TectonicPlanet
                 m_CBuffers["plate_transforms"].SetData(plate_transforms_array);
                 m_CBufferUpdatesNeeded["plate_transforms"] = false;
             }
+
+            if (m_CBufferUpdatesNeeded["plate_transforms_predictive"])
+            {
+                if (m_CBuffers["plate_transforms_predictive"] != null)
+                {
+                    m_CBuffers["plate_transforms_predictive"].Release();
+                }
+                m_CBuffers["plate_transforms_predictive"] = new ComputeBuffer(m_TectonicPlatesCount, 16, ComputeBufferType.Default);
+                Quaternion predicted_transform;
+                Vector4[] plate_transforms_array = new Vector4[m_TectonicPlatesCount];
+                Vector4 added_transform;
+                for (int i = 0; i < m_TectonicPlatesCount; i++)
+                {
+                    predicted_transform = Quaternion.AngleAxis(m_PlanetManager.m_Settings.TectonicIterationStepTime * m_TectonicPlates[i].m_PlateAngularSpeed * 180.0f / Mathf.PI, m_TectonicPlates[i].m_RotationAxis) * m_TectonicPlates[i].m_Transform;
+                    added_transform = Vector4.zero;
+                    added_transform.x = predicted_transform.x;
+                    added_transform.y = predicted_transform.y;
+                    added_transform.z = predicted_transform.z;
+                    added_transform.w = predicted_transform.w;
+                    plate_transforms_array[i] = added_transform;
+                }
+                m_CBuffers["plate_transforms_predictive"].SetData(plate_transforms_array);
+                m_CBufferUpdatesNeeded["plate_transforms_predictive"] = false;
+            }
+
 
             if (m_CBufferUpdatesNeeded["overlap_matrix"])
             {
@@ -581,12 +610,11 @@ public class TectonicPlanet
 
         work_shader.Dispatch(kernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1);
 
-        
         CS_VertexData[] data_out = new CS_VertexData[m_VerticesCount];
         m_CBuffers["data_vertex_data"].GetData(data_out);
         for (int i = 0; i < m_VerticesCount; i++)
         {
-            m_DataPointData[i].elevation = data_out[i].elevation;
+            m_DataPointData[i].elevation = Mathf.Min(data_out[i].elevation, m_PlanetManager.m_Settings.HighestContinentalAltitude);
             m_DataPointData[i].plate = data_out[i].plate;
         }
         m_CBufferUpdatesNeeded["data_vertex_data"] = true;
@@ -943,7 +971,7 @@ public class TectonicPlanet
                 new_plate.m_InitElevation = m_PlanetManager.m_Settings.AverageContinentalElevation; // plate is continental
             } else
             {
-                new_plate.m_InitElevation = m_PlanetManager.m_Settings.AverageOceanicDepth; // plate is oceanic
+                new_plate.m_InitElevation = m_PlanetManager.m_Settings.InitialOceanicDepth; // plate is oceanic
             }
             new_plate.m_Centroid = added_centroid;
             plates.Add(new_plate); // add new plate to the list
@@ -1014,6 +1042,7 @@ public class TectonicPlanet
         m_CBufferUpdatesNeeded["crust_BVH_sps"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles_sps"] = true;
+        m_TectonicStepsTaken = 0;
     }
 
     public void DetermineBorderTriangles ()
@@ -1052,6 +1081,66 @@ public class TectonicPlanet
 
     public int[,] CalculatePlatesVP ()
     {
+        int[,] retVal = new int[m_TectonicPlatesCount, m_TectonicPlatesCount];
+        float[] plate_scores = new float[m_TectonicPlatesCount];
+        int[] plate_ranks = new int[m_TectonicPlatesCount];
+        List<int> ranked = new List<int>();
+        for (int i = 0; i < m_TectonicPlatesCount; i++)
+        {
+            foreach (int it in m_TectonicPlates[i].m_PlateVertices)
+            {
+                plate_scores[i] += (m_CrustPointData[it].elevation < 0.0f ? -m_CrustPointData[it].elevation : 10 * m_CrustPointData[it].elevation);
+            }
+        }
+        for (int i = 0; i < m_TectonicPlatesCount; i++)
+        {
+            float max_score = 0.0f;
+            int best_in_round = -1;
+            for (int j = 0; j < m_TectonicPlatesCount; j++)
+            {
+                if (!ranked.Contains(j))
+                {
+                    if (plate_scores[j] > max_score)
+                    {
+                        max_score = plate_scores[j];
+                        best_in_round = j;
+                    }
+                }
+            }
+            if (best_in_round == -1)
+            {
+                Debug.LogError("Plate density sort failure!");
+            }
+            plate_ranks[best_in_round] = i;
+            ranked.Add(best_in_round);
+        }
+
+        for (int i = 0; i < m_TectonicPlatesCount; i++)
+        {
+            for (int j = 0; j <= i; j++)
+            {
+                if (i == j)
+                {
+                    retVal[i, j] = 0;
+                }
+                else
+                {
+                    retVal[i, j] = (plate_ranks[i] > plate_ranks[j] ? 1 : -1);
+                }
+            }
+        }
+
+
+        for (int j = 0; j < m_TectonicPlatesCount; j++)
+        {
+            for (int i = 0; i < j; i++)
+            {
+                retVal[i, j] = -retVal[j, i];
+            }
+        }
+        return retVal;
+
+        /* old version
         int[,] retVal = new int[m_TectonicPlatesCount, m_TectonicPlatesCount];
         for (int i = 0; i < m_TectonicPlatesCount; i++)
         {
@@ -1095,15 +1184,17 @@ public class TectonicPlanet
             }
         }
         return retVal;
+        */
     }
 
     public void MovePlates ()
     {
         for (int i = 0; i < m_TectonicPlatesCount; i++)
         {
-            m_TectonicPlates[i].m_Transform *= Quaternion.AngleAxis(m_PlanetManager.m_Settings.TectonicIterationStepTime * m_TectonicPlates[i].m_PlateAngularSpeed * 180.0f / Mathf.PI, m_TectonicPlates[i].m_RotationAxis);
+            m_TectonicPlates[i].m_Transform = Quaternion.AngleAxis(m_PlanetManager.m_Settings.TectonicIterationStepTime * m_TectonicPlates[i].m_PlateAngularSpeed * 180.0f / Mathf.PI, m_TectonicPlates[i].m_RotationAxis) * m_TectonicPlates[i].m_Transform;
         }
         m_CBufferUpdatesNeeded["plate_transforms"] = true;
+        m_CBufferUpdatesNeeded["plate_transforms_predictive"] = true;
     }
 
     public BoundingVolume ConstructBVH(List<BoundingVolume> volume_list)
@@ -1242,10 +1333,10 @@ public class TectonicPlanet
         m_CBufferUpdatesNeeded["crust_border_triangles"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles_sps"] = true;
         */
-        Debug.Log("Plate clean-up complete.");
+        //Debug.Log("Plate clean-up complete.");
     }
 
-    public void ResampleCrust ()
+    public void ResampleCrust(bool clean_empty_plates = true)
     {
         Vector3[] centroids = new Vector3[m_TectonicPlatesCount];
         foreach (Plate it in m_TectonicPlates)
@@ -1256,6 +1347,7 @@ public class TectonicPlanet
         }
         for (int i = 0; i < m_DataVertices.Count; i++) // for all vertices on the global mesh
         {
+            m_CrustVertices[i] = m_DataVertices[i];
             m_TectonicPlates[m_DataPointData[i].plate].m_PlateVertices.Add(i);
             m_CrustPointData[i] = new PointData(m_DataPointData[i]);
             centroids[m_DataPointData[i].plate] += m_DataVertices[i];
@@ -1290,8 +1382,10 @@ public class TectonicPlanet
                 it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
             }
         }
-
-        CleanUpPlates();
+        if (clean_empty_plates)
+        {
+            CleanUpPlates();
+        }
         DetermineBorderTriangles();
         m_CBufferUpdatesNeeded["plate_transforms"] = true;
         m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
@@ -1299,6 +1393,7 @@ public class TectonicPlanet
         m_CBufferUpdatesNeeded["crust_BVH_sps"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles_sps"] = true;
+        m_TectonicStepsTaken = 0;
     }
 
     public List<Vector3> PlateContactPoints ()
@@ -1500,12 +1595,146 @@ public class TectonicPlanet
 
     public void TectonicStep()
     {
+        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_PlateInteractionsShader;
+        if (m_PlanetManager.m_ContinentalCollisions)
+        {
+            UpdateCBBuffers();
+            int continentalContactsKernelHandle = work_shader.FindKernel("CSContinentalContacts");
+
+            int n_total_triangles = m_CBuffers["crust_triangles"].count;
+            int[] continental_triangle_contacts_table_output = new int[m_TectonicPlatesCount * n_total_triangles];
+            int[] continental_triangle_contacts_output = new int[n_total_triangles];
+
+            ComputeBuffer continental_triangle_contacts_table_buffer = new ComputeBuffer(continental_triangle_contacts_table_output.Length, 4, ComputeBufferType.Default);
+            ComputeBuffer continental_triangle_contacts_buffer = new ComputeBuffer(continental_triangle_contacts_output.Length, 4, ComputeBufferType.Default);
+
+            continental_triangle_contacts_table_buffer.SetData(continental_triangle_contacts_table_output);
+            continental_triangle_contacts_buffer.SetData(continental_triangle_contacts_output);
+
+            work_shader.SetInt("n_crust_triangles", m_CrustTriangles.Count);
+            work_shader.SetInt("n_plates", m_TectonicPlatesCount);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_vertex_locations", m_CBuffers["crust_vertex_locations"]);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_triangles", m_CBuffers["crust_triangles"]);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_vertex_data", m_CBuffers["crust_vertex_data"]);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "overlap_matrix", m_CBuffers["overlap_matrix"]);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_BVH", m_CBuffers["crust_BVH"]);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_BVH_sps", m_CBuffers["crust_BVH_sps"]);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "plate_transforms", m_CBuffers["plate_transforms"]);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "plate_transforms_predictive", m_CBuffers["plate_transforms_predictive"]);
+
+            work_shader.SetBuffer(continentalContactsKernelHandle, "continental_triangle_contacts_table", continental_triangle_contacts_table_buffer);
+            work_shader.SetBuffer(continentalContactsKernelHandle, "continental_triangle_contacts", continental_triangle_contacts_buffer);
+
+            work_shader.Dispatch(continentalContactsKernelHandle, n_total_triangles / 64 + (n_total_triangles % 64 != 0 ? 1 : 0), 1, 1);
+
+            continental_triangle_contacts_table_buffer.GetData(continental_triangle_contacts_table_output);
+            continental_triangle_contacts_buffer.GetData(continental_triangle_contacts_output);
+
+            int[] continental_vertex_collisions = new int[m_VerticesCount];
+            int[] continental_vertex_collisions_table = new int[m_VerticesCount * m_TectonicPlatesCount];
+            bool collision_occured = false;
+            int n_triangles = m_CrustTriangles.Count;
+            for (int i = 0; i < n_triangles; i++)
+            {
+                if (continental_triangle_contacts_output[i] != 0)
+                {
+                    collision_occured = true;
+                    continental_vertex_collisions[m_CrustTriangles[i].m_A] = 1;
+                    for (int j = 0; j < m_TectonicPlatesCount; j++)
+                    {
+                        if (continental_triangle_contacts_table_output[j * n_triangles + i] != 0)
+                        {
+                            continental_vertex_collisions_table[j * m_VerticesCount + m_CrustTriangles[i].m_A] = 1;
+                            continental_vertex_collisions_table[j * m_VerticesCount + m_CrustTriangles[i].m_B] = 1;
+                            continental_vertex_collisions_table[j * m_VerticesCount + m_CrustTriangles[i].m_C] = 1;
+                        }
+                    }
+                }
+            }
+            if (collision_occured)
+            {
+                Debug.Log("Continental collision detected :<");
+                Debug.Log("Determining terraines...");
+                List<CollidingTerraine> c_terraines = new List<CollidingTerraine>();
+
+                int[] continental_vertex_collisions_terraines = new int[m_CrustVertices.Count];
+                int[] continental_vertex_collisions_plates = new int[m_CrustVertices.Count];
+
+                for (int i = 0; i < m_CrustVertices.Count; i++)
+                {
+                    continental_vertex_collisions_plates[i] = -1;
+                }
+
+                int terraine_count_index = 0;
+
+                for (int i = 0; i < m_CrustVertices.Count; i++)
+                {
+                    if (continental_vertex_collisions[i] != 0)
+                    {
+                        for (int j = 0; j < m_TectonicPlatesCount; j++)
+                        {
+                            if (continental_vertex_collisions_table[j * m_CrustVertices.Count + i] != 0)
+                            {
+                                terraine_count_index++;
+                                int colliding_plate = m_CrustPointData[i].plate;
+                                int collided_plate = j;
+                                CollidingTerraine new_c_terraine = new CollidingTerraine();
+                                Queue<int> to_search = new Queue<int>();
+                                to_search.Enqueue(i);
+                                continental_vertex_collisions_terraines[i] = terraine_count_index;
+                                continental_vertex_collisions[i] = 0;
+                                continental_vertex_collisions_plates[i] = collided_plate;
+                                int active_vertex_index;
+                                while (to_search.Count > 0)
+                                {
+                                    active_vertex_index = to_search.Dequeue();
+                                    new_c_terraine.m_Vertices.Add(active_vertex_index);
+                                    foreach (int it in m_DataVerticesNeighbours[active_vertex_index]) // Data should be initialized and filled
+                                    {
+                                        if ((continental_vertex_collisions_terraines[it] == 0) && (m_CrustPointData[it].elevation >= 0) && (m_CrustPointData[it].plate == colliding_plate))
+                                        {
+                                            to_search.Enqueue(it);
+                                            continental_vertex_collisions_terraines[it] = terraine_count_index;
+                                            continental_vertex_collisions[it] = 0;
+                                            continental_vertex_collisions_plates[it] = collided_plate;
+                                        }
+                                    }
+                                }
+                                new_c_terraine.colliding_plate = colliding_plate;
+                                new_c_terraine.collided_plate = collided_plate;
+                                new_c_terraine.index = terraine_count_index;
+                                c_terraines.Add(new_c_terraine);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // IMPLEMENT ACTUAL COLLISION UPLIFT !!!
+
+                CrustToData();
+                ResampleCrust(false);
+                foreach (CollidingTerraine it in c_terraines)
+                {
+                    Debug.Log("Terrain " + it.index + " in plate " + it.colliding_plate + ": " + it.m_Vertices.Count + " into plate " + it.collided_plate);
+                    for (int i = 0; i < it.m_Vertices.Count; i++)
+                    {
+                        m_DataPointData[it.m_Vertices[i]].plate = it.collided_plate;
+                    }
+                }
+                ResampleCrust();
+
+            }
+
+
+            continental_triangle_contacts_table_buffer.Release();
+            continental_triangle_contacts_buffer.Release();
+        }
         if (m_PlanetManager.m_StepMovePlates)
         {
             MovePlates();
         }
         UpdateCBBuffers();
-        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_PlateInteractionsShader;
 
         int plateContactsKernelHandle = work_shader.FindKernel("CSTrianglePlateContacts");
 
@@ -1591,7 +1820,7 @@ public class TectonicPlanet
             //Debug.Log("Extrema of uplift - min: " + Mathf.Min(uplift_output) + "; max: " + Mathf.Max(uplift_output));
             for (int i = 0; i < m_VerticesCount; i++)
             {
-                m_CrustPointData[i].elevation += uplift_output[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime;
+                m_CrustPointData[i].elevation = Mathf.Min(m_CrustPointData[i].elevation + uplift_output[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime, m_PlanetManager.m_Settings.HighestContinentalAltitude);
             }
             uplift_buffer.Release();
             m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
@@ -1626,7 +1855,7 @@ public class TectonicPlanet
             sediment_buffer.GetData(sediment_output);
             for (int i = 0; i < m_VerticesCount; i++)
             {
-                m_CrustPointData[i].elevation += (erosion_damping_output[i] + (m_PlanetManager.m_SedimentAccretion ? sediment_output[i] : 0.0f)) * m_PlanetManager.m_Settings.TectonicIterationStepTime;
+                m_CrustPointData[i].elevation = Mathf.Min(m_CrustPointData[i].elevation + (erosion_damping_output[i] + (m_PlanetManager.m_SedimentAccretion ? sediment_output[i] : 0.0f)) * m_PlanetManager.m_Settings.TectonicIterationStepTime, m_PlanetManager.m_Settings.HighestContinentalAltitude);
             }
             erosion_damping_buffer.Release();
             sediment_buffer.Release();
@@ -1679,74 +1908,10 @@ public class TectonicPlanet
             pull_contributions_buffer.Release();
             m_CBufferUpdatesNeeded["plate_motion_axes"] = true;
         }
-        if (m_PlanetManager.m_ContinentalCollisions)
-        {
-            UpdateCBBuffers();
-            int continentalContactsKernelHandle = work_shader.FindKernel("CSContinentalContacts");
-
-
-
-            int n_total_triangles = m_CBuffers["crust_triangles"].count;
-            int[] continental_triangle_contacts_table_output = new int[m_TectonicPlatesCount * n_total_triangles];
-            int[] continental_triangle_contacts_output = new int[n_total_triangles];
-
-            ComputeBuffer continental_triangle_contacts_table_buffer = new ComputeBuffer(continental_triangle_contacts_table_output.Length, 4, ComputeBufferType.Default);
-            ComputeBuffer continental_triangle_contacts_buffer = new ComputeBuffer(continental_triangle_contacts_output.Length, 4, ComputeBufferType.Default);
-
-            continental_triangle_contacts_table_buffer.SetData(continental_triangle_contacts_table_output);
-            continental_triangle_contacts_buffer.SetData(continental_triangle_contacts_output);
-
-            work_shader.SetInt("n_crust_triangles", m_CrustTriangles.Count);
-            work_shader.SetInt("n_plates", m_TectonicPlatesCount);
-            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_vertex_locations", m_CBuffers["crust_vertex_locations"]);
-            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_triangles", m_CBuffers["crust_triangles"]);
-            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_vertex_data", m_CBuffers["crust_vertex_data"]);
-            work_shader.SetBuffer(continentalContactsKernelHandle, "overlap_matrix", m_CBuffers["overlap_matrix"]);
-            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_BVH", m_CBuffers["crust_BVH"]);
-            work_shader.SetBuffer(continentalContactsKernelHandle, "crust_BVH_sps", m_CBuffers["crust_BVH_sps"]);
-            work_shader.SetBuffer(continentalContactsKernelHandle, "plate_transforms", m_CBuffers["plate_transforms"]);
-
-            work_shader.SetBuffer(continentalContactsKernelHandle, "continental_triangle_contacts_table", continental_triangle_contacts_table_buffer);
-            work_shader.SetBuffer(continentalContactsKernelHandle, "continental_triangle_contacts", continental_triangle_contacts_buffer);
-
-            work_shader.Dispatch(continentalContactsKernelHandle, n_total_triangles / 64 + (n_total_triangles % 64 != 0 ? 1 : 0), 1, 1);
-
-            continental_triangle_contacts_table_buffer.GetData(continental_triangle_contacts_table_output);
-            continental_triangle_contacts_buffer.GetData(continental_triangle_contacts_output);
-
-            int[] continental_vertex_collisions = new int[m_VerticesCount];
-            int[] continental_vertex_collisions_table = new int[m_VerticesCount*m_TectonicPlatesCount];
-            bool collision_occured = false;
-            int n_triangles = m_CrustTriangles.Count;
-            for (int i = 0; i < n_triangles; i++)
-            {
-                if (continental_triangle_contacts_output[i] != 0)
-                {
-                    collision_occured = true;
-                    continental_vertex_collisions[m_CrustTriangles[i].m_A] = 1;
-                    for (int j = 0; j < m_TectonicPlatesCount; j++)
-                    {
-                        if (continental_triangle_contacts_table_output[j * n_triangles + i] != 0)
-                        {
-                            continental_vertex_collisions_table[j * m_VerticesCount + m_CrustTriangles[i].m_A] = 1;
-                            continental_vertex_collisions_table[j * m_VerticesCount + m_CrustTriangles[i].m_B] = 1;
-                            continental_vertex_collisions_table[j * m_VerticesCount + m_CrustTriangles[i].m_C] = 1;
-                        }
-                    }
-                }
-            }
-            if (collision_occured)
-            {
-                Debug.Log("Continental collision detected :<");
-            }
-
-
-            continental_triangle_contacts_table_buffer.Release();
-            continental_triangle_contacts_buffer.Release();
-        }
 
 
         contact_points_buffer.Release();
+        m_TectonicStepsTaken++;
     }
 
 

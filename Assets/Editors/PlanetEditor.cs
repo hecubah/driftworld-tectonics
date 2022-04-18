@@ -21,6 +21,7 @@ public class PlanetEditor : Editor
             if (m_PlanetManager.m_Planet.m_TectonicPlates.Count > 0) // if there are tectonic plates initialized
             {
                 GUILayout.Label("Tectonic plates count: " + m_PlanetManager.m_Planet.m_TectonicPlates.Count.ToString()); // number of tectonic plates
+                GUILayout.Label("Tectonic steps taken without resample: " + m_PlanetManager.m_Planet.m_TectonicStepsTaken); // days since last metric mess
             }
             if (m_PlanetManager.m_Planet.m_TectonicPlatesCount > 0)
             {

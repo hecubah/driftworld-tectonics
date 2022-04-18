@@ -66,7 +66,6 @@ StructuredBuffer<s_triangle> data_triangles;
 StructuredBuffer<float3> render_vertex_locations;
 RWStructuredBuffer<vertex_data> render_vertex_data;
 
-
 float4 qmul(float4 q1, float4 q2) {
     return float4(
         q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
@@ -241,6 +240,7 @@ vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, f
     e3 = crust_vertex_data[crust_triangles[triangle_index].c].elevation;
 
     ret.elevation = (u * e1 + v * e2 + w * e3);
+    
     ret.plate = crust_vertex_data[crust_triangles[triangle_index].a].plate;
     if (v > u) {
         ret.plate = crust_vertex_data[crust_triangles[triangle_index].b].plate;
@@ -396,6 +396,7 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
         data_vertex_data[ivi] = crust_barycentric_interpolation(iv, found_index, plate_transforms[found_plate]);
     }
 }
+
 
 bool is_point_in_data_tri(float3 vertex_location, s_triangle tested_triangle) {
     float3 abcross, bccross, cacross, triangle_barycenter;

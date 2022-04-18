@@ -63,6 +63,7 @@ public class SimulationSettings
     public int BVHConstructionRadius = 20; // interval radius for BVH construction
     public float AverageContinentalElevation = 0.001f; // landmass initial elevation
     public float AverageOceanicDepth = -0.004f;
+    public float InitialOceanicDepth = -0.004f;
     //public static float SubductionDistance = 0.29f; // max distance that causes subduction
     public int MaxBorderTrianglesCount = 1500;
 

@@ -62,3 +62,12 @@ public class Terraine
 
 }
 
+public class CollidingTerraine
+{
+    public int colliding_plate = -1;
+    public int collided_plate = -1;
+    public int index = 0;
+    public List<int> m_Vertices = new List<int>();
+
+}
+

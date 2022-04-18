@@ -455,6 +455,7 @@ void CSPlateVerticesSlabContributions(uint3 dID : SV_DispatchThreadID)
 
 RWStructuredBuffer<int> continental_triangle_contacts_table; // array of triangle contact results
 RWStructuredBuffer<int> continental_triangle_contacts; // array of triangle contact results
+StructuredBuffer<float4> plate_transforms_predictive; // quaternion array of geometry rotations - prediction
 
 int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle_plate_index, int bv_plate_index) {
     int candidate_triangle_index = -1;
@@ -466,7 +467,7 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
 
     float3 needle_circumcenter = crust_triangles[triangle_index].circumcenter;
     float needle_circumradius = crust_triangles[triangle_index].circumradius;
-    float3 needle_circumcenter_tr = quat_rot(needle_circumcenter, plate_transforms[triangle_plate_index]);
+    float3 needle_circumcenter_tr = quat_rot(needle_circumcenter, plate_transforms_predictive[triangle_plate_index]);
     int offset = crust_BVH_sps[bv_plate_index];
 
     s_triangle candidate, candidate_neighbour; // maybe delete
@@ -476,7 +477,7 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
     bool nearest_barycenter_found, plate_check;
 
     while (stack_index >= 0) {
-        dot_prod = dot(needle_circumcenter_tr, quat_rot(crust_BVH[offset + dfs_stack[stack_index]].circumcenter, plate_transforms[bv_plate_index]));
+        dot_prod = dot(needle_circumcenter_tr, quat_rot(crust_BVH[offset + dfs_stack[stack_index]].circumcenter, plate_transforms_predictive[bv_plate_index]));
 
         dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
 
