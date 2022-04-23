@@ -64,10 +64,80 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction2()
     {
+        float tolerance = 0.1f;
+        Debug.Log("Checking mesh health...");
+        bool healthy = true;
+        if (m_Planet.m_TectonicPlatesCount > 0)
+        {
+            Debug.Log("Checking crust...");
+            int n_vertices = m_Planet.m_CrustVertices.Count;
+            for (int i = 0; i < n_vertices; i++)
+            {
+                if (Mathf.Abs(1-m_Planet.m_CrustVertices[i].magnitude) > tolerance)
+                {
+                    Debug.LogError("Anomalous crust vertex magnitude: " + i + "(" + m_Planet.m_CrustVertices[i].magnitude + ")");
+                    healthy = false;
+                    continue;
+                }
+                if (float.IsInfinity(m_Planet.m_CrustPointData[i].elevation))
+                {
+                    Debug.LogError("Anomalous crust vertex elevation: " + i + "(" + m_Planet.m_CrustPointData[i].elevation + ")");
+                    healthy = false;
+                    continue;
+                }
+                if (float.IsNaN(m_Planet.m_CrustPointData[i].elevation))
+                {
+                    Debug.LogError("Anomalous crust vertex elevation: " + i + "(" + m_Planet.m_CrustPointData[i].elevation + ")");
+                    healthy = false;
+                }
+            }
+            Debug.Log((healthy ? "Crust is healthy" : "Crust is not healthy"));
+        }
+        for (int i = 0; i < m_Planet.m_DataVertices.Count; i++)
+        {
+            if (Mathf.Abs(1 - m_Planet.m_DataVertices[i].magnitude) > tolerance)
+            {
+                Debug.LogError("Anomalous data vertex magnitude: " + i + "(" + m_Planet.m_CrustVertices[i].magnitude + ")");
+                healthy = false;
+            }
+            if (float.IsInfinity(m_Planet.m_DataPointData[i].elevation))
+            {
+                Debug.LogError("Anomalous data vertex elevation: " + i + "(" + m_Planet.m_DataPointData[i].elevation + ")");
+                healthy = false;
+                continue;
+            }
+            if (float.IsNaN(m_Planet.m_DataPointData[i].elevation))
+            {
+                Debug.LogError("Anomalous data vertex elevation: " + i + "(" + m_Planet.m_DataPointData[i].elevation + ")");
+                healthy = false;
+            }
+        }
+        Debug.Log((healthy ? "Data is healthy" : "Data is not healthy"));
+        for (int i = 0; i < m_Planet.m_RenderVertices.Count; i++)
+        {
+            if (Mathf.Abs(1 - m_Planet.m_DataVertices[i].magnitude) > tolerance)
+            {
+                Debug.LogError("Anomalous render vertex magnitude: " + i + "(" + m_Planet.m_CrustVertices[i].magnitude + ")");
+                healthy = false;
+            }
+            if (float.IsInfinity(m_Planet.m_RenderPointData[i].elevation))
+            {
+                Debug.LogError("Anomalous render vertex elevation: " + i + "(" + m_Planet.m_RenderPointData[i].elevation + ")");
+                healthy = false;
+                continue;
+            }
+            if (float.IsNaN(m_Planet.m_RenderPointData[i].elevation))
+            {
+                Debug.LogError("Anomalous render vertex elevation: " + i + "(" + m_Planet.m_RenderPointData[i].elevation + ")");
+                healthy = false;
+            }
+        }
+        Debug.Log((healthy ? "Render is healthy" : "Render is not healthy"));
     }
 
     public void DebugFunction3()
     {
+        GC.Collect();
     }
 
     public void DebugFunction4()
