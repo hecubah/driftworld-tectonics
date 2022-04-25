@@ -17,7 +17,7 @@ public class DRTriangle
     public Vector3 m_CCenter;
 
     public List<Vector3> m_VertexReference;
-    public List<DRTriangle> m_TriangleReference;
+    //public List<DRTriangle> m_TriangleReference;
     public List<int> m_Neighbours;
     public HashSet<int> m_VerticesSet;
 

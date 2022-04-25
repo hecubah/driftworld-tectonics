@@ -15,8 +15,8 @@ public class TectonicPlanet
 
     public List<Vector3> m_CrustVertices; // vertices belonging to the crust layer
     public List<DRTriangle> m_CrustTriangles; // All triangles belonging to the crust layer - crust movement flips some of them
-    public List<List<int>> m_CrustVerticesNeighbours;
-    public List<List<int>> m_CrustTrianglesOfVertices;
+    //public List<List<int>> m_CrustVerticesNeighbours;
+    //public List<List<int>> m_CrustTrianglesOfVertices;
     public List<PointData> m_CrustPointData;
 
     public List<Vector3> m_DataVertices;
@@ -47,7 +47,7 @@ public class TectonicPlanet
 
     public int[,] m_PlatesOverlap; // matrix saying if row overlaps column (1 if it does, -1 if it goes under)
 
-    public ComputeBuffer m_GPUBufferCrustBVH = null;
+    //public ComputeBuffer m_GPUBufferCrustBVH = null;
 
     public Dictionary<string, ComputeBuffer> m_CBuffers;
     public Dictionary<string, bool> m_CBufferUpdatesNeeded;
@@ -62,8 +62,8 @@ public class TectonicPlanet
 
         m_CrustVertices = new List<Vector3>();
         m_CrustTriangles = new List<DRTriangle>();
-        m_CrustVerticesNeighbours = new List<List<int>>();
-        m_CrustTrianglesOfVertices = new List<List<int>>();
+        //m_CrustVerticesNeighbours = new List<List<int>>();
+        //m_CrustTrianglesOfVertices = new List<List<int>>();
         m_CrustPointData = new List<PointData>();
 
         m_DataVertices = new List<Vector3>();

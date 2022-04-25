@@ -13,6 +13,7 @@ public class PlanetManager : MonoBehaviour
 
     public string m_DataMeshFilename = "";
     public string m_RenderMeshFilename = "";
+    public string m_SaveFilename = "";
     /*
     public ComputeShader m_DefaultTerrainTextureCShader = null;
     public ComputeShader m_PlatesAreaTextureCShader = null;
@@ -142,6 +143,18 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction4()
     {
+        /*
+        TecPlanetBinaryData A = new TecPlanetBinaryData();
+        A.bagr = 12;
+        A.traktor.Add(1);
+        A.traktor.Add(1);
+        A.traktor.Add(2);
+        A.traktor.Add(3);
+        A.traktor.Add(5);
+        SaveManager.Save(A);
+        TecPlanetBinaryData B = SaveManager.Load();
+        Debug.Log(B.velikost_traktoru);
+        */
     }
 
     // Start is called before the first frame update

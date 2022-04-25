@@ -38,6 +38,18 @@ public class PlanetEditor : Editor
             m_PlanetManager.m_ClampToOceanLevel = false;
             m_PlanetManager.LoadNewPlanet(); // manager call for new mesh and topology
         }
+        if (planet_is_loaded)
+        {
+            if (GUILayout.Button("Save planet to file"))
+            {
+                SaveManager.Save(m_PlanetManager);
+            }
+
+        }
+        if (GUILayout.Button("Load planet from file"))
+        {
+            SaveManager.Load(m_PlanetManager);
+        }
         bool plates_render, data_render, default_render; // variables for button switching between render modes
 
         if (planet_is_loaded) // if a planet is loaded
