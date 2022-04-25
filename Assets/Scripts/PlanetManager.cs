@@ -7,8 +7,8 @@ using UnityEngine;
 public class PlanetManager : MonoBehaviour
 {
     [HideInInspector] public GameObject m_Surface = null;
-    public TectonicPlanet m_DataMathSphere = null;
-    public TectonicPlanet m_RenderMathSphere = null;
+    //public TectonicPlanet m_DataMathSphere = null;
+    //public TectonicPlanet m_RenderMathSphere = null;
     public TectonicPlanet m_Planet = null;
 
     public string m_DataMeshFilename = "";

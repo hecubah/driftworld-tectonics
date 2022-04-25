@@ -42,13 +42,13 @@ public class PlanetEditor : Editor
         {
             if (GUILayout.Button("Save planet to file"))
             {
-                SaveManager.Save(m_PlanetManager);
+                SaveManager.SavePlanet(m_PlanetManager);
             }
 
         }
         if (GUILayout.Button("Load planet from file"))
         {
-            SaveManager.Load(m_PlanetManager);
+            SaveManager.LoadPlanet(m_PlanetManager);
         }
         bool plates_render, data_render, default_render; // variables for button switching between render modes
 
