@@ -6,6 +6,28 @@ using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
 
+public class SimpleReadStream
+{
+    public int m_StreamIndex;
+    public byte[] m_Buffer;
+    public int m_BufferSize;
+
+    public SimpleReadStream()
+    {
+        m_StreamIndex = 0; 
+        m_BufferSize = 0;
+        m_Buffer = null;
+    }
+
+    public void Read(byte[] output, int offset, int length)
+    {
+        for (int i = 0; i < length; i++)
+        {
+            output[offset + i] = m_StreamIndex < m_BufferSize ? m_Buffer[m_StreamIndex++] : (byte)0;
+        }
+    }
+}
+
 [System.Serializable]
 public class Vector3Serial
 {
@@ -383,42 +405,44 @@ public static class SaveManager
         filename = man.m_SaveFilename;
         PlanetBinaryData data = Load();
         Debug.Log(data.m_DataPointData.Count);
-        //Load2();
-    }
-
-    public static void Load2()
-    {
-        FileStream fs = new FileStream(filename, FileMode.Open);
-        MemoryStream ms = new MemoryStream();
-        byte[] bytes = new byte[fs.Length];
-        fs.Read(bytes, 0, (int)fs.Length);
-        ms.Write(bytes, 0, (int)fs.Length);
-        fs.Close();
-        ms.Seek(0, SeekOrigin.Begin);
-        byte[] value = new byte[4];
-        for (int i = 0; i < 10; i++)
+        if (man.m_Surface == null)
         {
-            ms.Read(value, 0, 4);
-            Debug.Log(BitConverter.ToInt32(value));
-
+            man.m_Surface = new GameObject("Surface");
+            man.m_Surface.transform.parent = man.transform;
+            MeshFilter newMeshFilter = man.m_Surface.AddComponent<MeshFilter>();
+            man.m_Surface.AddComponent<MeshRenderer>().sharedMaterial = new Material(Shader.Find("Custom/SphereTextureShader"));
+            newMeshFilter.sharedMesh = new Mesh();
         }
+        if (man.m_Random == null)
+        {
+            man.m_Random = new RandomMersenne(man.m_RandomSeed);
+        }
+        man.m_Planet = new TectonicPlanet(man.m_Settings.PlanetRadius);
+
+        //CONSTRUCT PLANET HERE
 
 
 
-        ms.Close();
+        //PLANET SHOULD BE CONSTRUCTED BY NOW
 
+        man.m_RenderMode = "normal";
+        man.RenderSurfaceMesh();
+        man.m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
+        GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
+        man.m_Planet.InitializeCBuffers();
     }
 
     public static PlanetBinaryData Load()
     {
         PlanetBinaryData data = new PlanetBinaryData();
         FileStream fs = new FileStream(filename, FileMode.Open);
-        MemoryStream ms = new MemoryStream();
         byte[] bytes = new byte[fs.Length];
         fs.Read(bytes, 0, (int)fs.Length);
-        ms.Write(bytes, 0, (int)fs.Length);
+        SimpleReadStream ms = new SimpleReadStream();
+        ms.m_BufferSize = bytes.Length;
+        ms.m_StreamIndex = 0;
+        ms.m_Buffer = bytes;
         fs.Close();
-        ms.Seek(0, SeekOrigin.Begin);
 
 
         byte[] value_read = new byte[4];
@@ -667,8 +691,6 @@ public static class SaveManager
             triangle.c = BitConverter.ToInt32(value_read, 0);
             data.m_RenderTriangles.Add(triangle);
         }
-
-        ms.Close();
 
         return data;
     }

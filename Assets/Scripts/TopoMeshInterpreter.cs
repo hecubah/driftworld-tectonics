@@ -26,7 +26,14 @@ public class TopoMeshInterpreter // class with a single job to read and interpre
             Debug.LogError("file " + file_path + " does not exist");
         } else
         {
-            FileStream fs = new FileStream(file_path, FileMode.Open);
+            FileStream ps = new FileStream(file_path, FileMode.Open);
+            byte[] buffer = new byte[ps.Length];
+            ps.Read(buffer, 0, buffer.Length);
+            SimpleReadStream fs = new SimpleReadStream();
+            fs.m_StreamIndex = 0;
+            fs.m_BufferSize = buffer.Length;
+            fs.m_Buffer = buffer;
+            ps.Close();
             byte[] int_read = new byte[4];
             int n_vertices, n_triangles, n_vertex_neighbours, vertex_neighbour_index;
             fs.Read(int_read, 0, 4);
@@ -98,7 +105,7 @@ public class TopoMeshInterpreter // class with a single job to read and interpre
             }
 
 
-            fs.Close();
+            //fs.Close();
         }
         vertices_p = vertices;
         triangles_p = triangles;
