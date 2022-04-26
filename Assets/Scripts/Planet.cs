@@ -1367,7 +1367,7 @@ public class TectonicPlanet
         {
             it.m_Transform = Quaternion.identity;
             List<BoundingVolume> bvt_leaves = new List<BoundingVolume>();
-            int plate_tricount = it.m_PlateTriangles.Count();
+            int plate_tricount = it.m_PlateTriangles.Count;
             for (int i = 0; i < plate_tricount; i++) // for all triangles in data
             {
                 int tri_index = it.m_PlateTriangles[i];

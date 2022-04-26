@@ -404,7 +404,6 @@ public static class SaveManager
     {
         filename = man.m_SaveFilename;
         PlanetBinaryData data = Load();
-        Debug.Log(data.m_DataPointData.Count);
         if (man.m_Surface == null)
         {
             man.m_Surface = new GameObject("Surface");
@@ -421,7 +420,135 @@ public static class SaveManager
 
         //CONSTRUCT PLANET HERE
 
+        int n_vertices, n_triangles;
+        n_vertices = data.m_DataVertices.Count;
+        man.m_Planet.m_CrustVertices = new List<Vector3>();
+        man.m_Planet.m_DataVertices = new List<Vector3>();
+        man.m_Planet.m_CrustPointData = new List<PointData>();
+        man.m_Planet.m_DataPointData = new List<PointData>();
+        man.m_Planet.m_DataVerticesNeighbours = new List<List<int>>();
+        man.m_Planet.m_DataTrianglesOfVertices = new List<List<int>>();
+        for (int i = 0; i < n_vertices; i++)
+        {
+            if (data.m_TectonicsPresent)
+            {
+                man.m_Planet.m_CrustVertices.Add(new Vector3(data.m_CrustVertices[i].x, data.m_CrustVertices[i].y, data.m_CrustVertices[i].z));
+                man.m_Planet.m_CrustPointData.Add(new PointData(data.m_CrustPointData[i]));
+            }
+            man.m_Planet.m_DataVertices.Add(new Vector3(data.m_DataVertices[i].x, data.m_DataVertices[i].y, data.m_DataVertices[i].z));
+            man.m_Planet.m_DataPointData.Add(new PointData(data.m_DataPointData[i]));
+            man.m_Planet.m_DataVerticesNeighbours.Add(data.m_DataVerticesNeighbours[i]);
+            man.m_Planet.m_DataTrianglesOfVertices.Add(data.m_DataTrianglesOfVertices[i]);
+        }
 
+        n_triangles = data.m_DataTriangles.Count;
+        man.m_Planet.m_CrustTriangles = new List<DRTriangle>();
+        man.m_Planet.m_DataTriangles = new List<DRTriangle>();
+        for (int i = 0; i < n_triangles; i++)
+        {
+            DRTriangleSerial source;
+            if (data.m_TectonicsPresent)
+            {
+                source = data.m_CrustTriangles[i];
+                man.m_Planet.m_CrustTriangles.Add(new DRTriangle(source.a, source.b,source.c, man.m_Planet.m_CrustVertices));
+            }
+            source = data.m_DataTriangles[i];
+            man.m_Planet.m_DataTriangles.Add(new DRTriangle(source.a, source.b, source.c, man.m_Planet.m_DataVertices));
+
+        }
+
+        man.m_Planet.m_TectonicStepsTaken = 0;
+        if (data.m_TectonicsPresent)
+        {
+            man.m_Planet.m_TectonicPlatesCount = data.m_TectonicPlates.Count;
+            for (int i = 0; i < data.m_TectonicPlates.Count; i++)
+            {
+                Plate target = new Plate(man.m_Planet);
+                target.m_RotationAxis = new Vector3(data.m_TectonicPlates[i].m_RotationAxis.x, data.m_TectonicPlates[i].m_RotationAxis.y, data.m_TectonicPlates[i].m_RotationAxis.z);
+                target.m_PlateAngularSpeed = data.m_TectonicPlates[i].m_PlateAngularSpeed;
+                target.m_InitElevation = data.m_TectonicPlates[i].m_InitElevation;
+                target.m_Mass = data.m_TectonicPlates[i].m_Mass;
+                target.m_Type = data.m_TectonicPlates[i].m_Type;
+                target.m_Transform = new Quaternion(data.m_TectonicPlates[i].m_Transform.x, data.m_TectonicPlates[i].m_Transform.y, data.m_TectonicPlates[i].m_Transform.z, data.m_TectonicPlates[i].m_Transform.w);
+                target.m_Centroid = new Vector3(data.m_TectonicPlates[i].m_Centroid.x, data.m_TectonicPlates[i].m_Centroid.y, data.m_TectonicPlates[i].m_Centroid.z);
+            }
+        }
+
+        n_vertices = data.m_RenderVertices.Count;
+        man.m_Planet.m_RenderVertices = new List<Vector3>();
+        man.m_Planet.m_RenderPointData = new List<PointData>();
+        man.m_Planet.m_RenderVerticesNeighbours = new List<List<int>>();
+        man.m_Planet.m_RenderTrianglesOfVertices = new List<List<int>>();
+        for (int i = 0; i < n_vertices; i++)
+        {
+            man.m_Planet.m_RenderVertices.Add(new Vector3(data.m_RenderVertices[i].x, data.m_RenderVertices[i].y, data.m_RenderVertices[i].z));
+            man.m_Planet.m_RenderPointData.Add(new PointData(data.m_RenderPointData[i]));
+            man.m_Planet.m_RenderVerticesNeighbours.Add(data.m_RenderVerticesNeighbours[i]);
+            man.m_Planet.m_RenderTrianglesOfVertices.Add(data.m_RenderTrianglesOfVertices[i]);
+        }
+
+        n_triangles = data.m_RenderTriangles.Count;
+        man.m_Planet.m_RenderTriangles = new List<DRTriangle>();
+        for (int i = 0; i < n_triangles; i++)
+        {
+            DRTriangleSerial source = data.m_DataTriangles[i];
+            man.m_Planet.m_DataTriangles.Add(new DRTriangle(source.a, source.b, source.c, man.m_Planet.m_RenderVertices));
+
+        }
+
+        man.m_Planet.m_RenderVerticesCount = man.m_Planet.m_RenderVertices.Count; // set the render vertices count
+        man.m_Planet.m_RenderTrianglesCount = man.m_Planet.m_RenderTriangles.Count; // set the render triangles count
+
+
+        man.m_Planet.m_VerticesCount = man.m_Planet.m_DataVertices.Count;
+        man.m_Planet.m_TrianglesCount = man.m_Planet.m_DataTriangles.Count;
+
+        List<BoundingVolume> m_BVTLeaves = new List<BoundingVolume>();
+        for (int i = 0; i < man.m_Planet.m_TrianglesCount; i++) // for all triangles in data
+        {
+            BoundingVolume new_bb = new BoundingVolume(man.m_Planet.m_DataTriangles[i].m_CCenter, man.m_Planet.m_DataTriangles[i].m_CUnitRadius); // create a leaf bounding box
+            new_bb.m_TriangleIndex = i; // denote the triangle index to the leaf
+            man.m_Planet.m_DataTriangles[i].m_BVolume = new_bb; // denote the leaf to the respective triangle
+            m_BVTLeaves.Add(new_bb); // add the new bounding volume to the list of leaves
+        }
+        man.m_Planet.m_DataBVH = man.m_Planet.ConstructBVH(m_BVTLeaves); // construct BVH from bottom
+        man.m_Planet.m_DataBVHArray = BoundingVolume.BuildBVHArray(man.m_Planet.m_DataBVH); //
+
+
+        for (int i = 0; i < man.m_Planet.m_VerticesCount; i++)
+        {
+            man.m_Planet.m_TectonicPlates[man.m_Planet.m_CrustPointData[i].plate].m_PlateVertices.Add(i);
+        }
+
+        for (int i = 0; i < man.m_Planet.m_TrianglesCount; i++) // for all triangles
+        {
+            if ((man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_A].plate == man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_B].plate) && (man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_B].plate == man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_C].plate)) // if the triangle only has vertices of one type (qquivalence is a transitive relation)
+            {
+                man.m_Planet.m_TectonicPlates[man.m_Planet.m_DataPointData[man.m_Planet.m_CrustTriangles[i].m_A].plate].m_PlateTriangles.Add(i);
+            }
+        }
+
+        foreach (Plate it in man.m_Planet.m_TectonicPlates)
+        {
+            List<BoundingVolume> bvt_leaves = new List<BoundingVolume>();
+            int plate_tricount = it.m_PlateTriangles.Count;
+            for (int i = 0; i < plate_tricount; i++) // for all triangles in data
+            {
+                int tri_index = it.m_PlateTriangles[i];
+                BoundingVolume new_bb = new BoundingVolume(man.m_Planet.m_CrustTriangles[tri_index].m_CCenter, man.m_Planet.m_CrustTriangles[tri_index].m_CUnitRadius); // create a leaf bounding box
+                new_bb.m_TriangleIndex = tri_index; // denote the triangle index to the leaf
+                man.m_Planet.m_CrustTriangles[tri_index].m_BVolume = new_bb; // denote the leaf to the respective triangle
+                bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
+            }
+            if (bvt_leaves.Count > 0)
+            {
+                it.m_BVHPlate = man.m_Planet.ConstructBVH(bvt_leaves);
+                it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
+            }
+        }
+        man.m_Planet.DetermineBorderTriangles();
+
+        man.m_Planet.InitializeCBuffers();
 
         //PLANET SHOULD BE CONSTRUCTED BY NOW
 
