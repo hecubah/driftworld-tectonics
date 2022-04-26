@@ -81,15 +81,18 @@ public class DRTriangleSerial
     public int a;
     public int b;
     public int c;
+    public int neigh1;
+    public int neigh2;
+    public int neigh3;
 
     public DRTriangleSerial()
     {
-        a = -1; b = -1; c = -1; // default nonsense values
+        a = -1; b = -1; c = -1; neigh1 = -1; neigh2 = -1; neigh3 = -1; // default nonsense values
     }
 
     public DRTriangleSerial(DRTriangle tri)
     {
-        a = tri.m_A; b = tri.m_B; c = tri.m_C;
+        a = tri.m_A; b = tri.m_B; c = tri.m_C; neigh1 = tri.m_Neighbours[0]; neigh2 = tri.m_Neighbours[1]; neigh3 = tri.m_Neighbours[2];
     }
 
 }
@@ -303,6 +306,12 @@ public static class SaveManager
                 fs.Write(value_buffer, 0, 4);
                 value_buffer = BitConverter.GetBytes(data.m_CrustTriangles[i].c);
                 fs.Write(value_buffer, 0, 4);
+                value_buffer = BitConverter.GetBytes(data.m_CrustTriangles[i].neigh1);
+                fs.Write(value_buffer, 0, 4);
+                value_buffer = BitConverter.GetBytes(data.m_CrustTriangles[i].neigh2);
+                fs.Write(value_buffer, 0, 4);
+                value_buffer = BitConverter.GetBytes(data.m_CrustTriangles[i].neigh3);
+                fs.Write(value_buffer, 0, 4);
             }
             value_buffer = BitConverter.GetBytes(data.m_DataTriangles[i].a);
             fs.Write(value_buffer, 0, 4);
@@ -310,11 +319,19 @@ public static class SaveManager
             fs.Write(value_buffer, 0, 4);
             value_buffer = BitConverter.GetBytes(data.m_DataTriangles[i].c);
             fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_DataTriangles[i].neigh1);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_DataTriangles[i].neigh2);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_DataTriangles[i].neigh3);
+            fs.Write(value_buffer, 0, 4);
         }
 
         if (tectonics_present)
         {
             int n_plates = data.m_TectonicPlates.Count;
+            value_buffer = BitConverter.GetBytes(n_plates);
+            fs.Write(value_buffer, 0, 4);
             for (int i = 0; i < n_plates; i++)
             {
                 value_buffer = BitConverter.GetBytes(data.m_TectonicPlates[i].m_RotationAxis.x);
@@ -394,6 +411,12 @@ public static class SaveManager
             fs.Write(value_buffer, 0, 4);
             value_buffer = BitConverter.GetBytes(data.m_RenderTriangles[i].c);
             fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_RenderTriangles[i].neigh1);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_RenderTriangles[i].neigh2);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_RenderTriangles[i].neigh3);
+            fs.Write(value_buffer, 0, 4);
         }
 
         fs.Close();
@@ -442,25 +465,36 @@ public static class SaveManager
         }
 
         n_triangles = data.m_DataTriangles.Count;
+
         man.m_Planet.m_CrustTriangles = new List<DRTriangle>();
         man.m_Planet.m_DataTriangles = new List<DRTriangle>();
+        DRTriangle new_tri;
         for (int i = 0; i < n_triangles; i++)
         {
             DRTriangleSerial source;
             if (data.m_TectonicsPresent)
             {
                 source = data.m_CrustTriangles[i];
-                man.m_Planet.m_CrustTriangles.Add(new DRTriangle(source.a, source.b,source.c, man.m_Planet.m_CrustVertices));
+                new_tri = new DRTriangle(source.a, source.b, source.c, man.m_Planet.m_CrustVertices);
+                new_tri.m_Neighbours.Add(source.neigh1);
+                new_tri.m_Neighbours.Add(source.neigh2);
+                new_tri.m_Neighbours.Add(source.neigh3);
+                man.m_Planet.m_CrustTriangles.Add(new_tri);
             }
             source = data.m_DataTriangles[i];
-            man.m_Planet.m_DataTriangles.Add(new DRTriangle(source.a, source.b, source.c, man.m_Planet.m_DataVertices));
+            new_tri = new DRTriangle(source.a, source.b, source.c, man.m_Planet.m_DataVertices);
+            new_tri.m_Neighbours.Add(source.neigh1);
+            new_tri.m_Neighbours.Add(source.neigh2);
+            new_tri.m_Neighbours.Add(source.neigh3);
+            man.m_Planet.m_DataTriangles.Add(new_tri);
 
         }
 
-        man.m_Planet.m_TectonicStepsTaken = 0;
+        man.m_Planet.m_TectonicStepsTaken = data.m_TectonicsPresent ? data.m_TectonicStepsTaken : 0;
         if (data.m_TectonicsPresent)
         {
             man.m_Planet.m_TectonicPlatesCount = data.m_TectonicPlates.Count;
+            man.m_Planet.m_TectonicPlates = new List<Plate>();
             for (int i = 0; i < data.m_TectonicPlates.Count; i++)
             {
                 Plate target = new Plate(man.m_Planet);
@@ -471,6 +505,7 @@ public static class SaveManager
                 target.m_Type = data.m_TectonicPlates[i].m_Type;
                 target.m_Transform = new Quaternion(data.m_TectonicPlates[i].m_Transform.x, data.m_TectonicPlates[i].m_Transform.y, data.m_TectonicPlates[i].m_Transform.z, data.m_TectonicPlates[i].m_Transform.w);
                 target.m_Centroid = new Vector3(data.m_TectonicPlates[i].m_Centroid.x, data.m_TectonicPlates[i].m_Centroid.y, data.m_TectonicPlates[i].m_Centroid.z);
+                man.m_Planet.m_TectonicPlates.Add(target);
             }
         }
 
@@ -491,14 +526,17 @@ public static class SaveManager
         man.m_Planet.m_RenderTriangles = new List<DRTriangle>();
         for (int i = 0; i < n_triangles; i++)
         {
-            DRTriangleSerial source = data.m_DataTriangles[i];
-            man.m_Planet.m_DataTriangles.Add(new DRTriangle(source.a, source.b, source.c, man.m_Planet.m_RenderVertices));
+            DRTriangleSerial source = data.m_RenderTriangles[i];
+            new_tri = new DRTriangle(source.a, source.b, source.c, man.m_Planet.m_RenderVertices);
+            new_tri.m_Neighbours.Add(source.neigh1);
+            new_tri.m_Neighbours.Add(source.neigh2);
+            new_tri.m_Neighbours.Add(source.neigh3);
+            man.m_Planet.m_RenderTriangles.Add(new_tri);
 
         }
 
         man.m_Planet.m_RenderVerticesCount = man.m_Planet.m_RenderVertices.Count; // set the render vertices count
         man.m_Planet.m_RenderTrianglesCount = man.m_Planet.m_RenderTriangles.Count; // set the render triangles count
-
 
         man.m_Planet.m_VerticesCount = man.m_Planet.m_DataVertices.Count;
         man.m_Planet.m_TrianglesCount = man.m_Planet.m_DataTriangles.Count;
@@ -514,41 +552,43 @@ public static class SaveManager
         man.m_Planet.m_DataBVH = man.m_Planet.ConstructBVH(m_BVTLeaves); // construct BVH from bottom
         man.m_Planet.m_DataBVHArray = BoundingVolume.BuildBVHArray(man.m_Planet.m_DataBVH); //
 
-
-        for (int i = 0; i < man.m_Planet.m_VerticesCount; i++)
+        if (data.m_TectonicsPresent)
         {
-            man.m_Planet.m_TectonicPlates[man.m_Planet.m_CrustPointData[i].plate].m_PlateVertices.Add(i);
-        }
-
-        for (int i = 0; i < man.m_Planet.m_TrianglesCount; i++) // for all triangles
-        {
-            if ((man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_A].plate == man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_B].plate) && (man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_B].plate == man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_C].plate)) // if the triangle only has vertices of one type (qquivalence is a transitive relation)
+            for (int i = 0; i < man.m_Planet.m_VerticesCount; i++)
             {
-                man.m_Planet.m_TectonicPlates[man.m_Planet.m_DataPointData[man.m_Planet.m_CrustTriangles[i].m_A].plate].m_PlateTriangles.Add(i);
+                man.m_Planet.m_TectonicPlates[man.m_Planet.m_CrustPointData[i].plate].m_PlateVertices.Add(i);
             }
-        }
 
-        foreach (Plate it in man.m_Planet.m_TectonicPlates)
-        {
-            List<BoundingVolume> bvt_leaves = new List<BoundingVolume>();
-            int plate_tricount = it.m_PlateTriangles.Count;
-            for (int i = 0; i < plate_tricount; i++) // for all triangles in data
+            for (int i = 0; i < man.m_Planet.m_TrianglesCount; i++) // for all triangles
             {
-                int tri_index = it.m_PlateTriangles[i];
-                BoundingVolume new_bb = new BoundingVolume(man.m_Planet.m_CrustTriangles[tri_index].m_CCenter, man.m_Planet.m_CrustTriangles[tri_index].m_CUnitRadius); // create a leaf bounding box
-                new_bb.m_TriangleIndex = tri_index; // denote the triangle index to the leaf
-                man.m_Planet.m_CrustTriangles[tri_index].m_BVolume = new_bb; // denote the leaf to the respective triangle
-                bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
+                if ((man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_A].plate == man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_B].plate) && (man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_B].plate == man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_C].plate)) // if the triangle only has vertices of one type (qquivalence is a transitive relation)
+                {
+                    man.m_Planet.m_TectonicPlates[man.m_Planet.m_DataPointData[man.m_Planet.m_CrustTriangles[i].m_A].plate].m_PlateTriangles.Add(i);
+                }
             }
-            if (bvt_leaves.Count > 0)
-            {
-                it.m_BVHPlate = man.m_Planet.ConstructBVH(bvt_leaves);
-                it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
-            }
-        }
-        man.m_Planet.DetermineBorderTriangles();
 
-        man.m_Planet.InitializeCBuffers();
+            foreach (Plate it in man.m_Planet.m_TectonicPlates)
+            {
+                List<BoundingVolume> bvt_leaves = new List<BoundingVolume>();
+                int plate_tricount = it.m_PlateTriangles.Count;
+                for (int i = 0; i < plate_tricount; i++) // for all triangles in data
+                {
+                    int tri_index = it.m_PlateTriangles[i];
+                    BoundingVolume new_bb = new BoundingVolume(man.m_Planet.m_CrustTriangles[tri_index].m_CCenter, man.m_Planet.m_CrustTriangles[tri_index].m_CUnitRadius); // create a leaf bounding box
+                    new_bb.m_TriangleIndex = tri_index; // denote the triangle index to the leaf
+                    man.m_Planet.m_CrustTriangles[tri_index].m_BVolume = new_bb; // denote the leaf to the respective triangle
+                    bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
+                }
+                if (bvt_leaves.Count > 0)
+                {
+                    it.m_BVHPlate = man.m_Planet.ConstructBVH(bvt_leaves);
+                    it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
+                }
+            }
+            man.m_Planet.DetermineBorderTriangles();
+            man.m_Planet.m_PlatesOverlap = man.m_Planet.CalculatePlatesVP();
+            man.m_Planet.InitializeCBuffers();
+        }
 
         //PLANET SHOULD BE CONSTRUCTED BY NOW
 
@@ -579,7 +619,6 @@ public static class SaveManager
         bool tectonics_present = data.m_TectonicsPresent;
         ms.Read(value_read, 0, 4);
         data.m_Radius = BitConverter.ToSingle(value_read, 0);
-
         if (tectonics_present)
         {
             ms.Read(value_read, 0, 4);
@@ -679,6 +718,12 @@ public static class SaveManager
                 triangle.b = BitConverter.ToInt32(value_read, 0);
                 ms.Read(value_read, 0, 4);
                 triangle.c = BitConverter.ToInt32(value_read, 0);
+                ms.Read(value_read, 0, 4);
+                triangle.neigh1 = BitConverter.ToInt32(value_read, 0);
+                ms.Read(value_read, 0, 4);
+                triangle.neigh2 = BitConverter.ToInt32(value_read, 0);
+                ms.Read(value_read, 0, 4);
+                triangle.neigh3 = BitConverter.ToInt32(value_read, 0);
                 data.m_CrustTriangles.Add(triangle);
             }
 
@@ -688,6 +733,12 @@ public static class SaveManager
             triangle.b = BitConverter.ToInt32(value_read, 0);
             ms.Read(value_read, 0, 4);
             triangle.c = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            triangle.neigh1 = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            triangle.neigh2 = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            triangle.neigh3 = BitConverter.ToInt32(value_read, 0);
             data.m_DataTriangles.Add(triangle);
         }
 
@@ -816,6 +867,12 @@ public static class SaveManager
             triangle.b = BitConverter.ToInt32(value_read, 0);
             ms.Read(value_read, 0, 4);
             triangle.c = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            triangle.neigh1 = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            triangle.neigh2 = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            triangle.neigh3 = BitConverter.ToInt32(value_read, 0);
             data.m_RenderTriangles.Add(triangle);
         }
 
