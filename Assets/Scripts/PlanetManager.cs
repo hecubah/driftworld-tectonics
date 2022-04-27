@@ -7,26 +7,11 @@ using UnityEngine;
 public class PlanetManager : MonoBehaviour
 {
     [HideInInspector] public GameObject m_Surface = null;
-    //public TectonicPlanet m_DataMathSphere = null;
-    //public TectonicPlanet m_RenderMathSphere = null;
     public TectonicPlanet m_Planet = null;
 
     public string m_DataMeshFilename = "";
     public string m_RenderMeshFilename = "";
     public string m_SaveFilename = "";
-    /*
-    public ComputeShader m_DefaultTerrainTextureCShader = null;
-    public ComputeShader m_PlatesAreaTextureCShader = null;
-    public ComputeShader m_FractalTerrainCShader = null;
-    public ComputeShader m_TriangleCollisionTestCShader = null;
-    public ComputeShader m_CircleMergeShader = null;
-    public ComputeShader m_BVHNearestNeighbourShader = null;
-    public ComputeShader m_VertexDataInterpolationShader = null;
-    public ComputeShader m_TerrainesConstructShader = null;
-    public ComputeShader m_PlateInteractionsShader = null;
-    public ComputeShader m_DebugTextureShader = null;
-    */
-    //public ComputeShader m_BVHContureTestShader = null;
 
     public uint m_RandomSeed = 0;
     public int m_TectonicIterationSteps = 10;

@@ -152,12 +152,6 @@ public class PlanetEditor : Editor
         if (planet_is_loaded) // if a planet is loaded
         {
             GUILayout.Label("Data surface tools:");
-            if (GUILayout.Button("Markup Terrain"))
-            {
-                m_PlanetManager.m_Planet.MarkupTerrain(); // basic terrain elevation mark-up for debugging purposes
-                m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
-
-            }
             if (GUILayout.Button("Generate Fractal Terrain"))
             {
                 m_PlanetManager.m_Planet.GenerateFractalTerrain();

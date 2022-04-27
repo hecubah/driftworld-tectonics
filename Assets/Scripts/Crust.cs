@@ -25,7 +25,6 @@ public class PointData // object containint additional vertex data
 
 public class Plate // maximal tectonic unit, the parameters drive certain decisions
 {
-    //public TectonicPlanet m_Planet; // to which planet the plate belongs to
     public List<int> m_PlateVertices; // all vertices belonging to the plate
     public List<int> m_PlateTriangles; // all triangles belonging to the plate
     public List<int> m_BorderTriangles; // border triangles of the plate
@@ -47,13 +46,6 @@ public class Plate // maximal tectonic unit, the parameters drive certain decisi
         m_Centroid = Vector3.zero;
         m_BVHArray = new List<BoundingVolumeStruct>();
     }
-
-}
-public class Terraine
-{
-    public int plate = 0; // Dangerous definition
-    public int index = 0;
-    public List<int> m_Vertices = new List<int>();
 
 }
 

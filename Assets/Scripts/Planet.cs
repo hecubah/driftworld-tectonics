@@ -15,8 +15,6 @@ public class TectonicPlanet
 
     public List<Vector3> m_CrustVertices; // vertices belonging to the crust layer
     public List<DRTriangle> m_CrustTriangles; // All triangles belonging to the crust layer - crust movement flips some of them
-    //public List<List<int>> m_CrustVerticesNeighbours;
-    //public List<List<int>> m_CrustTrianglesOfVertices;
     public List<PointData> m_CrustPointData;
 
     public List<Vector3> m_DataVertices;
@@ -46,8 +44,6 @@ public class TectonicPlanet
     public List<Plate> m_TectonicPlates;
 
     public int[,] m_PlatesOverlap; // matrix saying if row overlaps column (1 if it does, -1 if it goes under)
-
-    //public ComputeBuffer m_GPUBufferCrustBVH = null;
 
     public Dictionary<string, ComputeBuffer> m_CBuffers;
     public Dictionary<string, bool> m_CBufferUpdatesNeeded;
@@ -484,95 +480,13 @@ public class TectonicPlanet
 
     public static float UnitSphereDistance(Vector3 a, Vector3 b)
     {
-        return Mathf.Acos(Vector3.Dot(a, b));
+        float dot = Vector3.Dot(a, b);
+        return Mathf.Acos(dot <= 1.0f ? dot : 1.0f);
     }
 
     public static float SphereDistance(Vector3 a, Vector3 b, float radius)
     {
         return radius * UnitSphereDistance(a, b);
-    }
-
-    public int SearchDataTrianglesForPointBruteForce(Vector3 needle)
-    {
-        float mindist = Mathf.Infinity;
-        float dist;
-        int current_searched_triangle = 0; // hopefully dummy variable definition
-        for (int i = 0; i < m_TrianglesCount; i++)
-        {
-            dist = UnitSphereDistance(needle, m_DataTriangles[i].m_BCenter);
-            if (dist < mindist)
-            {
-                mindist = dist;
-                current_searched_triangle = i;
-            }
-        }
-        if (!m_DataTriangles[current_searched_triangle].Contains(needle))
-        {
-            for (int i = 0; i < m_DataTriangles[current_searched_triangle].m_Neighbours.Count; i++)
-            {
-                if (m_DataTriangles[i].Contains(needle))
-                {
-                    current_searched_triangle = i;
-                    break;
-                }
-
-            }
-        }
-        return current_searched_triangle;
-
-    }
-
-    public int SearchDataTrianglesForPoint(Vector3 needle)
-    {
-        bool closest;
-        float mindist = Mathf.Infinity;
-        float dist;
-        int current_searched_triangle = 0; // hopefully dummy variable definition
-        int aux_triangle_index;
-        for (int i = 0; i < m_LookupStartTriangles.Count; i++)
-        {
-            dist = UnitSphereDistance(needle, m_DataTriangles[m_LookupStartTriangles[i]].m_BCenter);
-            if (dist < mindist)
-            {
-                mindist = dist;
-                current_searched_triangle = m_LookupStartTriangles[i];
-            }
-        }
-        do
-        {
-            aux_triangle_index = current_searched_triangle;
-            closest = true;
-            for (int i = 0; i < m_DataTriangles[current_searched_triangle].m_Neighbours.Count; i++)
-            {
-                dist = UnitSphereDistance(needle, m_DataTriangles[m_DataTriangles[current_searched_triangle].m_Neighbours[i]].m_BCenter);
-                if (dist < mindist)
-                {
-                    mindist = dist;
-                    aux_triangle_index = m_DataTriangles[current_searched_triangle].m_Neighbours[i];
-                    closest = false;
-                }
-            }
-            current_searched_triangle = aux_triangle_index;
-        } while (!closest);
-        if (!m_DataTriangles[current_searched_triangle].Contains(needle))
-        {
-            for (int i = 0; i < m_DataTriangles[current_searched_triangle].m_Neighbours.Count; i++)
-            {
-                if (m_DataTriangles[m_DataTriangles[current_searched_triangle].m_Neighbours[i]].Contains(needle))
-                {
-                    current_searched_triangle = m_DataTriangles[current_searched_triangle].m_Neighbours[i];
-                    break;
-                }
-
-            }
-        }
-        return current_searched_triangle;
-    }
-
-    public List<int> SearchDataForPoint(Vector3 needle)
-    {
-        List<int> retVal = m_DataBVH.SearchForPoint(needle, m_DataTriangles);
-        return retVal;
     }
 
     public void CrustToData()
@@ -780,135 +694,6 @@ public class TectonicPlanet
             m_RenderPointData.Add(new PointData()); // delete the list of crust point data - render
         }
 
-    }
-
-    public PointData InterpolatePointFromData(Vector3 point)
-    {
-        PointData retVal = new PointData();
-        int which_triangle = SearchDataTrianglesForPoint(point);
-        
-        float d00, d01, d11, d20, d21, den;
-        float u, v, w;
-        Vector3 a, b, c, v0, v1, v2;
-        int ai, bi, ci, max_weight;
-        a = m_DataVertices[m_DataTriangles[which_triangle].m_A];
-        b = m_DataVertices[m_DataTriangles[which_triangle].m_B];
-        c = m_DataVertices[m_DataTriangles[which_triangle].m_C];
-        ai = m_DataTriangles[which_triangle].m_A;
-        bi = m_DataTriangles[which_triangle].m_B;
-        ci = m_DataTriangles[which_triangle].m_C;
-        v0 = b - a;
-        v1 = c - a;
-        v2 = point - a;
-        d00 = Vector3.Dot(v0, v0);
-        d01 = Vector3.Dot(v0, v1);
-        d11 = Vector3.Dot(v1, v1);
-        d20 = Vector3.Dot(v2, v0);
-        d21 = Vector3.Dot(v2, v1);
-        den = d00 * d11 - d01 * d01;
-        v = (d11 * d20 - d01 * d21) / den;
-        max_weight = 2;
-        w = (d00 * d21 - d01 * d20) / den;
-        if (w > max_weight)
-            max_weight = 3;
-        u = 1.0f - v - w;
-        if (u > max_weight)
-            max_weight = 1;
-
-        retVal.elevation = m_DataPointData[ai].elevation * u + m_DataPointData[bi].elevation * v + m_DataPointData[ci].elevation * w;
-        
-        switch (max_weight)
-        {
-            case 1:
-                retVal.plate = m_DataPointData[ai].plate;
-                break;
-            case 2:
-                retVal.plate = m_DataPointData[bi].plate;
-                break;
-            case 3:
-                retVal.plate = m_DataPointData[ci].plate;
-                break;
-            default:
-                break;
-        }
-        
-        return retVal;
-    }
-
-    public PointData InterpolatePointFromTriangle(Vector3 point, DRTriangle triangle)
-    {
-        if (!triangle.Contains(point))
-        {
-            return null;
-        }
-        PointData retVal = new PointData();
-
-        float d00, d01, d11, d20, d21, den;
-        float u, v, w;
-        Vector3 a, b, c, v0, v1, v2;
-        int ai, bi, ci, max_weight;
-        a = m_DataVertices[triangle.m_A];
-        b = m_DataVertices[triangle.m_B];
-        c = m_DataVertices[triangle.m_C];
-        ai = triangle.m_A;
-        bi = triangle.m_B;
-        ci = triangle.m_C;
-        v0 = b - a;
-        v1 = c - a;
-        v2 = point - a;
-        d00 = Vector3.Dot(v0, v0);
-        d01 = Vector3.Dot(v0, v1);
-        d11 = Vector3.Dot(v1, v1);
-        d20 = Vector3.Dot(v2, v0);
-        d21 = Vector3.Dot(v2, v1);
-        den = d00 * d11 - d01 * d01;
-        v = (d11 * d20 - d01 * d21) / den;
-        max_weight = 2;
-        w = (d00 * d21 - d01 * d20) / den;
-        if (w > max_weight)
-            max_weight = 3;
-        u = 1.0f - v - w;
-        if (u > max_weight)
-            max_weight = 1;
-
-        retVal.elevation = m_DataPointData[ai].elevation * u + m_DataPointData[bi].elevation * v + m_DataPointData[ci].elevation * w;
-
-        switch (max_weight)
-        {
-            case 1:
-                retVal.plate = m_DataPointData[ai].plate;
-                break;
-            case 2:
-                retVal.plate = m_DataPointData[bi].plate;
-                break;
-            case 3:
-                retVal.plate = m_DataPointData[ci].plate;
-                break;
-            default:
-                break;
-        }
-
-        return retVal;
-
-    }
-
-    public void MarkupTerrain ()
-    {
-        bool mark;
-        Vector3 pointNorth, pointSouthHemi;
-        pointNorth = new Vector3(0,1,0);
-        pointSouthHemi = new Vector3(1,-1,-1).normalized;
-        for (int i = 0; i < m_VerticesCount; i++)
-        {
-            Vector3 point = m_DataVertices[i];
-            mark = UnitSphereDistance(point, pointNorth) < Mathf.PI / 6;
-            mark = mark || ((point.y > -0.1f) && (point.y < 0.1f));
-            mark = mark || (UnitSphereDistance(point, pointSouthHemi) < Math.PI / 12);
-            if (mark)
-                m_DataPointData[i].elevation = m_PlanetManager.m_Settings.MarkupElevation*m_Radius;
-            else
-                m_DataPointData[i].elevation = 0.0f;
-        }
     }
 
     public void GenerateFractalTerrain ()
@@ -1704,7 +1489,6 @@ public class TectonicPlanet
         contact_points_buffer.Release();
         m_TectonicStepsTaken++;
     }
-
 
     public void BVHDiagnostics ()
     {
