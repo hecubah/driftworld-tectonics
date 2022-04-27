@@ -109,7 +109,7 @@ bool segments_intersect(float3 a1, float3 a2, float3 b1, float3 b2) {
     else {
         return false;
     }
-    
+
 
 }
 
@@ -160,9 +160,9 @@ bool crust_triangles_intersect(int triangle_a, int triangle_b, int plate_index_a
 
 
 s_platecontact triangle_contact_with_plate_bvh(int triangle_index, int triangle_plate_index, int bv_plate_index) {
-    
+
     s_platecontact retval;
-    
+
     retval.contact_occured = 0;
     retval.contact_point = float3(0, 0, 0);
     retval.elevation = 0;
@@ -201,7 +201,7 @@ s_platecontact triangle_contact_with_plate_bvh(int triangle_index, int triangle_
             dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
             continue;
         }
-        
+
         if (crust_BVH[offset + dfs_stack[stack_index]].n_children == 2) {
             dfs_stack[stack_index + 1] = crust_BVH[offset + dfs_stack[stack_index]].left_child;
             stack_index++;
@@ -289,7 +289,7 @@ float subduction_height_transfer(float source_elevation) {
 [numthreads(64, 1, 1)]
 void CSSubductionUplift(uint3 dID : SV_DispatchThreadID)
 {
-    
+
     int ivi = dID.x;
     if (ivi >= n_crust_vertices) {
         return;
@@ -297,7 +297,7 @@ void CSSubductionUplift(uint3 dID : SV_DispatchThreadID)
     float uplift_sum = 0.0f;
     int ivi_plate = crust_vertex_data[ivi].plate;
     float3 iv = quat_rot(crust_vertex_locations[ivi], plate_transforms[ivi_plate]);
-    
+
 
     for (int i = 0; i < n_plates; i++) {
         if (overlap_matrix[ivi_plate * n_plates + i] < 1) {
@@ -305,7 +305,7 @@ void CSSubductionUplift(uint3 dID : SV_DispatchThreadID)
         }
         float dist = MAX_DISTANCE;
 
-        
+
         int found_contact_index = -1;
         int cpi; // contact point index
         float dot_prod;
@@ -330,7 +330,7 @@ void CSSubductionUplift(uint3 dID : SV_DispatchThreadID)
         }
     }
     uplift[ivi] = uplift_sum * subduction_uplift;
-    
+
 }
 
 float oceanic_elevation_damping;
@@ -492,7 +492,7 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
             dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
             continue;
         }
-        
+
         if (crust_BVH[offset + dfs_stack[stack_index]].n_children == 2) {
             dfs_stack[stack_index + 1] = crust_BVH[offset + dfs_stack[stack_index]].left_child;
             stack_index++;
@@ -537,7 +537,7 @@ void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
     if ((crust_vertex_data[crust_triangles[ivi].a].elevation < 0) || (crust_vertex_data[crust_triangles[ivi].b].elevation < 0) || (crust_vertex_data[crust_triangles[ivi].c].elevation < 0)) {
         return;
     }
-    
+
     int main_plate_index = crust_vertex_data[crust_triangles[ivi].a].plate;
     for (int i = 0; i < n_plates; i++) {
         if (i == main_plate_index) {

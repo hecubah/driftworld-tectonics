@@ -65,7 +65,7 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction2()
     {
-        float tolerance = 0.1f;
+        float tolerance = 0.01f;
         Debug.Log("Checking mesh health...");
         bool healthy = true;
         if (m_Planet.m_TectonicPlatesCount > 0)

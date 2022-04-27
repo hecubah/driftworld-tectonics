@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-[System.Serializable]
 public class PointData // object containint additional vertex data
 {
     public float elevation = 0; // elevation parameter
@@ -32,10 +31,7 @@ public class Plate // maximal tectonic unit, the parameters drive certain decisi
     public List<int> m_BorderTriangles; // border triangles of the plate
     public Vector3 m_RotationAxis; // axis around which the plate drifts
     public float m_PlateAngularSpeed; // angular speed of the plate drift
-    public float m_InitElevation; // mean elevation
     public BoundingVolume m_BVHPlate; // bounding volume hiearchy of the plate
-    public float m_Mass; // total mass of the plate, sum of thickness values
-    public float m_Type; // oceanic or continental plate, sum of elevation values
     public Quaternion m_Transform; // Relative transform caused by the motion of the plate
     public Vector3 m_Centroid; // centroid of the plate because it is called centroid not a cup of coffee
     public List<BoundingVolumeStruct> m_BVHArray; // List representing the BVH for array buffer feeding of the compute buffers
@@ -50,8 +46,6 @@ public class Plate // maximal tectonic unit, the parameters drive certain decisi
         m_Transform = Quaternion.identity;
         m_Centroid = Vector3.zero;
         m_BVHArray = new List<BoundingVolumeStruct>();
-        m_Type = 0.0f;
-        m_Mass = 0.0f;
     }
 
 }

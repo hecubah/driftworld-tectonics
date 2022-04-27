@@ -50,22 +50,18 @@ public class SimulationSettings
     public int FractalTerrainIterations = 10000; // in bunches of 64
     public float FractalTerrainElevationStep = 0.003f; // minimal elevation in every fractal terrain generation iteration
     public float MarkupElevation = 0.1f; // uniform elevation for mark-ups
-    public float PlateInitElevationRange = 0.1f; // maximum interval of uniform elevation for new plates
     public int PlateInitNumberOfCentroids = 7; // number of initial tectonic plates (Voronoi centers)
-    public float PlateInitLandRatio = 0.0f;// 0.33f; // land to sea ratio
     //public static float MaxPlateAngularSpeed = 0.03f; // per million years;
 
-    public float CrustThicknessMin = 0.04f; // minimum random crust thickness parameter
-    public float CrustThicknessMax = 0.06f; // maximum random crust thickness parameter
+    public float NewCrustThickness = 0.01f; // initial crust thickness on generated points
     public float CrustElevationRandomThicknessRange = 0.01f; // how much the crust is varied in thickness across samples
     public float OceanBaseFloor = -0.004f; // base floor level when rendering without sample interpolation outside of tectonic plates
     public float OceanicRidgeElevationFalloff = 0.05f;
     public int BVHConstructionRadius = 20; // interval radius for BVH construction
-    public float AverageContinentalElevation = 0.001f; // landmass initial elevation
     public float AverageOceanicDepth = -0.004f;
     public float InitialOceanicDepth = -0.004f;
     //public static float SubductionDistance = 0.29f; // max distance that causes subduction
-    public int MaxBorderTrianglesCount = 1500;
+    //public int MaxBorderTrianglesCount = 1500;
 
     public float TectonicIterationStepTime = 2; // simulation time-step in My, def: 2
     public float PlanetRadius = 6.37f; // multiple of 1000 km

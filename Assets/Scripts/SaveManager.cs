@@ -102,9 +102,6 @@ public class PlateSerial
 {
     public Vector3Serial m_RotationAxis;
     public float m_PlateAngularSpeed;
-    public float m_InitElevation;
-    public float m_Mass;
-    public float m_Type;
     public QuaternionSerial m_Transform;
     public Vector3Serial m_Centroid;
 
@@ -112,9 +109,6 @@ public class PlateSerial
     {
         m_RotationAxis = null;
         m_PlateAngularSpeed = 0;
-        m_InitElevation = 0;
-        m_Mass = 0;
-        m_Type = 0;
         m_Transform = null;
         m_Centroid = null;
     }
@@ -123,9 +117,6 @@ public class PlateSerial
     {
         m_RotationAxis = new Vector3Serial(plate.m_RotationAxis);
         m_PlateAngularSpeed = plate.m_PlateAngularSpeed;
-        m_InitElevation = plate.m_InitElevation;
-        m_Mass = plate.m_Mass;
-        m_Type = plate.m_Type;
         m_Transform = new QuaternionSerial(plate.m_Transform);
         m_Centroid = new Vector3Serial (plate.m_Centroid);
     }
@@ -342,12 +333,6 @@ public static class SaveManager
                 fs.Write(value_buffer, 0, 4);
                 value_buffer = BitConverter.GetBytes(data.m_TectonicPlates[i].m_PlateAngularSpeed);
                 fs.Write(value_buffer, 0, 4);
-                value_buffer = BitConverter.GetBytes(data.m_TectonicPlates[i].m_InitElevation);
-                fs.Write(value_buffer, 0, 4);
-                value_buffer = BitConverter.GetBytes(data.m_TectonicPlates[i].m_Mass);
-                fs.Write(value_buffer, 0, 4);
-                value_buffer = BitConverter.GetBytes(data.m_TectonicPlates[i].m_Type);
-                fs.Write(value_buffer, 0, 4);
                 value_buffer = BitConverter.GetBytes(data.m_TectonicPlates[i].m_Transform.x);
                 fs.Write(value_buffer, 0, 4);
                 value_buffer = BitConverter.GetBytes(data.m_TectonicPlates[i].m_Transform.y);
@@ -500,9 +485,6 @@ public static class SaveManager
                 Plate target = new Plate(man.m_Planet);
                 target.m_RotationAxis = new Vector3(data.m_TectonicPlates[i].m_RotationAxis.x, data.m_TectonicPlates[i].m_RotationAxis.y, data.m_TectonicPlates[i].m_RotationAxis.z);
                 target.m_PlateAngularSpeed = data.m_TectonicPlates[i].m_PlateAngularSpeed;
-                target.m_InitElevation = data.m_TectonicPlates[i].m_InitElevation;
-                target.m_Mass = data.m_TectonicPlates[i].m_Mass;
-                target.m_Type = data.m_TectonicPlates[i].m_Type;
                 target.m_Transform = new Quaternion(data.m_TectonicPlates[i].m_Transform.x, data.m_TectonicPlates[i].m_Transform.y, data.m_TectonicPlates[i].m_Transform.z, data.m_TectonicPlates[i].m_Transform.w);
                 target.m_Centroid = new Vector3(data.m_TectonicPlates[i].m_Centroid.x, data.m_TectonicPlates[i].m_Centroid.y, data.m_TectonicPlates[i].m_Centroid.z);
                 man.m_Planet.m_TectonicPlates.Add(target);
@@ -767,15 +749,6 @@ public static class SaveManager
 
                 ms.Read(value_read, 0, 4);
                 plate.m_PlateAngularSpeed = BitConverter.ToSingle(value_read, 0);
-
-                ms.Read(value_read, 0, 4);
-                plate.m_InitElevation = BitConverter.ToSingle(value_read, 0);
-
-                ms.Read(value_read, 0, 4);
-                plate.m_Mass = BitConverter.ToSingle(value_read, 0);
-
-                ms.Read(value_read, 0, 4);
-                plate.m_Type = BitConverter.ToSingle(value_read, 0);
 
                 ms.Read(value_read, 0, 4);
                 transform.x = BitConverter.ToSingle(value_read, 0);
