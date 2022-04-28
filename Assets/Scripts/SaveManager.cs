@@ -574,7 +574,6 @@ public static class SaveManager
 
         //PLANET SHOULD BE CONSTRUCTED BY NOW
 
-        man.m_RenderMode = "normal";
         man.RenderSurfaceMesh();
         man.m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
         GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);

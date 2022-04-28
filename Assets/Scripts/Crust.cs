@@ -3,16 +3,19 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum OroType {UNKNOWN, ANDEAN, HIMALAYAN};
+
 public class PointData // object containint additional vertex data
 {
     public float elevation = 0; // elevation parameter
     public float thickness = 0; // thickness parameter
     public int plate = -1; // which plate the vertex belongs to - -1 means no plate
+    public OroType orogeny = OroType.UNKNOWN;
+    public float age = 0;
+
 
     public PointData() // default constructor with blank data - zero plate index means something only if the list of plates is not empty
     {
-        elevation = 0; // basic elevation is at sea level
-        plate = 0; // default, only has meaning with a non-empty list of plates
     }
 
     public PointData(PointData source)
@@ -20,6 +23,8 @@ public class PointData // object containint additional vertex data
         elevation = source.elevation;
         thickness = source.thickness;
         plate = source.plate;
+        orogeny = source.orogeny;
+        age = source.age;
     }
 }
 

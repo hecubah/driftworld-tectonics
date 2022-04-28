@@ -167,7 +167,7 @@ public class TectonicPlanet
                 {
                     m_CBuffers["crust_vertex_data"].Release();
                 }
-                m_CBuffers["crust_vertex_data"] = new ComputeBuffer(m_VerticesCount, 8, ComputeBufferType.Default);
+                m_CBuffers["crust_vertex_data"] = new ComputeBuffer(m_VerticesCount, 16, ComputeBufferType.Default);
                 CS_VertexData[] crust_vertex_data_array = new CS_VertexData[m_VerticesCount];
                 for (int i = 0; i < m_VerticesCount; i++)
                 {
@@ -392,7 +392,7 @@ public class TectonicPlanet
             {
                 m_CBuffers["data_vertex_data"].Release();
             }
-            m_CBuffers["data_vertex_data"] = new ComputeBuffer(m_VerticesCount, 8, ComputeBufferType.Default);
+            m_CBuffers["data_vertex_data"] = new ComputeBuffer(m_VerticesCount, 16, ComputeBufferType.Default);
             CS_VertexData[] data_vertex_data_array = new CS_VertexData[m_VerticesCount];
             for (int i = 0; i < m_VerticesCount; i++)
             {
@@ -466,7 +466,7 @@ public class TectonicPlanet
             {
                 m_CBuffers["render_vertex_data"].Release();
             }
-            m_CBuffers["render_vertex_data"] = new ComputeBuffer(m_VerticesCount, 8, ComputeBufferType.Default);
+            m_CBuffers["render_vertex_data"] = new ComputeBuffer(m_VerticesCount, 16, ComputeBufferType.Default);
             CS_VertexData[] render_vertex_data_array = new CS_VertexData[m_VerticesCount];
             for (int i = 0; i < m_RenderVerticesCount; i++)
             {
@@ -491,7 +491,10 @@ public class TectonicPlanet
 
     public void CrustToData()
     {
-
+        if (m_TectonicPlates.Count == 0)
+        {
+            return;
+        }
         ComputeShader work_shader = m_PlanetManager.m_Shaders.m_VertexDataInterpolationShader;
 
         int kernelHandle = work_shader.FindKernel("CSCrustToData");
@@ -772,10 +775,13 @@ public class TectonicPlanet
             m_DataPointData[i].elevation = m_PlanetManager.m_Settings.InitialOceanicDepth;
             m_DataPointData[i].thickness = m_PlanetManager.m_Settings.NewCrustThickness;
             m_DataPointData[i].plate = plate_index;
+            m_DataPointData[i].orogeny = OroType.UNKNOWN;
+            m_DataPointData[i].age = 0;
             plates[plate_index].m_PlateVertices.Add(i);
             m_CrustVertices.Add(m_DataVertices[i]);
             m_CrustPointData.Add(new PointData(m_DataPointData[i]));
         }
+        m_CrustTriangles = new List<DRTriangle>();
         for (int i = 0; i < m_DataTriangles.Count; i++) // for all triangles
         {
             if ((m_DataPointData[m_DataTriangles[i].m_A].plate == m_DataPointData[m_DataTriangles[i].m_B].plate) && (m_DataPointData[m_DataTriangles[i].m_B].plate == m_DataPointData[m_DataTriangles[i].m_C].plate)) // if the triangle only has vertices of one type (qquivalence is a transitive relation)
@@ -810,6 +816,7 @@ public class TectonicPlanet
         m_CBufferUpdatesNeeded["crust_triangles"] = true;
         m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
         m_CBufferUpdatesNeeded["plate_transforms"] = true;
+        m_CBufferUpdatesNeeded["plate_transforms_predictive"] = true;
         m_CBufferUpdatesNeeded["overlap_matrix"] = true;
         m_CBufferUpdatesNeeded["crust_BVH"] = true;
         m_CBufferUpdatesNeeded["crust_BVH_sps"] = true;

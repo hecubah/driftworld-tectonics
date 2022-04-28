@@ -33,6 +33,8 @@ struct s_triangle {
 struct vertex_data {
     float elevation;
     int plate;
+    int orogeny;
+    float age;
 };
 
 int n_plates;
@@ -139,7 +141,7 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
                 if (is_point_in_crust_tri(vlt, crust_triangles[candidate_triangle_index])) {
                     return candidate_triangle_index;
                 }
-                
+
                 candidate = crust_triangles[candidate_triangle_index];
                 barycenter_dot_max = dot(vlt, normalize(crust_vertex_locations[candidate.a] + crust_vertex_locations[candidate.b] + crust_vertex_locations[candidate.c]));
                 nearest_barycenter_found = false;
@@ -197,8 +199,8 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
                 if ((plate_check) && (is_point_in_crust_tri(vlt, candidate_neighbour))) {
                     return candidate.neigh_3;
                 }
-                
-                
+
+
             }
             // triangle test END
             while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
@@ -208,9 +210,9 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
             if (stack_index == 0) {
                 return -1;
             }
-            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;            
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
         }
-        
+
     }
     return -1;
 }
@@ -234,19 +236,26 @@ vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, f
     u = 1.0f - v - w;
     vertex_data ret;
 
-    float e1, e2, e3;
+    float e1, e2, e3, ag1, ag2, ag3;
     e1 = crust_vertex_data[crust_triangles[triangle_index].a].elevation;
     e2 = crust_vertex_data[crust_triangles[triangle_index].b].elevation;
     e3 = crust_vertex_data[crust_triangles[triangle_index].c].elevation;
+    ag1 = crust_vertex_data[crust_triangles[triangle_index].a].age;
+    ag2 = crust_vertex_data[crust_triangles[triangle_index].b].age;
+    ag3 = crust_vertex_data[crust_triangles[triangle_index].c].age;
 
     ret.elevation = (u * e1 + v * e2 + w * e3);
-    
+    ret.age = (u * ag1 + v * ag2 + w * ag3);
+
     ret.plate = crust_vertex_data[crust_triangles[triangle_index].a].plate;
+    ret.orogeny = crust_vertex_data[crust_triangles[triangle_index].a].orogeny;
     if (v > u) {
-        ret.plate = crust_vertex_data[crust_triangles[triangle_index].b].plate;
+      ret.plate = crust_vertex_data[crust_triangles[triangle_index].b].plate;
+      ret.orogeny = crust_vertex_data[crust_triangles[triangle_index].b].orogeny;
     }
     if (w > v) {
-        ret.plate = crust_vertex_data[crust_triangles[triangle_index].c].plate;
+      ret.plate = crust_vertex_data[crust_triangles[triangle_index].c].plate;
+      ret.orogeny = crust_vertex_data[crust_triangles[triangle_index].c].orogeny;
     }
     return ret;
 }
@@ -254,7 +263,7 @@ vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, f
 [numthreads(64, 1, 1)]
 void CSCrustToData(uint3 dID : SV_DispatchThreadID)
 {
-    
+
     int ivi = dID.x; // interpolated vertex index
     if (ivi >= n_data_vertices) {
         return;
@@ -267,7 +276,7 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
     for (int i = 0; i < n_plates; i++) {
         int help_index;
         if ((found_plate == -1) || (overlap_matrix[i * n_plates + found_plate] != -1)) {
-            
+
             help_index = search_plate_bvh_for_point(ivi, i);
             if (help_index != -1) {
                 found_index = help_index;
@@ -292,7 +301,7 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
 
         for (int i = 0; i < n_plates; i++) {
             float check_dist = MAX_DISTANCE;
-            int crust_border_loop_size = crust_border_triangles_sps[i + 1] - crust_border_triangles_sps[i];            
+            int crust_border_loop_size = crust_border_triangles_sps[i + 1] - crust_border_triangles_sps[i];
             iv_transformed = quat_rot(iv, plate_transforms[i] * float4(-1, -1, -1, 1));
 
             for (int j = 0; j < crust_border_loop_size; j++) {
@@ -338,7 +347,7 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
                     triangle_2 = control_triangle;
                 }
             }
-            
+
             float3 control_point = crust_vertex_locations[triangle_1.a];
             float dot_product = dot(control_point, iv_transformed);
             float max_dot_product = dot_product;
@@ -357,7 +366,7 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
                 elevation_1 = crust_vertex_data[triangle_1.c].elevation;
                 max_dot_product = dot_product;
             }
-            
+
             // second plate
 
             control_point = crust_vertex_locations[triangle_1.a];
@@ -380,7 +389,7 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
             }
 
         }
-        
+
         float dist_ridge = 0.5f * (dist_1 + dist_2) - dist_1;
         float alpha = dist_ridge / (dist_ridge + dist_1);
 
@@ -546,20 +555,29 @@ vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
     u = 1.0f - v - w;
     vertex_data ret;
 
-    float e1, e2, e3;
+    float e1, e2, e3, ag1, ag2, ag3;
     e1 = data_vertex_data[data_triangles[triangle_index].a].elevation;
     e2 = data_vertex_data[data_triangles[triangle_index].b].elevation;
     e3 = data_vertex_data[data_triangles[triangle_index].c].elevation;
+    ag1 = data_vertex_data[data_triangles[triangle_index].a].age;
+    ag2 = data_vertex_data[data_triangles[triangle_index].b].age;
+    ag3 = data_vertex_data[data_triangles[triangle_index].c].age;
 
     ret.elevation = (u * e1 + v * e2 + w * e3);
+    ret.age = (u * ag1 + v * ag2 + w * ag3);
+
     ret.plate = data_vertex_data[data_triangles[triangle_index].a].plate;
+    ret.orogeny = data_vertex_data[data_triangles[triangle_index].a].orogeny;
     if (v > u) {
-        ret.plate = data_vertex_data[data_triangles[triangle_index].b].plate;
+      ret.plate = data_vertex_data[data_triangles[triangle_index].b].plate;
+      ret.orogeny = data_vertex_data[data_triangles[triangle_index].b].orogeny;
     }
     if (w > v) {
-        ret.plate = data_vertex_data[data_triangles[triangle_index].c].plate;
+      ret.plate = data_vertex_data[data_triangles[triangle_index].c].plate;
+      ret.orogeny = data_vertex_data[data_triangles[triangle_index].c].orogeny;
     }
     return ret;
+
 }
 
 [numthreads(64, 1, 1)]

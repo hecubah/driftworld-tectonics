@@ -1,0 +1,9 @@
+crust age
+orogeny type
+folding direction
+
+editor polish
+
+overlays
+
+thickness

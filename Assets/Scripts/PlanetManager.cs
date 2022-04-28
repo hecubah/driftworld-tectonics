@@ -3,6 +3,15 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum TexOverlay
+{
+    None, Terrain, PlateBorders
+}
+public enum RenderMode
+{
+    Crust, Data, Render
+}
+
 [Serializable]
 public class PlanetManager : MonoBehaviour
 {
@@ -22,7 +31,9 @@ public class PlanetManager : MonoBehaviour
     public SimulationSettings m_Settings = new SimulationSettings();
     public SimulationShaders m_Shaders = new SimulationShaders();
 
-    [HideInInspector] public string m_RenderMode = "";
+    [HideInInspector] public TexOverlay m_TextureOverlay = TexOverlay.None;
+    [HideInInspector] public bool m_OverlayOnRender = false;
+    [HideInInspector] public RenderMode m_RenderMode = RenderMode.Render;
     [HideInInspector] public bool m_PropagateCrust = false;
     [HideInInspector] public bool m_PropagateData = false;
     [HideInInspector] public bool m_ClampToOceanLevel = false;
@@ -34,6 +45,12 @@ public class PlanetManager : MonoBehaviour
     [HideInInspector] public bool m_SedimentAccretion = false;
     [HideInInspector] public bool m_CAPTerrainOnStep = false;
     [HideInInspector] public bool m_ContinentalCollisions = false;
+
+    [HideInInspector] public bool m_FoldoutRenderOptions = false;
+    [HideInInspector] public bool m_FoldoutTectonics = false;
+    [HideInInspector] public bool m_FoldoutDataManipulation = false;
+    [HideInInspector] public bool m_FoldoutDiagnostics = false;
+    [HideInInspector] public bool m_FoldoutWIPTools = false;
 
     public void DebugFunction()
     {
@@ -128,18 +145,13 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction4()
     {
-        /*
-        TecPlanetBinaryData A = new TecPlanetBinaryData();
-        A.bagr = 12;
-        A.traktor.Add(1);
-        A.traktor.Add(1);
-        A.traktor.Add(2);
-        A.traktor.Add(3);
-        A.traktor.Add(5);
-        SaveManager.Save(A);
-        TecPlanetBinaryData B = SaveManager.Load();
-        Debug.Log(B.velikost_traktoru);
-        */
+        Vector3 u = new Vector3(0, 0, -1);
+        Vector3 axis = new Vector3(0, 1, 0);
+        Quaternion q = Quaternion.AngleAxis(30, axis);
+        Vector3 v = q * u;
+        Debug.Log(v.ToString());
+        Vector3 w = Vector3.Cross(axis, u);
+        Debug.Log(w.ToString());
     }
 
     // Start is called before the first frame update
@@ -169,7 +181,6 @@ public class PlanetManager : MonoBehaviour
         }
         m_Planet = new TectonicPlanet(m_Settings.PlanetRadius);
         m_Planet.LoadDefaultTopology(m_DataMeshFilename, m_RenderMeshFilename);
-        m_RenderMode = "normal";
         RenderSurfaceMesh();
         m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
         GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
@@ -184,13 +195,20 @@ public class PlanetManager : MonoBehaviour
         int[] triangles;
         switch (m_RenderMode)
         {
-            case "plates":
-                m_Planet.CrustMesh(out vertices, out triangles);
+            case RenderMode.Crust:
+                if (m_Planet.m_TectonicPlates.Count > 0)
+                {
+                    m_Planet.CrustMesh(out vertices, out triangles);
+                } else
+                {
+                    Debug.Log("No tectonic plates, rendering data layer.");
+                    m_Planet.DataMesh(out vertices, out triangles, m_PropagateCrust);
+                }
                 break;
-            case "data":
+            case RenderMode.Data:
                 m_Planet.DataMesh(out vertices, out triangles, m_PropagateCrust);
                 break;
-            case "normal":
+            case RenderMode.Render:
                 m_Planet.NormalMesh(out vertices, out triangles, m_PropagateData, m_PropagateCrust);
                 break;
             default:

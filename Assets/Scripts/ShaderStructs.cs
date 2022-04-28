@@ -56,21 +56,20 @@ public struct CS_Triangle // size of 40 B
     }
 }
 
-public struct CS_VertexData // size of 8 B
+public struct CS_VertexData // size of 16 B
 {
-    public float elevation;
-    public int plate;
+    public float elevation;//
+    public int plate;//
+    public int orogeny;
+    public float age;
 
-    public CS_VertexData(float elevation_p, int plate_p)
-    {
-        elevation = elevation_p;
-        plate = plate_p;
-    }
 
     public CS_VertexData(PointData source)
     {
         elevation = source.elevation;
         plate = source.plate;
+        orogeny = (int)source.orogeny;
+        age = source.age;
     }
 }
 

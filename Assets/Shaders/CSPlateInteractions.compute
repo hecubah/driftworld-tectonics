@@ -33,6 +33,8 @@ struct s_triangle {
 struct vertex_data {
     float elevation;
     int plate;
+    int orogeny;
+    float age;
 };
 
 struct s_platecontact // size of 28 B
