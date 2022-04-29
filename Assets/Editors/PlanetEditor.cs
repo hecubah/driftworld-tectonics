@@ -75,7 +75,7 @@ public class PlanetEditor : Editor
 
             if (GUILayout.Button("Render surface"))
             {
-                m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
+                m_PlanetManager.RenderPlanet();
             }
 
 
@@ -87,7 +87,7 @@ public class PlanetEditor : Editor
                 if (GUILayout.Button("Initialize tectonic plates")) // new tectonic plates system
                 {
                     m_PlanetManager.m_Planet.InitializeRandomCrust(); // random plates initialization
-                    m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
+                    m_PlanetManager.RenderPlanet(); // draw the mesh according to set render mode
                 }
                 if (m_PlanetManager.m_Planet.m_TectonicPlates.Count > 0)
                 {
@@ -102,14 +102,13 @@ public class PlanetEditor : Editor
                     {
                         m_PlanetManager.m_SedimentAccretion = GUILayout.Toggle(m_PlanetManager.m_SedimentAccretion, "Sediment accretion");
                     }
-                    m_PlanetManager.m_CAPTerrainOnStep = GUILayout.Toggle(m_PlanetManager.m_CAPTerrainOnStep, "Draw terrain texture");
                     m_PlanetManager.m_ContinentalCollisions = GUILayout.Toggle(m_PlanetManager.m_ContinentalCollisions, "Continental collisions");
 
 
                     if (GUILayout.Button("Resample crust"))
                     {
                         m_PlanetManager.m_Planet.ResampleCrust(); // recalculate data mesh filling in missing samples
-                        m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
+                        m_PlanetManager.RenderPlanet(); // draw the mesh according to set render mode
                     }
                 }
                 GUILayout.EndVertical(); // tectonic plates tools box end
@@ -123,11 +122,7 @@ public class PlanetEditor : Editor
                     {
                         m_PlanetManager.m_Planet.TectonicStep(); // do stuff
                     }
-                    m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
-                    if (m_PlanetManager.m_CAPTerrainOnStep)
-                    {
-                        m_PlanetManager.CAPTerrainTexture(m_PlanetManager.m_Planet);
-                    }
+                    m_PlanetManager.RenderPlanet(); // draw the mesh according to set render mode
                 }
             }
 
@@ -143,18 +138,7 @@ public class PlanetEditor : Editor
                 if (GUILayout.Button("Generate Fractal Terrain"))
                 {
                     m_PlanetManager.m_Planet.GenerateFractalTerrain();
-                    m_PlanetManager.RenderSurfaceMesh(); // draw the mesh according to set render mode
-                }
-                if (GUILayout.Button("Create and paint terrain texture"))
-                {
-                    m_PlanetManager.CAPTerrainTexture(m_PlanetManager.m_Planet); // paint default terraing texture over the mesh
-                }
-                if (m_PlanetManager.m_Planet.m_TectonicPlates.Count > 0)
-                {
-                    if (GUILayout.Button("Paint plate borders"))
-                    {
-                        m_PlanetManager.CAPPlatesAreaTexture(m_PlanetManager.m_Planet); // paint plate border texture over the mesh
-                    }
+                    m_PlanetManager.RenderPlanet(); // draw the mesh according to set render mode
                 }
                 if (GUILayout.Button("Initialize RNG"))
                 {

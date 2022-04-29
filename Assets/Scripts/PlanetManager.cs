@@ -7,6 +7,7 @@ public enum TexOverlay
 {
     None, Terrain, PlateBorders
 }
+
 public enum RenderMode
 {
     Crust, Data, Render
@@ -32,8 +33,8 @@ public class PlanetManager : MonoBehaviour
     public SimulationShaders m_Shaders = new SimulationShaders();
 
     [HideInInspector] public TexOverlay m_TextureOverlay = TexOverlay.None;
-    [HideInInspector] public bool m_OverlayOnRender = false;
     [HideInInspector] public RenderMode m_RenderMode = RenderMode.Render;
+    [HideInInspector] public bool m_OverlayOnRender = false;
     [HideInInspector] public bool m_PropagateCrust = false;
     [HideInInspector] public bool m_PropagateData = false;
     [HideInInspector] public bool m_ClampToOceanLevel = false;
@@ -43,7 +44,6 @@ public class PlanetManager : MonoBehaviour
     [HideInInspector] public bool m_StepSlabPull = false;
     [HideInInspector] public bool m_StepErosionDamping = false;
     [HideInInspector] public bool m_SedimentAccretion = false;
-    [HideInInspector] public bool m_CAPTerrainOnStep = false;
     [HideInInspector] public bool m_ContinentalCollisions = false;
 
     [HideInInspector] public bool m_FoldoutRenderOptions = false;
@@ -181,13 +181,11 @@ public class PlanetManager : MonoBehaviour
         }
         m_Planet = new TectonicPlanet(m_Settings.PlanetRadius);
         m_Planet.LoadDefaultTopology(m_DataMeshFilename, m_RenderMeshFilename);
-        RenderSurfaceMesh();
-        m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
-        GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
         m_Planet.InitializeCBuffers();
+        RenderPlanet();
     }
 
-    public void RenderSurfaceMesh()
+    public void RenderPlanet()
     {
         MeshFilter meshFilter = m_Surface.GetComponent<MeshFilter>();
         meshFilter.sharedMesh.Clear();
@@ -199,9 +197,11 @@ public class PlanetManager : MonoBehaviour
                 if (m_Planet.m_TectonicPlates.Count > 0)
                 {
                     m_Planet.CrustMesh(out vertices, out triangles);
-                } else
+                }
+                else
                 {
                     Debug.Log("No tectonic plates, rendering data layer.");
+                    m_RenderMode = RenderMode.Data;
                     m_Planet.DataMesh(out vertices, out triangles, m_PropagateCrust);
                 }
                 break;
@@ -218,31 +218,112 @@ public class PlanetManager : MonoBehaviour
         meshFilter.sharedMesh.vertices = vertices;
         meshFilter.sharedMesh.triangles = triangles;
         meshFilter.sharedMesh.RecalculateNormals();
+        if (m_OverlayOnRender)
+        {
+            Texture2D tex = null;
+            bool problem = false;
+            bool no_overlay = false;
+            switch (m_TextureOverlay)
+            {
+                case TexOverlay.None:
+                    no_overlay = true;
+                    break;
+                case TexOverlay.Terrain:
+                    if (m_RenderMode == RenderMode.Crust)
+                    {
+                        if (m_PropagateCrust)
+                        {
+                            m_Planet.CrustToData();
+                        }
+                        else
+                        {
+                            problem = true;
+
+                        }
+                    }
+                    if (problem)
+                    {
+                        tex = MissingDataTexture();
+                    }
+                    else
+                    {
+                        tex = OverlayTerrain();
+                    }
+                    break;
+                case TexOverlay.PlateBorders:
+                    if (m_Planet.m_TectonicPlates.Count == 0)
+                    {
+                        Debug.LogError("Plate borders overlay impossible when there are no plates.");
+                        problem = true;
+                    }
+                    if (problem)
+                    {
+                        tex = MissingDataTexture();
+                    }
+                    else
+                    {
+                        tex = OverlayPlateBorders();
+                    }
+                    GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+                    m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+                    break;
+                default:
+                    no_overlay = true;
+                    break;
+            }
+            if (no_overlay)
+            {
+                m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null); // remove the planet texture
+                GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null); // remove the plane texture
+            } else
+            {
+                GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+                m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+            }
+        } else
+        {
+            m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null); // remove the planet texture
+            GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null); // remove the plane texture
+        }
+    }
+
+    public Texture2D MissingDataTexture()
+    {
+        Texture2D tex = new Texture2D(4096,4096);
+        for (int i = 0; i < tex.height; i++)
+        {
+            for (int j = 0; j < tex.width; j++)
+            {
+                tex.SetPixel(i, j, Color.red);
+            }
+        }
+        tex.Apply ();
+        return tex;
 
     }
 
-    public void CAPTerrainTexture(TectonicPlanet sphere)
-    {
+    public Texture2D OverlayTerrain()
+    {        
         int kernelHandle = m_Shaders.m_DefaultTerrainTextureCShader.FindKernel("CSDefaultTerrainTexture");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
         com_tex.enableRandomWrite = true;
         com_tex.Create();
 
-        Vector3[] triangle_points = new Vector3[3 * sphere.m_TrianglesCount];
-        float[] point_values = new float[3 * sphere.m_TrianglesCount];
-        int[] triangle_neighbours = new int[3 * sphere.m_TrianglesCount];
-        for (int i = 0; i < sphere.m_TrianglesCount; i++)
+        Vector3[] triangle_points = new Vector3[3 * m_Planet.m_TrianglesCount];
+        float[] point_values = new float[3 * m_Planet.m_TrianglesCount];
+        int[] triangle_neighbours = new int[3 * m_Planet.m_TrianglesCount];
+        for (int i = 0; i < m_Planet.m_TrianglesCount; i++)
         {
-            triangle_points[3 * i + 0] = sphere.m_DataVertices[sphere.m_DataTriangles[i].m_A];
-            triangle_points[3 * i + 1] = sphere.m_DataVertices[sphere.m_DataTriangles[i].m_B];
-            triangle_points[3 * i + 2] = sphere.m_DataVertices[sphere.m_DataTriangles[i].m_C];
-            point_values[3 * i + 0] = sphere.m_DataPointData[sphere.m_DataTriangles[i].m_A].elevation;
-            point_values[3 * i + 1] = sphere.m_DataPointData[sphere.m_DataTriangles[i].m_B].elevation;
-            point_values[3 * i + 2] = sphere.m_DataPointData[sphere.m_DataTriangles[i].m_C].elevation;
-            triangle_neighbours[3 * i + 0] = sphere.m_DataTriangles[i].m_Neighbours[0];
-            triangle_neighbours[3 * i + 1] = sphere.m_DataTriangles[i].m_Neighbours[1];
-            triangle_neighbours[3 * i + 2] = sphere.m_DataTriangles[i].m_Neighbours[2];
+            triangle_points[3 * i + 0] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_A];
+            triangle_points[3 * i + 1] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_B];
+            triangle_points[3 * i + 2] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_C];
+            point_values[3 * i + 0] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_A].elevation;
+            point_values[3 * i + 1] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_B].elevation;
+            point_values[3 * i + 2] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_C].elevation;
+            triangle_neighbours[3 * i + 0] = m_Planet.m_DataTriangles[i].m_Neighbours[0];
+            triangle_neighbours[3 * i + 1] = m_Planet.m_DataTriangles[i].m_Neighbours[1];
+            triangle_neighbours[3 * i + 2] = m_Planet.m_DataTriangles[i].m_Neighbours[2];
         }
 
         ComputeBuffer triangle_points_buffer = new ComputeBuffer(triangle_points.Length, 12, ComputeBufferType.Default);
@@ -255,7 +336,7 @@ public class PlanetManager : MonoBehaviour
         m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
         m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
         m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetInt("trianglesNumber", sphere.m_TrianglesCount);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
         m_Shaders.m_DefaultTerrainTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
         m_Shaders.m_DefaultTerrainTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
         triangle_points_buffer.Release();
@@ -268,11 +349,10 @@ public class PlanetManager : MonoBehaviour
         RenderTexture.active = null;
         com_tex.Release();
         tex.Apply();
-        GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
-        m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+        return tex;
     }
 
-    public void CAPPlatesAreaTexture(TectonicPlanet sphere)
+    public Texture2D OverlayPlateBorders()
     {
 
 
@@ -282,48 +362,48 @@ public class PlanetManager : MonoBehaviour
         com_tex.enableRandomWrite = true;
         com_tex.Create();
 
-        Vector3[] triangle_points = new Vector3[3 * sphere.m_TrianglesCount];
-        int[] point_values = new int[3 * sphere.m_TrianglesCount];
-        int[] triangle_neighbours = new int[3 * sphere.m_TrianglesCount];
-        for (int i = 0; i < sphere.m_TrianglesCount; i++)
+        Vector3[] triangle_points = new Vector3[3 * m_Planet.m_TrianglesCount];
+        int[] point_values = new int[3 * m_Planet.m_TrianglesCount];
+        int[] triangle_neighbours = new int[3 * m_Planet.m_TrianglesCount];
+        for (int i = 0; i < m_Planet.m_TrianglesCount; i++)
         {
-            triangle_points[3 * i + 0] = sphere.m_CrustVertices[sphere.m_CrustTriangles[i].m_A];
-            triangle_points[3 * i + 1] = sphere.m_CrustVertices[sphere.m_CrustTriangles[i].m_B];
-            triangle_points[3 * i + 2] = sphere.m_CrustVertices[sphere.m_CrustTriangles[i].m_C];
-            point_values[3 * i + 0] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_A].plate;
-            point_values[3 * i + 1] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_B].plate;
-            point_values[3 * i + 2] = sphere.m_CrustPointData[sphere.m_CrustTriangles[i].m_C].plate;
-            triangle_neighbours[3 * i + 0] = sphere.m_CrustTriangles[i].m_Neighbours[0];
-            triangle_neighbours[3 * i + 1] = sphere.m_CrustTriangles[i].m_Neighbours[1];
-            triangle_neighbours[3 * i + 2] = sphere.m_CrustTriangles[i].m_Neighbours[2];
+            triangle_points[3 * i + 0] = m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_A];
+            triangle_points[3 * i + 1] = m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_B];
+            triangle_points[3 * i + 2] = m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_C];
+            point_values[3 * i + 0] = m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_A].plate;
+            point_values[3 * i + 1] = m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_B].plate;
+            point_values[3 * i + 2] = m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_C].plate;
+            triangle_neighbours[3 * i + 0] = m_Planet.m_CrustTriangles[i].m_Neighbours[0];
+            triangle_neighbours[3 * i + 1] = m_Planet.m_CrustTriangles[i].m_Neighbours[1];
+            triangle_neighbours[3 * i + 2] = m_Planet.m_CrustTriangles[i].m_Neighbours[2];
         }
 
-        int[] overlap_matrix = new int[sphere.m_TectonicPlatesCount * sphere.m_TectonicPlatesCount];
-        int[] BVH_array_sizes = new int[sphere.m_TectonicPlatesCount];
+        int[] overlap_matrix = new int[m_Planet.m_TectonicPlatesCount * m_Planet.m_TectonicPlatesCount];
+        int[] BVH_array_sizes = new int[m_Planet.m_TectonicPlatesCount];
         List<BoundingVolumeStruct> BVArray_pass = new List<BoundingVolumeStruct>();
-        Vector4 [] plate_transforms = new Vector4[sphere.m_TectonicPlatesCount];
+        Vector4[] plate_transforms = new Vector4[m_Planet.m_TectonicPlatesCount];
 
-        int[] vertex_plates = new int[sphere.m_VerticesCount];
-        for (int i = 0; i < sphere.m_VerticesCount; i++)
+        int[] vertex_plates = new int[m_Planet.m_VerticesCount];
+        for (int i = 0; i < m_Planet.m_VerticesCount; i++)
         {
-            vertex_plates[i] = sphere.m_CrustPointData[i].plate;
+            vertex_plates[i] = m_Planet.m_CrustPointData[i].plate;
         }
 
-        for (int i = 0; i < sphere.m_TectonicPlatesCount; i++)
+        for (int i = 0; i < m_Planet.m_TectonicPlatesCount; i++)
         {
-            for (int j = 0; j < sphere.m_TectonicPlatesCount; j++)
+            for (int j = 0; j < m_Planet.m_TectonicPlatesCount; j++)
             {
-                overlap_matrix[i * sphere.m_TectonicPlatesCount + j] = sphere.m_PlatesOverlap[i, j];
+                overlap_matrix[i * m_Planet.m_TectonicPlatesCount + j] = m_Planet.m_PlatesOverlap[i, j];
             }
-            BVH_array_sizes[i] = sphere.m_TectonicPlates[i].m_BVHArray.Count;
-            BVArray_pass.AddRange(sphere.m_TectonicPlates[i].m_BVHArray);
+            BVH_array_sizes[i] = m_Planet.m_TectonicPlates[i].m_BVHArray.Count;
+            BVArray_pass.AddRange(m_Planet.m_TectonicPlates[i].m_BVHArray);
             Vector4 added_transform = new Vector4();
-            added_transform.x = sphere.m_TectonicPlates[i].m_Transform.x;
-            added_transform.y = sphere.m_TectonicPlates[i].m_Transform.y;
-            added_transform.z = sphere.m_TectonicPlates[i].m_Transform.z;
-            added_transform.w = sphere.m_TectonicPlates[i].m_Transform.w;
+            added_transform.x = m_Planet.m_TectonicPlates[i].m_Transform.x;
+            added_transform.y = m_Planet.m_TectonicPlates[i].m_Transform.y;
+            added_transform.z = m_Planet.m_TectonicPlates[i].m_Transform.z;
+            added_transform.w = m_Planet.m_TectonicPlates[i].m_Transform.w;
             plate_transforms[i] = added_transform;
-              
+
         }
         BoundingVolumeStruct[] BVArray_finished = BVArray_pass.ToArray();
 
@@ -349,7 +429,7 @@ public class PlanetManager : MonoBehaviour
 
         m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
         m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
-        m_Shaders.m_PlatesAreaTextureCShader.SetInt("n_plates", sphere.m_TectonicPlatesCount);
+        m_Shaders.m_PlatesAreaTextureCShader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
 
         m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "overlap_matrix", overlap_matrix_buffer);
         m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
@@ -378,8 +458,7 @@ public class PlanetManager : MonoBehaviour
         RenderTexture.active = null;
         tex.Apply();
         com_tex.Release();
-        GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
-        m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+        return tex;
     }
 
     public void CAPTriangleCollisionTestTexture()

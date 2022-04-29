@@ -253,6 +253,10 @@ public static class SaveManager
                 fs.Write(value_buffer, 0, 4);
                 value_buffer = BitConverter.GetBytes(data.m_CrustPointData[i].plate);
                 fs.Write(value_buffer, 0, 4);
+                value_buffer = BitConverter.GetBytes(data.m_CrustPointData[i].age);
+                fs.Write(value_buffer, 0, 4);
+                value_buffer = BitConverter.GetBytes((int)data.m_CrustPointData[i].orogeny);
+                fs.Write(value_buffer, 0, 4);
             }
             value_buffer = BitConverter.GetBytes(data.m_DataVertices[i].x);
             fs.Write(value_buffer, 0, 4);
@@ -265,6 +269,10 @@ public static class SaveManager
             value_buffer = BitConverter.GetBytes(data.m_DataPointData[i].thickness);
             fs.Write(value_buffer, 0, 4);
             value_buffer = BitConverter.GetBytes(data.m_DataPointData[i].plate);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_DataPointData[i].age);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes((int)data.m_DataPointData[i].orogeny);
             fs.Write(value_buffer, 0, 4);
             n_neighbours = data.m_DataVerticesNeighbours[i].Count;
             value_buffer = BitConverter.GetBytes(n_neighbours);
@@ -366,6 +374,10 @@ public static class SaveManager
             value_buffer = BitConverter.GetBytes(data.m_RenderPointData[i].thickness);
             fs.Write(value_buffer, 0, 4);
             value_buffer = BitConverter.GetBytes(data.m_RenderPointData[i].plate);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_RenderPointData[i].age);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes((int)data.m_RenderPointData[i].orogeny);
             fs.Write(value_buffer, 0, 4);
             n_neighbours = data.m_RenderVerticesNeighbours[i].Count;
             value_buffer = BitConverter.GetBytes(n_neighbours);
@@ -574,10 +586,8 @@ public static class SaveManager
 
         //PLANET SHOULD BE CONSTRUCTED BY NOW
 
-        man.RenderSurfaceMesh();
-        man.m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
-        GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null);
         man.m_Planet.InitializeCBuffers();
+        man.RenderPlanet();
     }
 
     public static PlanetBinaryData Load()
@@ -640,6 +650,10 @@ public static class SaveManager
                 point.thickness = BitConverter.ToSingle(value_read, 0);
                 ms.Read(value_read, 0, 4);
                 point.plate = BitConverter.ToInt32(value_read, 0);
+                ms.Read(value_read, 0, 4);
+                point.age = BitConverter.ToInt32(value_read, 0);
+                ms.Read(value_read, 0, 4);
+                point.orogeny = (OroType) BitConverter.ToInt32(value_read, 0);
                 data.m_CrustPointData.Add(point);
             }
 
@@ -657,6 +671,10 @@ public static class SaveManager
             point.thickness = BitConverter.ToSingle(value_read, 0);
             ms.Read(value_read, 0, 4);
             point.plate = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            point.age = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            point.orogeny = (OroType) BitConverter.ToInt32(value_read, 0);
             data.m_DataPointData.Add(point);
 
             ms.Read(value_read, 0, 4);
@@ -800,6 +818,10 @@ public static class SaveManager
             point.thickness = BitConverter.ToSingle(value_read, 0);
             ms.Read(value_read, 0, 4);
             point.plate = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            point.age = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            point.orogeny = (OroType) BitConverter.ToInt32(value_read, 0);
             data.m_RenderPointData.Add(point);
 
             ms.Read(value_read, 0, 4);

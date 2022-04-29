@@ -1,9 +1,10 @@
 crust age
 orogeny type
-folding direction
-
-editor polish
 
 overlays
 
+plate rifting
+
 thickness
+
+memory leaks
