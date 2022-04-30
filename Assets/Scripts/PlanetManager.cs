@@ -5,7 +5,7 @@ using UnityEngine;
 
 public enum TexOverlay
 {
-    None, BasicTerrain, CrustPlates
+    None, BasicTerrain, CrustPlates, DebugDataTriangles, DebugCrustTriangles
 }
 
 public enum RenderMode
@@ -250,6 +250,24 @@ public class PlanetManager : MonoBehaviour
                         tex = OverlayBasicTerrain();
                     }
                     break;
+                case TexOverlay.DebugDataTriangles:
+                    tex = OverlayDebugDataTriangles();
+                    break;
+                case TexOverlay.DebugCrustTriangles:
+                    if (m_Planet.m_TectonicPlates.Count == 0)
+                    {
+                        Debug.LogError("Debug Crust Triangle overlay impossible when there are no plates.");
+                        problem = true;
+                    }
+                    if (problem)
+                    {
+                        tex = MissingDataTexture();
+                    }
+                    else
+                    {
+                        tex = OverlayDebugCrustTriangles();
+                    }
+                    break;
                 case TexOverlay.CrustPlates:
                     if (m_Planet.m_TectonicPlates.Count == 0)
                     {
@@ -264,8 +282,6 @@ public class PlanetManager : MonoBehaviour
                     {
                         tex = OverlayCrustPlates();
                     }
-                    GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
-                    m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
                     break;
                 default:
                     no_overlay = true;
@@ -308,6 +324,111 @@ public class PlanetManager : MonoBehaviour
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
 
         int kernelHandle = work_shader.FindKernel("CSOverlayTextureBasicTerrain");
+
+        m_Planet.UpdateCBBuffers();
+        /*
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
+        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
+
+        work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_Planet.m_CBuffers["overlap_matrix"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
+        */
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+        //work_shader.SetFloat("ocean_base_floor", m_Settings.OceanBaseFloor);
+
+        //work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation);
+        //work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation);
+        //work_shader.SetFloat("oceanic_ridge_elevation_falloff", m_PlanetManager.m_Settings.OceanicRidgeElevationFalloff);
+
+        //work_shader.SetInt("n_data_vertices", m_VerticesCount);
+
+        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles", m_CBuffers["crust_border_triangles"]);
+        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles_sps", m_CBuffers["crust_border_triangles_sps"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+
+        /*
+        int kernelHandle = m_Shaders.m_DefaultTerrainTextureCShader.FindKernel("CSDefaultTerrainTexture");
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+        Vector3[] triangle_points = new Vector3[3 * m_Planet.m_TrianglesCount];
+        float[] point_values = new float[3 * m_Planet.m_TrianglesCount];
+        int[] triangle_neighbours = new int[3 * m_Planet.m_TrianglesCount];
+        for (int i = 0; i < m_Planet.m_TrianglesCount; i++)
+        {
+            triangle_points[3 * i + 0] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_A];
+            triangle_points[3 * i + 1] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_B];
+            triangle_points[3 * i + 2] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_C];
+            point_values[3 * i + 0] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_A].elevation;
+            point_values[3 * i + 1] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_B].elevation;
+            point_values[3 * i + 2] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_C].elevation;
+            triangle_neighbours[3 * i + 0] = m_Planet.m_DataTriangles[i].m_Neighbours[0];
+            triangle_neighbours[3 * i + 1] = m_Planet.m_DataTriangles[i].m_Neighbours[1];
+            triangle_neighbours[3 * i + 2] = m_Planet.m_DataTriangles[i].m_Neighbours[2];
+        }
+
+        ComputeBuffer triangle_points_buffer = new ComputeBuffer(triangle_points.Length, 12, ComputeBufferType.Default);
+        ComputeBuffer point_values_buffer = new ComputeBuffer(point_values.Length, 4, ComputeBufferType.Default);
+        ComputeBuffer triangle_neighbours_buffer = new ComputeBuffer(triangle_neighbours.Length, 4, ComputeBufferType.Default);
+        triangle_points_buffer.SetData(triangle_points);
+        point_values_buffer.SetData(point_values);
+        triangle_neighbours_buffer.SetData(triangle_neighbours);
+
+        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        m_Shaders.m_DefaultTerrainTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
+        m_Shaders.m_DefaultTerrainTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
+        triangle_points_buffer.Release();
+        point_values_buffer.Release();
+        triangle_neighbours_buffer.Release();
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+        */
+    }
+
+    public Texture2D OverlayDebugDataTriangles()
+    {
+
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugDataTriangles");
 
         m_Planet.UpdateCBBuffers();
         /*
@@ -567,6 +688,43 @@ public class PlanetManager : MonoBehaviour
         com_tex.Release();
         return tex;
         */
+    }
+
+    public Texture2D OverlayDebugCrustTriangles()
+    {
+
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugCrustTriangles");
+
+        m_Planet.UpdateCBBuffers();
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
+        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
+
+        work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_Planet.m_CBuffers["overlap_matrix"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
     }
 
     public void CAPTriangleCollisionTestTexture()

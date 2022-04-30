@@ -1,7 +1,8 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSOverlayTextureBasicTerrain
+#pragma kernel CSOverlayTextureDebugDataTriangles
 #pragma kernel CSOverlayTextureCrustPlates
-#pragma kernel CSCrustToData
+#pragma kernel CSOverlayTextureDebugCrustTriangles
 //#pragma kernel CSDataToRender
 #pragma warning(disable : 3557)
 #define MAX_DISTANCE 1000 // initialization protection
@@ -223,28 +224,45 @@ vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
 
 }
 
-/*
-[numthreads(64, 1, 1)]
-void CSDataToRender(uint3 dID : SV_DispatchThreadID)
+float4 HSVtoRGB(float h, float s, float v)
 {
-
-    int ivi = dID.x; // interpolated vertex index
-    if (ivi >= n_render_vertices) {
-        return;
+    float c = v * s;
+    float x = c * (float)(1 - (abs(((h / 60.0f) % 2) - 1)));
+    float m = v - c;
+    float ra, ga, ba;
+    if (h < 60) {
+        ra = c;
+        ga = x;
+        ba = 0;
     }
-
-    float3 iv = render_vertex_locations[ivi];
-    int found_index = search_data_bvh_for_point(ivi);
-
-    if (found_index == -1) {
-        render_vertex_data[ivi].elevation = 0.0f; // should not happen, but hey
-        render_vertex_data[ivi].plate = 0;
+    else if (h < 120) {
+        ra = x;
+        ga = c;
+        ba = 0;
+    }
+    else if (h < 180) {
+        ra = 0;
+        ga = c;
+        ba = x;
+    }
+    else if (h < 240) {
+        ra = 0;
+        ga = x;
+        ba = c;
+    }
+    else if (h < 300) {
+        ra = x;
+        ga = 0;
+        ba = c;
     }
     else {
-        render_vertex_data[ivi] = data_barycentric_interpolation(iv, found_index);
+        ra = c;
+        ga = 0;
+        ba = x;
     }
+    return float4(ra+m, ga+m, ba+m, 1);
 }
-*/
+
 [numthreads(4, 4, 4)]
 void CSOverlayTextureBasicTerrain(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
 {
@@ -267,6 +285,27 @@ void CSOverlayTextureBasicTerrain(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupT
         } else {
           Result[pix_coords] = float4(0, 0, 1, 1);
         }
+    }
+}
+
+[numthreads(4, 4, 4)]
+void CSOverlayTextureDebugDataTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y+0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    int found_index = search_data_bvh_for_point(w_pixelpoint);
+
+    if (found_index == -1) {
+        Result[pix_coords] = float4(0, 0, 0, 1);
+    }
+    else {
+      Result[pix_coords] = HSVtoRGB((float)((uint)found_index % 31)/31.0f * 360.0f, 1, 1); // 31 is an arbitrary period
+      //Result[pix_coords] = HSVtoRGB(((float)found_index/(float)(2*n_data_vertices)) * 360.0f, 1, 1);
     }
 }
 
@@ -480,190 +519,6 @@ vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, f
     return ret;
 }
 
-[numthreads(64, 1, 1)]
-void CSCrustToData(uint3 dID : SV_DispatchThreadID)
-{
-
-    int ivi = dID.x; // interpolated vertex index
-    if (ivi >= n_data_vertices) {
-        return;
-    }
-
-    float3 iv = data_vertex_locations[ivi];
-    int found_index = -1;
-    int found_plate = -1;
-
-    for (int i = 0; i < n_plates; i++) {
-        int help_index;
-        if ((found_plate == -1) || (overlap_matrix[i * n_plates + found_plate] != -1)) {
-
-            help_index = search_plate_bvh_for_point(ivi, i);
-            if (help_index != -1) {
-                found_index = help_index;
-                found_plate = i;
-            }
-        }
-    }
-    float3 iv_transformed;
-    if (found_index == -1) {
-        float dist_1 = MAX_DISTANCE; // start from far
-        int plate_1 = -1; // no plate yet
-        s_triangle triangle_1 = crust_triangles[crust_border_triangles[0]]; // dummy init
-        float elevation_1 = abyssal_plains_elevation;
-        float dist_2 = MAX_DISTANCE; // start from far
-        int plate_2 = -1; // no plate yet
-        s_triangle triangle_2 = crust_triangles[crust_border_triangles[0]];
-        float elevation_2 = abyssal_plains_elevation;
-        float check_dist = MAX_DISTANCE;
-        s_triangle check_triangle;
-        float3 check_bcenter;
-        s_triangle control_triangle = crust_triangles[crust_border_triangles[0]];
-
-        for (int i = 0; i < n_plates; i++) {
-            float check_dist = MAX_DISTANCE;
-            int crust_border_loop_size = crust_border_triangles_sps[i + 1] - crust_border_triangles_sps[i];
-            iv_transformed = quat_rot(iv, plate_transforms[i] * float4(-1, -1, -1, 1));
-
-            for (int j = 0; j < crust_border_loop_size; j++) {
-                check_triangle = crust_triangles[crust_border_triangles[crust_border_triangles_sps[i] + j]];
-                check_bcenter = normalize(crust_vertex_locations[check_triangle.a] + crust_vertex_locations[check_triangle.b] + crust_vertex_locations[check_triangle.c]);
-                float dot_product = dot(check_bcenter, iv_transformed);
-                if ((dot_product <= 1 ? acos(dot_product) : 0) < check_dist) {
-                    check_dist = (dot_product <= 1 ? acos(dot_product) : 0);
-                    control_triangle = check_triangle;
-                }
-            }
-            if (i == 0) {
-                dist_1 = check_dist;
-                plate_1 = 0;
-                triangle_1 = control_triangle;
-            } else if (i == 1) {
-                if (check_dist < dist_1) {
-                    dist_2 = dist_1;
-                    plate_2 = 0;
-                    triangle_2 = triangle_1;
-                    dist_1 = check_dist;
-                    plate_1 = 1;
-                    triangle_1 = control_triangle;
-                }
-                else {
-                    dist_2 = check_dist;
-                    plate_2 = 1;
-                    triangle_2 = control_triangle;
-                }
-            }
-            else if (check_dist < dist_2) {
-                if (check_dist < dist_1) {
-                    dist_2 = dist_1;
-                    plate_2 = plate_1;
-                    triangle_2 = triangle_1;
-                    dist_1 = check_dist;
-                    plate_1 = i;
-                    triangle_1 = control_triangle;
-                }
-                else {
-                    dist_2 = check_dist;
-                    plate_2 = i;
-                    triangle_2 = control_triangle;
-                }
-            }
-
-            float3 control_point = crust_vertex_locations[triangle_1.a];
-            float dot_product = dot(control_point, iv_transformed);
-            float max_dot_product = dot_product;
-            elevation_1 = crust_vertex_data[triangle_1.a].elevation;
-
-            control_point = crust_vertex_locations[triangle_1.b];
-            dot_product = dot(control_point, iv_transformed);
-            if (dot_product > max_dot_product) {
-                elevation_1 = crust_vertex_data[triangle_1.b].elevation;
-                max_dot_product = dot_product;
-            }
-
-            control_point = crust_vertex_locations[triangle_1.c];
-            dot_product = dot(control_point, iv_transformed);
-            if (dot_product > max_dot_product) {
-                elevation_1 = crust_vertex_data[triangle_1.c].elevation;
-                max_dot_product = dot_product;
-            }
-
-            // second plate
-
-            control_point = crust_vertex_locations[triangle_1.a];
-            dot_product = dot(control_point, iv_transformed);
-            max_dot_product = dot_product;
-            elevation_2 = crust_vertex_data[triangle_2.a].elevation;
-
-            control_point = crust_vertex_locations[triangle_1.b];
-            dot_product = dot(control_point, iv_transformed);
-            if (dot_product > max_dot_product) {
-                elevation_2 = crust_vertex_data[triangle_2.b].elevation;
-                max_dot_product = dot_product;
-            }
-
-            control_point = crust_vertex_locations[triangle_1.c];
-            dot_product = dot(control_point, iv_transformed);
-            if (dot_product > max_dot_product) {
-                elevation_2 = crust_vertex_data[triangle_2.c].elevation;
-                max_dot_product = dot_product;
-            }
-
-        }
-
-        float dist_ridge = 0.5f * (dist_1 + dist_2) - dist_1;
-        float alpha = dist_ridge / (dist_ridge + dist_1);
-
-        //float plates_contribution = 0.5f * alpha * elevation_1 + (1 - 0.5f * alpha) * elevation_2;
-        float plates_contribution = alpha * elevation_1;
-        float ridge_contribution = (highest_oceanic_ridge_elevation - abyssal_plains_elevation) * exp2(-dist_ridge / oceanic_ridge_elevation_falloff) + abyssal_plains_elevation;
-
-        data_vertex_data[ivi].elevation = alpha * plates_contribution + (1 - alpha) * ridge_contribution;
-        data_vertex_data[ivi].plate = plate_1;
-    }
-    else {
-
-        data_vertex_data[ivi] = crust_barycentric_interpolation(iv, found_index, plate_transforms[found_plate]);
-    }
-}
-
-float4 HSVtoRGB(float h, float s, float v)
-{
-    float c = v * s;
-    float x = c * (float)(1 - (abs(((h / 60.0f) % 2) - 1)));
-    float m = v - c;
-    float ra, ga, ba;
-    if (h < 60) {
-        ra = c;
-        ga = x;
-        ba = 0;
-    }
-    else if (h < 120) {
-        ra = x;
-        ga = c;
-        ba = 0;
-    }
-    else if (h < 180) {
-        ra = 0;
-        ga = c;
-        ba = x;
-    }
-    else if (h < 240) {
-        ra = 0;
-        ga = x;
-        ba = c;
-    }
-    else if (h < 300) {
-        ra = x;
-        ga = 0;
-        ba = c;
-    }
-    else {
-        ra = c;
-        ga = 0;
-        ba = x;
-    }
-    return float4(ra+m, ga+m, ba+m, 1);
-}
 
 
 [numthreads(4, 4, 4)]
@@ -698,6 +553,42 @@ void CSOverlayTextureCrustPlates(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupTh
     else {
       //vertex_data data;
       Result[pix_coords] = HSVtoRGB((float)found_plate / (float)n_plates * 360.0f, 1, 1);
+        //data_vertex_data[ivi] = crust_barycentric_interpolation(iv, found_index, plate_transforms[found_plate]);
+    }
+}
+
+[numthreads(4, 4, 4)]
+void CSOverlayTextureDebugCrustTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y+0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    //float3 iv = data_vertex_locations[ivi];
+    int found_index = -1;
+    int found_plate = -1;
+
+    for (int i = 0; i < n_plates; i++) {
+        int help_index;
+        if ((found_plate == -1) || (overlap_matrix[i * n_plates + found_plate] != -1)) {
+
+            help_index = search_plate_bvh_for_point(w_pixelpoint, i);
+            if (help_index != -1) {
+                found_index = help_index;
+                found_plate = i;
+            }
+        }
+    }
+    if (found_index == -1) {
+        Result[pix_coords] = float4(0, 0, 0, 1);
+
+    }
+    else {
+      //vertex_data data;
+      Result[pix_coords] = HSVtoRGB((float)((uint)found_index % 31)/31.0f * 360.0f, 1, 1); // 31 is an arbitrary period
         //data_vertex_data[ivi] = crust_barycentric_interpolation(iv, found_index, plate_transforms[found_plate]);
     }
 }
