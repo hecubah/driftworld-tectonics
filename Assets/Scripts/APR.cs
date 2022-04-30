@@ -49,4 +49,5 @@ public class SimulationShaders
     public ComputeShader m_TerrainesConstructShader = null;
     public ComputeShader m_PlateInteractionsShader = null;
     public ComputeShader m_DebugTextureShader = null;
+    public ComputeShader m_OverlayTextureShader = null;
 }

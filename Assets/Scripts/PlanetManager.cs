@@ -5,7 +5,7 @@ using UnityEngine;
 
 public enum TexOverlay
 {
-    None, Terrain, PlateBorders
+    None, BasicTerrain, CrustPlates
 }
 
 public enum RenderMode
@@ -228,7 +228,7 @@ public class PlanetManager : MonoBehaviour
                 case TexOverlay.None:
                     no_overlay = true;
                     break;
-                case TexOverlay.Terrain:
+                case TexOverlay.BasicTerrain:
                     if (m_RenderMode == RenderMode.Crust)
                     {
                         if (m_PropagateCrust)
@@ -247,10 +247,10 @@ public class PlanetManager : MonoBehaviour
                     }
                     else
                     {
-                        tex = OverlayTerrain();
+                        tex = OverlayBasicTerrain();
                     }
                     break;
-                case TexOverlay.PlateBorders:
+                case TexOverlay.CrustPlates:
                     if (m_Planet.m_TectonicPlates.Count == 0)
                     {
                         Debug.LogError("Plate borders overlay impossible when there are no plates.");
@@ -262,7 +262,7 @@ public class PlanetManager : MonoBehaviour
                     }
                     else
                     {
-                        tex = OverlayPlateBorders();
+                        tex = OverlayCrustPlates();
                     }
                     GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
                     m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
@@ -302,8 +302,62 @@ public class PlanetManager : MonoBehaviour
 
     }
 
-    public Texture2D OverlayTerrain()
-    {        
+    public Texture2D OverlayBasicTerrain()
+    {
+
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureBasicTerrain");
+
+        m_Planet.UpdateCBBuffers();
+        /*
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
+        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
+
+        work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_Planet.m_CBuffers["overlap_matrix"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
+        */
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+        //work_shader.SetFloat("ocean_base_floor", m_Settings.OceanBaseFloor);
+
+        //work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation);
+        //work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation);
+        //work_shader.SetFloat("oceanic_ridge_elevation_falloff", m_PlanetManager.m_Settings.OceanicRidgeElevationFalloff);
+
+        //work_shader.SetInt("n_data_vertices", m_VerticesCount);
+
+        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles", m_CBuffers["crust_border_triangles"]);
+        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles_sps", m_CBuffers["crust_border_triangles_sps"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+
+        /*
         int kernelHandle = m_Shaders.m_DefaultTerrainTextureCShader.FindKernel("CSDefaultTerrainTexture");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
@@ -350,12 +404,65 @@ public class PlanetManager : MonoBehaviour
         com_tex.Release();
         tex.Apply();
         return tex;
+        */
     }
 
-    public Texture2D OverlayPlateBorders()
+    public Texture2D OverlayCrustPlates()
     {
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureCrustPlates");
+
+        m_Planet.UpdateCBBuffers();
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
+        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
+
+        work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_Planet.m_CBuffers["overlap_matrix"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
+
+/*
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+*/
+        //work_shader.SetFloat("ocean_base_floor", m_Settings.OceanBaseFloor);
+
+        //work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation);
+        //work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation);
+        //work_shader.SetFloat("oceanic_ridge_elevation_falloff", m_PlanetManager.m_Settings.OceanicRidgeElevationFalloff);
+
+        //work_shader.SetInt("n_data_vertices", m_VerticesCount);
+
+        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles", m_CBuffers["crust_border_triangles"]);
+        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles_sps", m_CBuffers["crust_border_triangles_sps"]);
 
 
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+
+        /*
         int kernelHandle = m_Shaders.m_PlatesAreaTextureCShader.FindKernel("CSPlatesAreaTexture");
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
@@ -459,6 +566,7 @@ public class PlanetManager : MonoBehaviour
         tex.Apply();
         com_tex.Release();
         return tex;
+        */
     }
 
     public void CAPTriangleCollisionTestTexture()
