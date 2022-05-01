@@ -27,7 +27,8 @@ public class TectonicPlanet
 
     public int m_VerticesCount;
     public int m_TrianglesCount;
-    public int m_TectonicStepsTaken;
+    public int m_TectonicStepsTakenWithoutResample;
+    public int m_TotalTectonicStepsTaken;
 
     public List<int> m_LookupStartTriangles;
 
@@ -89,9 +90,10 @@ public class TectonicPlanet
         m_CBuffers = new Dictionary<string, ComputeBuffer>();
         m_CBufferUpdatesNeeded = new Dictionary<string, bool>();
 
-        m_TectonicStepsTaken = 0;
+        m_TectonicStepsTakenWithoutResample = 0;
+        m_TotalTectonicStepsTaken = 0;
 
-        InitializeCBuffers();
+    InitializeCBuffers();
     }
 
     public void InitializeCBuffers()
@@ -505,6 +507,8 @@ public class TectonicPlanet
         work_shader.SetBuffer(kernelHandle, "crust_triangles", m_CBuffers["crust_triangles"]);
         work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_CBuffers["crust_vertex_data"]);
         work_shader.SetInt("n_plates", m_TectonicPlatesCount);
+        work_shader.SetInt("tectonic_steps_taken_without_resample", m_TectonicStepsTakenWithoutResample);
+        work_shader.SetFloat("tectonic_iteration_step_time", m_PlanetManager.m_Settings.TectonicIterationStepTime);
 
         work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_CBuffers["overlap_matrix"]);
         work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_CBuffers["crust_BVH_sps"]);
@@ -523,7 +527,7 @@ public class TectonicPlanet
 
         work_shader.SetBuffer(kernelHandle, "crust_border_triangles", m_CBuffers["crust_border_triangles"]);
         work_shader.SetBuffer(kernelHandle, "crust_border_triangles_sps", m_CBuffers["crust_border_triangles_sps"]);
-
+        
 
         work_shader.Dispatch(kernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1);
 
@@ -533,9 +537,10 @@ public class TectonicPlanet
         {
             m_DataPointData[i].elevation = Mathf.Min(data_out[i].elevation, m_PlanetManager.m_Settings.HighestContinentalAltitude);
             m_DataPointData[i].plate = data_out[i].plate;
+            m_DataPointData[i].age = data_out[i].age;
+            m_DataPointData[i].orogeny = (OroType)data_out[i].orogeny;
         }
         m_CBufferUpdatesNeeded["data_vertex_data"] = true;
-
     }
 
     public void DataToRender(bool propagate_crust)
@@ -571,6 +576,8 @@ public class TectonicPlanet
         {
             m_RenderPointData[i].elevation = render_out[i].elevation;
             m_RenderPointData[i].plate = render_out[i].plate;
+            m_RenderPointData[i].age = render_out[i].age;
+            m_RenderPointData[i].orogeny = (OroType) render_out[i].orogeny;
         }
         m_CBufferUpdatesNeeded["render_vertex_data"] = true;
 
@@ -822,7 +829,8 @@ public class TectonicPlanet
         m_CBufferUpdatesNeeded["crust_BVH_sps"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles_sps"] = true;
-        m_TectonicStepsTaken = 0;
+        m_TotalTectonicStepsTaken = 0;
+        m_TectonicStepsTakenWithoutResample = 0;
     }
 
     public void DetermineBorderTriangles ()
@@ -1173,7 +1181,7 @@ public class TectonicPlanet
         m_CBufferUpdatesNeeded["crust_BVH_sps"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles_sps"] = true;
-        m_TectonicStepsTaken = 0;
+        m_TectonicStepsTakenWithoutResample = 0;
     }
 
     public void TectonicStep()
@@ -1401,9 +1409,16 @@ public class TectonicPlanet
 
             uplift_buffer.GetData(uplift_output);
             //Debug.Log("Extrema of uplift - min: " + Mathf.Min(uplift_output) + "; max: " + Mathf.Max(uplift_output));
+            float el_old, el_new;
             for (int i = 0; i < m_VerticesCount; i++)
             {
+                el_old = m_CrustPointData[i].elevation;
+                el_new = Mathf.Min(el_old + uplift_output[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime, m_PlanetManager.m_Settings.HighestContinentalAltitude);
                 m_CrustPointData[i].elevation = Mathf.Min(m_CrustPointData[i].elevation + uplift_output[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime, m_PlanetManager.m_Settings.HighestContinentalAltitude);
+                if ((el_old < 0) && (el_new >= 0))
+                {
+                    m_CrustPointData[i].orogeny = OroType.ANDEAN;
+                }
             }
             uplift_buffer.Release();
             m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
@@ -1492,9 +1507,14 @@ public class TectonicPlanet
             m_CBufferUpdatesNeeded["plate_motion_axes"] = true;
         }
 
+        for (int i = 0; i < m_CrustVertices.Count; i++)
+        {
+            m_CrustPointData[i].age += m_PlanetManager.m_Settings.TectonicIterationStepTime;
+        }
 
         contact_points_buffer.Release();
-        m_TectonicStepsTaken++;
+        m_TotalTectonicStepsTaken++;
+        m_TectonicStepsTakenWithoutResample++;
     }
 
     public void BVHDiagnostics ()

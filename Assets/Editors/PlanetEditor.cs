@@ -20,7 +20,8 @@ public class PlanetEditor : Editor
             if (m_PlanetManager.m_Planet.m_TectonicPlates.Count > 0) // if there are tectonic plates initialized
             {
                 GUILayout.Label("Tectonic plates count: " + m_PlanetManager.m_Planet.m_TectonicPlates.Count.ToString()); // number of tectonic plates
-                GUILayout.Label("Tectonic steps taken without resample: " + m_PlanetManager.m_Planet.m_TectonicStepsTaken); // days since last metric mess
+                GUILayout.Label("Tectonic steps taken without resample: " + m_PlanetManager.m_Planet.m_TectonicStepsTakenWithoutResample); // days since last metric mess
+                GUILayout.Label("Total tectonic steps taken: " + m_PlanetManager.m_Planet.m_TotalTectonicStepsTaken);
             }
         }
         GUILayout.EndVertical(); // info box end

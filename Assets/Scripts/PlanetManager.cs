@@ -5,7 +5,7 @@ using UnityEngine;
 
 public enum TexOverlay
 {
-    None, BasicTerrain, CrustPlates, DebugDataTriangles, DebugCrustTriangles
+    None, BasicTerrain, CrustPlates, DebugDataTriangles, DebugCrustTriangles, CrustAge, Orogeny
 }
 
 public enum RenderMode
@@ -145,13 +145,10 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction4()
     {
-        Vector3 u = new Vector3(0, 0, -1);
-        Vector3 axis = new Vector3(0, 1, 0);
-        Quaternion q = Quaternion.AngleAxis(30, axis);
-        Vector3 v = q * u;
-        Debug.Log(v.ToString());
-        Vector3 w = Vector3.Cross(axis, u);
-        Debug.Log(w.ToString());
+        for (int i = 0; i < 50; i++)
+        {
+            Debug.Log(m_Planet.m_DataPointData[i].age);
+        }
     }
 
     // Start is called before the first frame update
@@ -281,6 +278,36 @@ public class PlanetManager : MonoBehaviour
                     else
                     {
                         tex = OverlayCrustPlates();
+                    }
+                    break;
+                case TexOverlay.CrustAge:
+                    if (m_Planet.m_TectonicPlates.Count == 0)
+                    {
+                        Debug.LogError("Crust age overlay impossible when there are no plates.");
+                        problem = true;
+                    }
+                    if (problem)
+                    {
+                        tex = MissingDataTexture();
+                    }
+                    else
+                    {
+                        tex = OverlayCrustAge();
+                    }
+                    break;
+                case TexOverlay.Orogeny:
+                    if (m_Planet.m_TectonicPlates.Count == 0)
+                    {
+                        Debug.LogError("Crust age overlay impossible when there are no plates.");
+                        problem = true;
+                    }
+                    if (problem)
+                    {
+                        tex = MissingDataTexture();
+                    }
+                    else
+                    {
+                        tex = OverlayOrogeny();
                     }
                     break;
                 default:
@@ -688,6 +715,82 @@ public class PlanetManager : MonoBehaviour
         com_tex.Release();
         return tex;
         */
+    }
+
+    public Texture2D OverlayCrustAge()
+    {
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureCrustAge");
+
+        m_Planet.UpdateCBBuffers();
+
+        work_shader.SetFloat("tectonic_iteration_step_time", m_Settings.TectonicIterationStepTime);
+        work_shader.SetInt("total_tectonic_steps_taken", m_Planet.m_TotalTectonicStepsTaken);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+
+    }
+
+    public Texture2D OverlayOrogeny()
+    {
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureOrogeny");
+
+        m_Planet.UpdateCBBuffers();
+
+        //work_shader.SetFloat("tectonic_iteration_step_time", m_Settings.TectonicIterationStepTime);
+        //work_shader.SetInt("total_tectonic_steps_taken", m_Planet.m_TotalTectonicStepsTaken);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+
     }
 
     public Texture2D OverlayDebugCrustTriangles()

@@ -129,7 +129,8 @@ public class PlanetBinaryData
 {
     public bool m_TectonicsPresent;
     public float m_Radius;
-    public int m_TectonicStepsTaken;
+    public int m_TotalTectonicStepsTaken;
+    public int m_TectonicStepsTakenWithoutResample;
 
     public List<Vector3Serial> m_CrustVertices;
     public List<DRTriangleSerial> m_CrustTriangles;
@@ -160,7 +161,8 @@ public static class SaveManager
         PlanetBinaryData data = new PlanetBinaryData();
         data.m_TectonicsPresent = (man.m_Planet.m_TectonicPlates.Count > 0); 
         data.m_Radius = man.m_Planet.m_Radius;
-        data.m_TectonicStepsTaken = man.m_Planet.m_TectonicStepsTaken;
+        data.m_TectonicStepsTakenWithoutResample = man.m_Planet.m_TectonicStepsTakenWithoutResample;
+        data.m_TotalTectonicStepsTaken = man.m_Planet.m_TotalTectonicStepsTaken;
         data.m_CrustVertices = new List<Vector3Serial>();
         data.m_CrustPointData = new List<PointData>();
         data.m_DataVertices = new List<Vector3Serial>();
@@ -230,8 +232,10 @@ public static class SaveManager
         fs.Write(value_buffer, 0, 4);
         if (tectonics_present)
         {
-            value_buffer = BitConverter.GetBytes(data.m_TectonicStepsTaken);
+            value_buffer = BitConverter.GetBytes(data.m_TectonicStepsTakenWithoutResample);
             fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_TotalTectonicStepsTaken);
+            fs.Write(value_buffer , 0, 4);
         }
         int n_vertices = data.m_DataVertices.Count;
         value_buffer = BitConverter.GetBytes(n_vertices);
@@ -487,7 +491,8 @@ public static class SaveManager
 
         }
 
-        man.m_Planet.m_TectonicStepsTaken = data.m_TectonicsPresent ? data.m_TectonicStepsTaken : 0;
+        man.m_Planet.m_TectonicStepsTakenWithoutResample = data.m_TectonicsPresent ? data.m_TectonicStepsTakenWithoutResample : 0;
+        man.m_Planet.m_TotalTectonicStepsTaken = data.m_TectonicsPresent ? data.m_TotalTectonicStepsTaken : 0;
         if (data.m_TectonicsPresent)
         {
             man.m_Planet.m_TectonicPlatesCount = data.m_TectonicPlates.Count;
@@ -613,7 +618,9 @@ public static class SaveManager
         if (tectonics_present)
         {
             ms.Read(value_read, 0, 4);
-            data.m_TectonicStepsTaken = BitConverter.ToInt32(value_read, 0);
+            data.m_TectonicStepsTakenWithoutResample = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            data.m_TotalTectonicStepsTaken = BitConverter.ToInt32(value_read, 0);
         }
 
         ms.Read(value_read, 0, 4);
@@ -651,7 +658,7 @@ public static class SaveManager
                 ms.Read(value_read, 0, 4);
                 point.plate = BitConverter.ToInt32(value_read, 0);
                 ms.Read(value_read, 0, 4);
-                point.age = BitConverter.ToInt32(value_read, 0);
+                point.age = BitConverter.ToSingle(value_read, 0);
                 ms.Read(value_read, 0, 4);
                 point.orogeny = (OroType) BitConverter.ToInt32(value_read, 0);
                 data.m_CrustPointData.Add(point);
@@ -672,7 +679,7 @@ public static class SaveManager
             ms.Read(value_read, 0, 4);
             point.plate = BitConverter.ToInt32(value_read, 0);
             ms.Read(value_read, 0, 4);
-            point.age = BitConverter.ToInt32(value_read, 0);
+            point.age = BitConverter.ToSingle(value_read, 0);
             ms.Read(value_read, 0, 4);
             point.orogeny = (OroType) BitConverter.ToInt32(value_read, 0);
             data.m_DataPointData.Add(point);
@@ -819,7 +826,7 @@ public static class SaveManager
             ms.Read(value_read, 0, 4);
             point.plate = BitConverter.ToInt32(value_read, 0);
             ms.Read(value_read, 0, 4);
-            point.age = BitConverter.ToInt32(value_read, 0);
+            point.age = BitConverter.ToSingle(value_read, 0);
             ms.Read(value_read, 0, 4);
             point.orogeny = (OroType) BitConverter.ToInt32(value_read, 0);
             data.m_RenderPointData.Add(point);

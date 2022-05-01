@@ -45,6 +45,8 @@ StructuredBuffer<BV> BVH_array;
 StructuredBuffer<float4> plate_transforms;
 
 int n_data_vertices;
+float tectonic_iteration_step_time;
+int tectonic_steps_taken_without_resample;
 float ocean_base_floor;
 
 float highest_oceanic_ridge_elevation;
@@ -399,6 +401,11 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
 
         data_vertex_data[ivi].elevation = alpha * plates_contribution + (1 - alpha) * ridge_contribution;
         data_vertex_data[ivi].plate = plate_1;
+        data_vertex_data[ivi].age = alpha * (float)tectonic_iteration_step_time * (float)tectonic_steps_taken_without_resample;
+        //data_vertex_data[ivi].age = (float)tectonic_iteration_step_time * (float)tectonic_steps_taken_without_resample * dist_1;
+        //data_vertex_data[ivi].age = (float)tectonic_iteration_step_time * (float)tectonic_steps_taken_without_resample;
+        //data_vertex_data[ivi].age = dist_ridge * 400;
+        data_vertex_data[ivi].orogeny = 0;
     }
     else {
 

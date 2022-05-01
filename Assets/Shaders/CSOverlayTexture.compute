@@ -1,6 +1,8 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSOverlayTextureBasicTerrain
 #pragma kernel CSOverlayTextureDebugDataTriangles
+#pragma kernel CSOverlayTextureCrustAge
+#pragma kernel CSOverlayTextureOrogeny
 #pragma kernel CSOverlayTextureCrustPlates
 #pragma kernel CSOverlayTextureDebugCrustTriangles
 //#pragma kernel CSDataToRender
@@ -41,7 +43,12 @@ struct vertex_data {
 
 RWTexture2D<float4> Result;
 
+float min_age;
+float max_age;
+
 int n_data_vertices;
+float tectonic_iteration_step_time;
+int total_tectonic_steps_taken;
 
 StructuredBuffer<float3> data_vertex_locations;
 RWStructuredBuffer<vertex_data> data_vertex_data;
@@ -305,7 +312,52 @@ void CSOverlayTextureDebugDataTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_
     }
     else {
       Result[pix_coords] = HSVtoRGB((float)((uint)found_index % 31)/31.0f * 360.0f, 1, 1); // 31 is an arbitrary period
-      //Result[pix_coords] = HSVtoRGB(((float)found_index/(float)(2*n_data_vertices)) * 360.0f, 1, 1);
+    }
+}
+
+[numthreads(4, 4, 4)]
+void CSOverlayTextureCrustAge(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y+0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    int found_index = search_data_bvh_for_point(w_pixelpoint);
+
+    if (found_index == -1) {
+        Result[pix_coords] = float4(0, 0, 0, 1);
+    }
+    else {
+        vertex_data data = data_barycentric_interpolation(w_pixelpoint, found_index);
+        Result[pix_coords] = HSVtoRGB((total_tectonic_steps_taken > 0 ? (1.0f - data.age / ((float)tectonic_iteration_step_time * (float)total_tectonic_steps_taken)) * 180.0f : 0.0f), 1, 1);
+        //float bagr = (total_tectonic_steps_taken > 0 ? (1.0f - data.age / ((float)tectonic_iteration_step_time * (float)total_tectonic_steps_taken)) : 0.0f);
+        //Result[pix_coords] = float4(bagr,bagr,bagr,1);
+        //Result[pix_coords] = HSVtoRGB(data.age, 1, 1);
+        //Result[pix_coords] = HSVtoRGB((total_tectonic_steps_taken > 0 ? data.age : 0.0f), 1, 1);
+    }
+}
+
+[numthreads(4, 4, 4)]
+void CSOverlayTextureOrogeny(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y+0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    int found_index = search_data_bvh_for_point(w_pixelpoint);
+
+    if (found_index == -1) {
+        Result[pix_coords] = float4(0, 0, 0, 1);
+    }
+    else {
+        vertex_data data = data_barycentric_interpolation(w_pixelpoint, found_index);
+        Result[pix_coords] = HSVtoRGB(data.orogeny * 45.0f, 1, 1);
     }
 }
 
