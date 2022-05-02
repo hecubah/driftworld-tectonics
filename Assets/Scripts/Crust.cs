@@ -54,7 +54,7 @@ public class Plate // maximal tectonic unit, the parameters drive certain decisi
 
 }
 
-public class CollidingTerraine
+public class CollidingTerrane
 {
     public int colliding_plate = -1;
     public int collided_plate = -1;

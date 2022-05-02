@@ -1249,10 +1249,10 @@ public class TectonicPlanet
             if (collision_occured)
             {
                 Debug.Log("Continental collision detected :<");
-                Debug.Log("Determining terraines...");
-                List<CollidingTerraine> c_terraines = new List<CollidingTerraine>();
+                Debug.Log("Determining terranes...");
+                List<CollidingTerrane> c_terranes = new List<CollidingTerrane>();
 
-                int[] continental_vertex_collisions_terraines = new int[m_CrustVertices.Count];
+                int[] continental_vertex_collisions_terranes = new int[m_CrustVertices.Count];
                 int[] continental_vertex_collisions_plates = new int[m_CrustVertices.Count];
 
                 for (int i = 0; i < m_CrustVertices.Count; i++)
@@ -1260,7 +1260,7 @@ public class TectonicPlanet
                     continental_vertex_collisions_plates[i] = -1;
                 }
 
-                int terraine_count_index = 0;
+                int terrane_count_index = 0;
 
                 for (int i = 0; i < m_CrustVertices.Count; i++)
                 {
@@ -1270,35 +1270,35 @@ public class TectonicPlanet
                         {
                             if (continental_vertex_collisions_table[j * m_CrustVertices.Count + i] != 0)
                             {
-                                terraine_count_index++;
+                                terrane_count_index++;
                                 int colliding_plate = m_CrustPointData[i].plate;
                                 int collided_plate = j;
-                                CollidingTerraine new_c_terraine = new CollidingTerraine();
+                                CollidingTerrane new_c_terrane = new CollidingTerrane();
                                 Queue<int> to_search = new Queue<int>();
                                 to_search.Enqueue(i);
-                                continental_vertex_collisions_terraines[i] = terraine_count_index;
+                                continental_vertex_collisions_terranes[i] = terrane_count_index;
                                 continental_vertex_collisions[i] = 0;
                                 continental_vertex_collisions_plates[i] = collided_plate;
                                 int active_vertex_index;
                                 while (to_search.Count > 0)
                                 {
                                     active_vertex_index = to_search.Dequeue();
-                                    new_c_terraine.m_Vertices.Add(active_vertex_index);
+                                    new_c_terrane.m_Vertices.Add(active_vertex_index);
                                     foreach (int it in m_DataVerticesNeighbours[active_vertex_index]) // Data should be initialized and filled
                                     {
-                                        if ((continental_vertex_collisions_terraines[it] == 0) && (m_CrustPointData[it].elevation >= 0) && (m_CrustPointData[it].plate == colliding_plate))
+                                        if ((continental_vertex_collisions_terranes[it] == 0) && (m_CrustPointData[it].elevation >= 0) && (m_CrustPointData[it].plate == colliding_plate))
                                         {
                                             to_search.Enqueue(it);
-                                            continental_vertex_collisions_terraines[it] = terraine_count_index;
+                                            continental_vertex_collisions_terranes[it] = terrane_count_index;
                                             continental_vertex_collisions[it] = 0;
                                             continental_vertex_collisions_plates[it] = collided_plate;
                                         }
                                     }
                                 }
-                                new_c_terraine.colliding_plate = colliding_plate;
-                                new_c_terraine.collided_plate = collided_plate;
-                                new_c_terraine.index = terraine_count_index;
-                                c_terraines.Add(new_c_terraine);
+                                new_c_terrane.colliding_plate = colliding_plate;
+                                new_c_terrane.collided_plate = collided_plate;
+                                new_c_terrane.index = terrane_count_index;
+                                c_terranes.Add(new_c_terrane);
                                 break;
                             }
                         }
@@ -1307,32 +1307,32 @@ public class TectonicPlanet
 
                 // IMPLEMENT ACTUAL COLLISION - START
 
-                List<int> terraine_colliding_plates = new List<int>();
-                List<int> terraine_collided_plates = new List<int>();
-                List<int> terraine_vertices = new List<int>();
-                List<int> terraine_vertices_sps = new List<int>();
-                terraine_vertices_sps.Add(0);
+                List<int> terrane_colliding_plates = new List<int>();
+                List<int> terrane_collided_plates = new List<int>();
+                List<int> terrane_vertices = new List<int>();
+                List<int> terrane_vertices_sps = new List<int>();
+                terrane_vertices_sps.Add(0);
 
-                foreach (CollidingTerraine it in c_terraines)
+                foreach (CollidingTerrane it in c_terranes)
                 {
-                    terraine_colliding_plates.Add(it.colliding_plate);
-                    terraine_collided_plates.Add(it.collided_plate);
+                    terrane_colliding_plates.Add(it.colliding_plate);
+                    terrane_collided_plates.Add(it.collided_plate);
                     foreach (int it2 in it.m_Vertices)
                     {
-                        terraine_vertices.Add(it2);
+                        terrane_vertices.Add(it2);
                     }
-                    terraine_vertices_sps.Add(terraine_vertices.Count);
+                    terrane_vertices_sps.Add(terrane_vertices.Count);
                 }
 
-                ComputeBuffer terraine_colliding_plates_buffer = new ComputeBuffer(terraine_colliding_plates.Count, 4);
-                ComputeBuffer terraine_collided_plates_buffer = new ComputeBuffer(terraine_collided_plates.Count, 4);
-                ComputeBuffer terraine_vertices_buffer = new ComputeBuffer(terraine_vertices.Count, 4);
-                ComputeBuffer terraine_vertices_sps_buffer = new ComputeBuffer(terraine_vertices_sps.Count, 4);
+                ComputeBuffer terrane_colliding_plates_buffer = new ComputeBuffer(terrane_colliding_plates.Count, 4);
+                ComputeBuffer terrane_collided_plates_buffer = new ComputeBuffer(terrane_collided_plates.Count, 4);
+                ComputeBuffer terrane_vertices_buffer = new ComputeBuffer(terrane_vertices.Count, 4);
+                ComputeBuffer terrane_vertices_sps_buffer = new ComputeBuffer(terrane_vertices_sps.Count, 4);
 
-                terraine_colliding_plates_buffer.SetData(terraine_colliding_plates.ToArray());
-                terraine_collided_plates_buffer.SetData(terraine_collided_plates.ToArray());
-                terraine_vertices_buffer.SetData(terraine_vertices.ToArray());
-                terraine_vertices_sps_buffer.SetData(terraine_vertices_sps.ToArray());
+                terrane_colliding_plates_buffer.SetData(terrane_colliding_plates.ToArray());
+                terrane_collided_plates_buffer.SetData(terrane_collided_plates.ToArray());
+                terrane_vertices_buffer.SetData(terrane_vertices.ToArray());
+                terrane_vertices_sps_buffer.SetData(terrane_vertices_sps.ToArray());
 
 
 
@@ -1346,7 +1346,7 @@ public class TectonicPlanet
                 debug_buffer.SetData(debug_output);
 
                 work_shader.SetInt("n_crust_vertices", m_CrustVertices.Count);
-                work_shader.SetInt("n_terraines", c_terraines.Count);
+                work_shader.SetInt("n_terranes", c_terranes.Count);
                 work_shader.SetFloat("maximum_plate_speed", m_PlanetManager.m_Settings.MaximumPlateSpeed);
                 work_shader.SetFloat("collision_coefficient", m_PlanetManager.m_Settings.ContinentalCollisionCoefficient);
                 work_shader.SetFloat("global_collision_distance", m_PlanetManager.m_Settings.ContinentalCollisionGlobalDistance);
@@ -1358,10 +1358,10 @@ public class TectonicPlanet
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "overlap_matrix", m_CBuffers["overlap_matrix"]);
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "plate_motion_axes", m_CBuffers["plate_motion_axes"]);
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "plate_motion_angular_speeds", m_CBuffers["plate_motion_angular_speeds"]);
-                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terraine_colliding_plates", terraine_colliding_plates_buffer);
-                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terraine_collided_plates", terraine_collided_plates_buffer);
-                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terraine_vertices", terraine_vertices_buffer);
-                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terraine_vertices_sps", terraine_vertices_sps_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_colliding_plates", terrane_colliding_plates_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_collided_plates", terrane_collided_plates_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_vertices", terrane_vertices_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_vertices_sps", terrane_vertices_sps_buffer);
 
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "uplift", uplift_buffer);
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "debug", debug_buffer);
@@ -1397,10 +1397,10 @@ public class TectonicPlanet
                 Debug.Log("min debug is " + deb_min);
                 debug_buffer.Release();
 
-                terraine_colliding_plates_buffer.Release();
-                terraine_collided_plates_buffer.Release();
-                terraine_vertices_buffer.Release();
-                terraine_vertices_sps_buffer.Release();
+                terrane_colliding_plates_buffer.Release();
+                terrane_collided_plates_buffer.Release();
+                terrane_vertices_buffer.Release();
+                terrane_vertices_sps_buffer.Release();
                 uplift_buffer.Release();
                 m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
 
@@ -1412,7 +1412,7 @@ public class TectonicPlanet
 
                 CrustToData();
                 ResampleCrust(false);
-                foreach (CollidingTerraine it in c_terraines)
+                foreach (CollidingTerrane it in c_terranes)
                 {
                     Debug.Log("Terrain " + it.index + " in plate " + it.colliding_plate + ": " + it.m_Vertices.Count + " into plate " + it.collided_plate);
                     for (int i = 0; i < it.m_Vertices.Count; i++)

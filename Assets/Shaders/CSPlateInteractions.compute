@@ -547,7 +547,7 @@ void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
         if (i == main_plate_index) {
             continue;
         }
-        if (overlap_matrix[i * n_plates + main_plate_index] < 1) { // only plates above can tear out terraines
+        if (overlap_matrix[i * n_plates + main_plate_index] < 1) { // only plates above can tear out terranes
             continue;
         }
         if (continental_triangle_contact_with_plate_bvh(ivi, main_plate_index, i) != 0) {
@@ -557,16 +557,16 @@ void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
     }
 }
 
-int n_terraines;
+int n_terranes;
 
 float collision_coefficient;
 float global_collision_distance;
 float initial_average_vertex_area;
 
-StructuredBuffer<int> terraine_colliding_plates;
-StructuredBuffer<int> terraine_collided_plates;
-StructuredBuffer<int> terraine_vertices;
-StructuredBuffer<int> terraine_vertices_sps;
+StructuredBuffer<int> terrane_colliding_plates;
+StructuredBuffer<int> terrane_collided_plates;
+StructuredBuffer<int> terrane_vertices;
+StructuredBuffer<int> terrane_vertices_sps;
 
 RWStructuredBuffer<float> debug;
 
@@ -582,27 +582,27 @@ void CSContinentalCollisionUplift(uint3 dID : SV_DispatchThreadID)
   int ivi_plate = crust_vertex_data[ivi].plate;
   float3 iv = quat_rot(crust_vertex_locations[ivi], plate_transforms[ivi_plate]);
 
-  float collision_max_distance, mindist, dist, dot_prod, terraine_area;
-  int offset, terraine_size;
+  float collision_max_distance, mindist, dist, dot_prod, terrane_area;
+  int offset, terrane_size;
 
-  for (int i = 0; i < n_terraines; i++) {
-    if (ivi_plate != terraine_collided_plates[i]) {
+  for (int i = 0; i < n_terranes; i++) {
+    if (ivi_plate != terrane_collided_plates[i]) {
       continue;
     }
     mindist = MAX_DISTANCE;
-    offset = terraine_vertices_sps[i];
-    terraine_size = terraine_vertices_sps[i+1] - terraine_vertices_sps[i];
-    terraine_area = (float)terraine_size / (float)n_crust_vertices * 4.0f * 3.141592653f;
-    collision_max_distance = global_collision_distance * sqrt(subduction_speed_transfer(iv, ivi_plate, terraine_colliding_plates[i])) * (float)terraine_size / initial_average_vertex_area;
-    for (int j = 0; j < terraine_size; j++) {
-      dot_prod = dot(iv, quat_rot(crust_vertex_locations[terraine_vertices[offset + j]], plate_transforms[terraine_colliding_plates[i]]));
+    offset = terrane_vertices_sps[i];
+    terrane_size = terrane_vertices_sps[i+1] - terrane_vertices_sps[i];
+    terrane_area = (float)terrane_size / (float)n_crust_vertices * 4.0f * 3.141592653f;
+    collision_max_distance = global_collision_distance * sqrt(subduction_speed_transfer(iv, ivi_plate, terrane_colliding_plates[i])) * (float)terrane_size / initial_average_vertex_area;
+    for (int j = 0; j < terrane_size; j++) {
+      dot_prod = dot(iv, quat_rot(crust_vertex_locations[terrane_vertices[offset + j]], plate_transforms[terrane_colliding_plates[i]]));
       dist = (dot_prod <= 1 ? acos(dot_prod) : 0.0f);
       mindist = (dist < mindist ? dist : mindist);
     }
     if (mindist <= collision_max_distance) {
-      uplift_sum += collision_coefficient * terraine_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
+      uplift_sum += collision_coefficient * terrane_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
     }
-    debug[ivi] += terraine_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
+    debug[ivi] += terrane_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
   }
   uplift[ivi] = uplift_sum;
 }
