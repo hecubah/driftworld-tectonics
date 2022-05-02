@@ -754,6 +754,7 @@ public class TectonicPlanet
     {
         List<Vector3> centroids = new List<Vector3>(); // vertices are assigned around these centroids
         List<Plate> plates = new List<Plate>(); // formal partition objects
+        List<float> plate_elevations = new List<float>();
         for (int i = 0; i < m_PlanetManager.m_Settings.PlateInitNumberOfCentroids; i++) // for each centroid
         {
             Vector3 added_centroid = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
@@ -763,6 +764,7 @@ public class TectonicPlanet
             new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, m_PlanetManager.m_Settings.MaximumPlateSpeed); // angular speed of the plate
             new_plate.m_Centroid = added_centroid;
             plates.Add(new_plate); // add new plate to the list
+            plate_elevations.Add(m_Random.Range(0.0f, 1.0f) < m_PlanetManager.m_Settings.InitialContinentalProbability ? m_PlanetManager.m_Settings.InitialContinentalAltitude : m_PlanetManager.m_Settings.InitialOceanicDepth);
         }
         m_CrustVertices = new List<Vector3>();
         m_CrustPointData = new List<PointData>();
@@ -779,7 +781,7 @@ public class TectonicPlanet
                     plate_index = j;
                 }
             }
-            m_DataPointData[i].elevation = m_PlanetManager.m_Settings.InitialOceanicDepth;
+            m_DataPointData[i].elevation = plate_elevations[plate_index];
             m_DataPointData[i].thickness = m_PlanetManager.m_Settings.NewCrustThickness;
             m_DataPointData[i].plate = plate_index;
             m_DataPointData[i].orogeny = OroType.UNKNOWN;
@@ -829,6 +831,8 @@ public class TectonicPlanet
         m_CBufferUpdatesNeeded["crust_BVH_sps"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles"] = true;
         m_CBufferUpdatesNeeded["crust_border_triangles_sps"] = true;
+        m_CBufferUpdatesNeeded["plate_motion_axes"] = true;
+        m_CBufferUpdatesNeeded["plate_motion_angular_speeds"] = true;
         m_TotalTectonicStepsTaken = 0;
         m_TectonicStepsTakenWithoutResample = 0;
     }
@@ -1301,7 +1305,110 @@ public class TectonicPlanet
                     }
                 }
 
-                // IMPLEMENT ACTUAL COLLISION UPLIFT !!!
+                // IMPLEMENT ACTUAL COLLISION - START
+
+                List<int> terraine_colliding_plates = new List<int>();
+                List<int> terraine_collided_plates = new List<int>();
+                List<int> terraine_vertices = new List<int>();
+                List<int> terraine_vertices_sps = new List<int>();
+                terraine_vertices_sps.Add(0);
+
+                foreach (CollidingTerraine it in c_terraines)
+                {
+                    terraine_colliding_plates.Add(it.colliding_plate);
+                    terraine_collided_plates.Add(it.collided_plate);
+                    foreach (int it2 in it.m_Vertices)
+                    {
+                        terraine_vertices.Add(it2);
+                    }
+                    terraine_vertices_sps.Add(terraine_vertices.Count);
+                }
+
+                ComputeBuffer terraine_colliding_plates_buffer = new ComputeBuffer(terraine_colliding_plates.Count, 4);
+                ComputeBuffer terraine_collided_plates_buffer = new ComputeBuffer(terraine_collided_plates.Count, 4);
+                ComputeBuffer terraine_vertices_buffer = new ComputeBuffer(terraine_vertices.Count, 4);
+                ComputeBuffer terraine_vertices_sps_buffer = new ComputeBuffer(terraine_vertices_sps.Count, 4);
+
+                terraine_colliding_plates_buffer.SetData(terraine_colliding_plates.ToArray());
+                terraine_collided_plates_buffer.SetData(terraine_collided_plates.ToArray());
+                terraine_vertices_buffer.SetData(terraine_vertices.ToArray());
+                terraine_vertices_sps_buffer.SetData(terraine_vertices_sps.ToArray());
+
+
+
+                int continentalCollisionUpliftKernelHandle = work_shader.FindKernel("CSContinentalCollisionUplift");
+
+                float[] uplift_output = new float[m_VerticesCount];
+                float[] debug_output = new float[m_VerticesCount];
+                ComputeBuffer uplift_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+                uplift_buffer.SetData(uplift_output);
+                ComputeBuffer debug_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
+                debug_buffer.SetData(debug_output);
+
+                work_shader.SetInt("n_crust_vertices", m_CrustVertices.Count);
+                work_shader.SetInt("n_terraines", c_terraines.Count);
+                work_shader.SetFloat("maximum_plate_speed", m_PlanetManager.m_Settings.MaximumPlateSpeed);
+                work_shader.SetFloat("collision_coefficient", m_PlanetManager.m_Settings.ContinentalCollisionCoefficient);
+                work_shader.SetFloat("global_collision_distance", m_PlanetManager.m_Settings.ContinentalCollisionGlobalDistance);
+                work_shader.SetFloat("initial_average_vertex_area", (float)m_CrustVertices.Count/m_PlanetManager.m_Settings.PlateInitNumberOfCentroids);
+
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "crust_vertex_locations", m_CBuffers["crust_vertex_locations"]);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "crust_vertex_data", m_CBuffers["crust_vertex_data"]);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "plate_transforms", m_CBuffers["plate_transforms"]);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "overlap_matrix", m_CBuffers["overlap_matrix"]);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "plate_motion_axes", m_CBuffers["plate_motion_axes"]);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "plate_motion_angular_speeds", m_CBuffers["plate_motion_angular_speeds"]);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terraine_colliding_plates", terraine_colliding_plates_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terraine_collided_plates", terraine_collided_plates_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terraine_vertices", terraine_vertices_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terraine_vertices_sps", terraine_vertices_sps_buffer);
+
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "uplift", uplift_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "debug", debug_buffer);
+
+                work_shader.Dispatch(continentalCollisionUpliftKernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1);
+
+
+                uplift_buffer.GetData(uplift_output);
+                debug_buffer.GetData(debug_output);
+                //Debug.Log("Extrema of uplift - min: " + Mathf.Min(uplift_output) + "; max: " + Mathf.Max(uplift_output));
+                float el_old, el_new;
+                float el_max = Mathf.NegativeInfinity;
+                float el_min = Mathf.Infinity;
+                float deb_max = Mathf.NegativeInfinity;
+                float deb_min = Mathf.Infinity;
+                for (int i = 0; i < m_VerticesCount; i++)
+                {
+                    el_old = m_CrustPointData[i].elevation;
+                    el_new = Mathf.Min(el_old + uplift_output[i], m_PlanetManager.m_Settings.HighestContinentalAltitude);
+                    m_CrustPointData[i].elevation = el_new;
+                    if ((el_old < 0) && (el_new >= 0))
+                    {
+                        m_CrustPointData[i].orogeny = OroType.HIMALAYAN;
+                    }
+                    el_max = (uplift_output[i] > el_max ? uplift_output[i] : el_max);
+                    el_min = (uplift_output[i] < el_min ? uplift_output[i] : el_min);
+                    deb_max = (debug_output[i] > deb_max ? debug_output[i] : deb_max);
+                    deb_min = (debug_output[i] < deb_min ? debug_output[i] : deb_min);
+                }
+                Debug.Log("max uplift is " + el_max);
+                Debug.Log("min uplift is " + el_min);
+                Debug.Log("max debug is " + deb_max);
+                Debug.Log("min debug is " + deb_min);
+                debug_buffer.Release();
+
+                terraine_colliding_plates_buffer.Release();
+                terraine_collided_plates_buffer.Release();
+                terraine_vertices_buffer.Release();
+                terraine_vertices_sps_buffer.Release();
+                uplift_buffer.Release();
+                m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
+
+
+
+
+
+                // IMPLEMENT ACTUAL COLLISION - END
 
                 CrustToData();
                 ResampleCrust(false);
@@ -1414,7 +1521,7 @@ public class TectonicPlanet
             {
                 el_old = m_CrustPointData[i].elevation;
                 el_new = Mathf.Min(el_old + uplift_output[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime, m_PlanetManager.m_Settings.HighestContinentalAltitude);
-                m_CrustPointData[i].elevation = Mathf.Min(m_CrustPointData[i].elevation + uplift_output[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime, m_PlanetManager.m_Settings.HighestContinentalAltitude);
+                m_CrustPointData[i].elevation = el_new;
                 if ((el_old < 0) && (el_new >= 0))
                 {
                     m_CrustPointData[i].orogeny = OroType.ANDEAN;

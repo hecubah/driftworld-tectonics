@@ -17,6 +17,8 @@ public class SimulationSettings
     public int BVHConstructionRadius = 20; // interval radius for BVH construction
     public float AverageOceanicDepth = -0.004f;
     public float InitialOceanicDepth = -0.004f;
+    public float InitialContinentalAltitude = 0.001f;
+    public float InitialContinentalProbability = 0.3f;
 
     public float TectonicIterationStepTime = 2; // simulation time-step in My, def: 2
     public float PlanetRadius = 6.37f; // multiple of 1000 km
@@ -36,6 +38,8 @@ public class SimulationSettings
     public float SlabPullPerturbation = 0.1f;
 
     public float NeighbourSmoothWeight = 0.1f;
+    public float ContinentalCollisionGlobalDistance = 0.659f;
+    public float ContinentalCollisionCoefficient = 82e-3f;
 }
 
 [System.Serializable]
