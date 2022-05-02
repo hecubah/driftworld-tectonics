@@ -1,7 +1,5 @@
-collision uplift
 plate rifting
 clean up code
 clean up shaders
 thickness
 memory leaks
-reintroduce initial continents
