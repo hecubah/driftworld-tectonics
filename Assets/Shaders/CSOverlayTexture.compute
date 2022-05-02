@@ -5,6 +5,7 @@
 #pragma kernel CSOverlayTextureOrogeny
 #pragma kernel CSOverlayTextureCrustPlates
 #pragma kernel CSOverlayTextureDebugCrustTriangles
+#pragma kernel CSOverlayTextureElevationLaplacian
 //#pragma kernel CSDataToRender
 #pragma warning(disable : 3557)
 #define MAX_DISTANCE 1000 // initialization protection
@@ -642,5 +643,55 @@ void CSOverlayTextureDebugCrustTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV
       //vertex_data data;
       Result[pix_coords] = HSVtoRGB((float)((uint)found_index % 31)/31.0f * 360.0f, 1, 1); // 31 is an arbitrary period
         //data_vertex_data[ivi] = crust_barycentric_interpolation(iv, found_index, plate_transforms[found_plate]);
+    }
+}
+
+StructuredBuffer<float> el_values;
+float el_min;
+float el_max;
+
+float laplacian_interpolation(float3 ipoint, int triangle_index) {
+    float3 a = data_vertex_locations[data_triangles[triangle_index].a];
+    float3 b = data_vertex_locations[data_triangles[triangle_index].b];
+    float3 c = data_vertex_locations[data_triangles[triangle_index].c];
+    float u, v, w;
+    float3 v0 = b - a;
+    float3 v1 = c - a;
+    float3 v2 = ipoint - a;
+    float d00 = dot(v0, v0);
+    float d01 = dot(v0, v1);
+    float d11 = dot(v1, v1);
+    float d20 = dot(v2, v0);
+    float d21 = dot(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+    v = (d11 * d20 - d01 * d21) / denom;
+    w = (d00 * d21 - d01 * d20) / denom;
+    u = 1.0f - v - w;
+    float el1, el2, el3;
+    el1 = el_values[data_triangles[triangle_index].a];
+    el2 = el_values[data_triangles[triangle_index].b];
+    el3 = el_values[data_triangles[triangle_index].c];
+
+    return (u * el1 + v * el2 + w * el3);
+}
+
+[numthreads(4, 4, 4)]
+void CSOverlayTextureElevationLaplacian(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y+0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    int found_index = search_data_bvh_for_point(w_pixelpoint);
+
+    if (found_index == -1) {
+        Result[pix_coords] = float4(0, 0, 0, 1);
+    }
+    else {
+      float lap_int = laplacian_interpolation(w_pixelpoint, found_index);
+      Result[pix_coords] = HSVtoRGB((lap_int - el_min)/(el_max - el_min) * 180.0f, 1, 0.5f);
     }
 }

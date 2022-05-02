@@ -34,6 +34,8 @@ public class SimulationSettings
     public float SedimentAccretion = 3e-4f;
     public float SubductionUplift = 6e-4f;
     public float SlabPullPerturbation = 0.1f;
+
+    public float NeighbourSmoothWeight = 0.1f;
 }
 
 [System.Serializable]

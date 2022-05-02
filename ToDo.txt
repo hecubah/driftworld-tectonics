@@ -1,13 +1,6 @@
 collision uplift
-
 plate rifting
-
+clean up code
 clean up shaders
-
 thickness
-
-diagnostics
-
-blur mask on elevation
-
 memory leaks

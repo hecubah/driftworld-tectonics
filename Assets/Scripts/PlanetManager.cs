@@ -5,7 +5,7 @@ using UnityEngine;
 
 public enum TexOverlay
 {
-    None, BasicTerrain, CrustPlates, DebugDataTriangles, DebugCrustTriangles, CrustAge, Orogeny
+    None, BasicTerrain, CrustPlates, DebugDataTriangles, DebugCrustTriangles, CrustAge, Orogeny, ElevationLaplacian
 }
 
 public enum RenderMode
@@ -54,101 +54,18 @@ public class PlanetManager : MonoBehaviour
 
     public void DebugFunction()
     {
-        float maxheight = 0;
-        float maxdepth = 0;
-        for (int i = 0; i < m_Planet.m_CrustVertices.Count; i++)
-        {
-            maxheight = Mathf.Max(maxheight, m_Planet.m_CrustPointData[i].elevation);
-            maxdepth = Mathf.Min(maxdepth, m_Planet.m_CrustPointData[i].elevation);
-        }
-        Debug.Log("Max height is " + maxheight);
-        Debug.Log("Max depth is " + maxdepth);
     }
 
     public void DebugFunction2()
     {
-        float tolerance = 0.01f;
-        Debug.Log("Checking mesh health...");
-        bool healthy = true;
-        if (m_Planet.m_TectonicPlatesCount > 0)
-        {
-            Debug.Log("Checking crust...");
-            int n_vertices = m_Planet.m_CrustVertices.Count;
-            for (int i = 0; i < n_vertices; i++)
-            {
-                if (Mathf.Abs(1-m_Planet.m_CrustVertices[i].magnitude) > tolerance)
-                {
-                    Debug.LogError("Anomalous crust vertex magnitude: " + i + "(" + m_Planet.m_CrustVertices[i].magnitude + ")");
-                    healthy = false;
-                    continue;
-                }
-                if (float.IsInfinity(m_Planet.m_CrustPointData[i].elevation))
-                {
-                    Debug.LogError("Anomalous crust vertex elevation: " + i + "(" + m_Planet.m_CrustPointData[i].elevation + ")");
-                    healthy = false;
-                    continue;
-                }
-                if (float.IsNaN(m_Planet.m_CrustPointData[i].elevation))
-                {
-                    Debug.LogError("Anomalous crust vertex elevation: " + i + "(" + m_Planet.m_CrustPointData[i].elevation + ")");
-                    healthy = false;
-                }
-            }
-            Debug.Log((healthy ? "Crust is healthy" : "Crust is not healthy"));
-        }
-        for (int i = 0; i < m_Planet.m_DataVertices.Count; i++)
-        {
-            if (Mathf.Abs(1 - m_Planet.m_DataVertices[i].magnitude) > tolerance)
-            {
-                Debug.LogError("Anomalous data vertex magnitude: " + i + "(" + m_Planet.m_CrustVertices[i].magnitude + ")");
-                healthy = false;
-            }
-            if (float.IsInfinity(m_Planet.m_DataPointData[i].elevation))
-            {
-                Debug.LogError("Anomalous data vertex elevation: " + i + "(" + m_Planet.m_DataPointData[i].elevation + ")");
-                healthy = false;
-                continue;
-            }
-            if (float.IsNaN(m_Planet.m_DataPointData[i].elevation))
-            {
-                Debug.LogError("Anomalous data vertex elevation: " + i + "(" + m_Planet.m_DataPointData[i].elevation + ")");
-                healthy = false;
-            }
-        }
-        Debug.Log((healthy ? "Data is healthy" : "Data is not healthy"));
-        for (int i = 0; i < m_Planet.m_RenderVertices.Count; i++)
-        {
-            if (Mathf.Abs(1 - m_Planet.m_DataVertices[i].magnitude) > tolerance)
-            {
-                Debug.LogError("Anomalous render vertex magnitude: " + i + "(" + m_Planet.m_CrustVertices[i].magnitude + ")");
-                healthy = false;
-            }
-            if (float.IsInfinity(m_Planet.m_RenderPointData[i].elevation))
-            {
-                Debug.LogError("Anomalous render vertex elevation: " + i + "(" + m_Planet.m_RenderPointData[i].elevation + ")");
-                healthy = false;
-                continue;
-            }
-            if (float.IsNaN(m_Planet.m_RenderPointData[i].elevation))
-            {
-                Debug.LogError("Anomalous render vertex elevation: " + i + "(" + m_Planet.m_RenderPointData[i].elevation + ")");
-                healthy = false;
-            }
-        }
-        Debug.Log((healthy ? "Render is healthy" : "Render is not healthy"));
     }
 
     public void DebugFunction3()
     {
-        GC.Collect();
     }
 
     public void DebugFunction4()
     {
-        for (int i = 0; i < 50; i++)
-        {
-            Debug.Log(m_Planet.m_DataPointData[i].age);
-        }
     }
 
     // Start is called before the first frame update
@@ -308,6 +225,28 @@ public class PlanetManager : MonoBehaviour
                     else
                     {
                         tex = OverlayOrogeny();
+                    }
+                    break;
+                case TexOverlay.ElevationLaplacian:
+                    if (m_RenderMode == RenderMode.Crust)
+                    {
+                        if (m_PropagateCrust)
+                        {
+                            m_Planet.CrustToData();
+                        }
+                        else
+                        {
+                            problem = true;
+
+                        }
+                    }
+                    if (problem)
+                    {
+                        tex = MissingDataTexture();
+                    }
+                    else
+                    {
+                        tex = OverlayElevationLaplacian();
                     }
                     break;
                 default:
@@ -790,7 +729,6 @@ public class PlanetManager : MonoBehaviour
         com_tex.Release();
         tex.Apply();
         return tex;
-
     }
 
     public Texture2D OverlayDebugCrustTriangles()
@@ -828,6 +766,69 @@ public class PlanetManager : MonoBehaviour
         com_tex.Release();
         tex.Apply();
         return tex;
+    }
+
+    public Texture2D OverlayElevationLaplacian()
+    {
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureElevationLaplacian");
+
+        m_Planet.UpdateCBBuffers();
+
+        int n_vertices = m_Planet.m_DataVertices.Count;
+        float[] el_values = new float[n_vertices];
+        float el, el_max, el_min;
+        el_max = Mathf.NegativeInfinity;
+        el_min = Mathf.Infinity;
+        for (int i = 0; i < n_vertices; i++)
+        {
+            el = 0;
+            foreach (int it in m_Planet.m_DataVerticesNeighbours[i])
+            {
+                el += m_Planet.m_DataPointData[it].elevation - m_Planet.m_DataPointData[i].elevation;
+            }
+            el_values[i] = el;
+            el_max = el > el_max ? el : el_max;
+            el_min = el < el_min ? el : el_min;
+        }
+
+        ComputeBuffer el_values_buffer = new ComputeBuffer(n_vertices, 4);
+
+        el_values_buffer.SetData(el_values);
+
+        work_shader.SetBuffer(kernelHandle, "el_values", el_values_buffer);
+
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", n_vertices);
+        work_shader.SetFloat("el_min", el_min);
+        work_shader.SetFloat("el_max", el_max);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        el_values_buffer.Release();
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+
     }
 
     public void CAPTriangleCollisionTestTexture()

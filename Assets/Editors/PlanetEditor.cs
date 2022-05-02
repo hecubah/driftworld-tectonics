@@ -141,6 +141,16 @@ public class PlanetEditor : Editor
                     m_PlanetManager.m_Planet.GenerateFractalTerrain();
                     m_PlanetManager.RenderPlanet(); // draw the mesh according to set render mode
                 }
+                if (GUILayout.Button("Smooth elevation"))
+                {
+                    m_PlanetManager.m_Planet.SmoothElevation();
+                    m_PlanetManager.RenderPlanet(); // draw the mesh according to set render mode
+                }
+                if (GUILayout.Button("Laplacian smooth elevation"))
+                {
+                    m_PlanetManager.m_Planet.LaplacianSmoothElevation();
+                    m_PlanetManager.RenderPlanet(); // draw the mesh according to set render mode
+                }
                 if (GUILayout.Button("Initialize RNG"))
                 {
                     m_PlanetManager.m_Random.RandomInit(m_PlanetManager.m_RandomSeed); // initialize Mersenne RNG using given seed
@@ -156,6 +166,10 @@ public class PlanetEditor : Editor
                 if (GUILayout.Button("BVH Diagnostics"))
                 {
                     m_PlanetManager.m_Planet.BVHDiagnostics();
+                }
+                if (GUILayout.Button("Elevation value diagnostics"))
+                {
+                    m_PlanetManager.m_Planet.ElevationValueDiagnostics();
                 }
                 if (GUILayout.Button("Triangle Collision Test"))
                 {

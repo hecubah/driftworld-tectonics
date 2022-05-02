@@ -1601,6 +1601,143 @@ public class TectonicPlanet
         }
     }
 
+    public void ElevationValueDiagnostics()
+    {
+        float tolerance = 0.01f;
+        Debug.Log("Checking mesh health...");
+        bool healthy = true;
+        if (m_TectonicPlatesCount > 0)
+        {
+            Debug.Log("Tectonic plates present, checking crust...");
+            int n_vertices = m_CrustVertices.Count;
+            for (int i = 0; i < n_vertices; i++)
+            {
+                if (Mathf.Abs(1 - m_CrustVertices[i].magnitude) > tolerance)
+                {
+                    Debug.LogError("Anomalous crust vertex magnitude: " + i + "(" + m_CrustVertices[i].magnitude + ")");
+                    healthy = false;
+                    continue;
+                }
+                if (float.IsInfinity(m_CrustPointData[i].elevation))
+                {
+                    Debug.LogError("Anomalous crust vertex elevation: " + i + "(" + m_CrustPointData[i].elevation + ")");
+                    healthy = false;
+                    continue;
+                }
+                if (float.IsNaN(m_CrustPointData[i].elevation))
+                {
+                    Debug.LogError("Anomalous crust vertex elevation: " + i + "(" + m_CrustPointData[i].elevation + ")");
+                    healthy = false;
+                }
+            }
+            Debug.Log((healthy ? "Crust is healthy" : "Crust is not healthy"));
+        }
+        for (int i = 0; i < m_DataVertices.Count; i++)
+        {
+            if (Mathf.Abs(1 - m_DataVertices[i].magnitude) > tolerance)
+            {
+                Debug.LogError("Anomalous data vertex magnitude: " + i + "(" + m_CrustVertices[i].magnitude + ")");
+                healthy = false;
+            }
+            if (float.IsInfinity(m_DataPointData[i].elevation))
+            {
+                Debug.LogError("Anomalous data vertex elevation: " + i + "(" + m_DataPointData[i].elevation + ")");
+                healthy = false;
+                continue;
+            }
+            if (float.IsNaN(m_DataPointData[i].elevation))
+            {
+                Debug.LogError("Anomalous data vertex elevation: " + i + "(" + m_DataPointData[i].elevation + ")");
+                healthy = false;
+            }
+        }
+        Debug.Log((healthy ? "Data is healthy" : "Data is not healthy"));
+        for (int i = 0; i < m_RenderVertices.Count; i++)
+        {
+            if (Mathf.Abs(1 - m_DataVertices[i].magnitude) > tolerance)
+            {
+                Debug.LogError("Anomalous render vertex magnitude: " + i + "(" + m_CrustVertices[i].magnitude + ")");
+                healthy = false;
+            }
+            if (float.IsInfinity(m_RenderPointData[i].elevation))
+            {
+                Debug.LogError("Anomalous render vertex elevation: " + i + "(" + m_RenderPointData[i].elevation + ")");
+                healthy = false;
+                continue;
+            }
+            if (float.IsNaN(m_RenderPointData[i].elevation))
+            {
+                Debug.LogError("Anomalous render vertex elevation: " + i + "(" + m_RenderPointData[i].elevation + ")");
+                healthy = false;
+            }
+        }
+        Debug.Log((healthy ? "Render is healthy" : "Render is not healthy"));
+    }
+
+    public void SmoothElevation ()
+    {
+        if (m_PlanetManager.m_PropagateCrust)
+        {
+            CrustToData();
+        }
+        int n_vertices = m_DataVertices.Count;
+        float [] el_values = new float[n_vertices];
+        float nsw = m_PlanetManager.m_Settings.NeighbourSmoothWeight;
+        for (int i = 0; i < n_vertices; i++)
+        {
+            el_values[i] += m_DataPointData[i].elevation;
+            foreach (int it in m_DataVerticesNeighbours[i])
+            {
+                el_values[i] += m_DataPointData[it].elevation * nsw;
+            }
+            el_values[i] /= nsw * m_DataVerticesNeighbours[i].Count + 1;
+        }
+        for (int i = 0; i < n_vertices; i++)
+        {
+            m_DataPointData[i].elevation = el_values[i];
+        }
+        m_CBufferUpdatesNeeded["data_vertex_data"] = true;
+        if (m_TectonicPlates.Count > 0)
+        {
+            ResampleCrust();
+        }
+    }
+
+    public void LaplacianSmoothElevation()
+    {
+        if (m_PlanetManager.m_PropagateCrust)
+        {
+            CrustToData();
+        }
+        int n_vertices = m_DataVertices.Count;
+        float[] el_values = new float[n_vertices];
+        float nsw;
+        for (int i = 0; i < n_vertices; i++)
+        {
+            nsw = 0;
+            foreach (int it in m_DataVerticesNeighbours[i])
+            {
+                nsw += m_DataPointData[it].elevation - m_DataPointData[i].elevation;
+            }
+            nsw = Mathf.Abs(nsw)/((m_PlanetManager.m_Settings.HighestContinentalAltitude - m_PlanetManager.m_Settings.OceanicTrenchElevation) * m_DataVerticesNeighbours[i].Count);
+            el_values[i] += m_DataPointData[i].elevation;
+            foreach (int it in m_DataVerticesNeighbours[i])
+            {
+                el_values[i] += m_DataPointData[it].elevation * nsw;
+            }
+            el_values[i] /= nsw * m_DataVerticesNeighbours[i].Count + 1;
+        }
+        for (int i = 0; i < n_vertices; i++)
+        {
+            m_DataPointData[i].elevation = el_values[i];
+        }
+        m_CBufferUpdatesNeeded["data_vertex_data"] = true;
+        if (m_TectonicPlates.Count > 0)
+        {
+            ResampleCrust();
+        }
+    }
+
 }
 
 
