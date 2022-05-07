@@ -104,6 +104,7 @@ public class PlanetEditor : Editor
                         m_PlanetManager.m_SedimentAccretion = GUILayout.Toggle(m_PlanetManager.m_SedimentAccretion, "Sediment accretion");
                     }
                     m_PlanetManager.m_ContinentalCollisions = GUILayout.Toggle(m_PlanetManager.m_ContinentalCollisions, "Continental collisions");
+                    m_PlanetManager.m_PlateRifting = GUILayout.Toggle(m_PlanetManager.m_PlateRifting, "Plate rifting");
 
 
                     if (GUILayout.Button("Resample crust"))
@@ -154,6 +155,10 @@ public class PlanetEditor : Editor
                 if (GUILayout.Button("Initialize RNG"))
                 {
                     m_PlanetManager.m_Random.RandomInit(m_PlanetManager.m_RandomSeed); // initialize Mersenne RNG using given seed
+                }
+                if (GUILayout.Button("Calculate thickness"))
+                {
+                    m_PlanetManager.m_Planet.CalculateThickness();
                 }
                 GUILayout.EndVertical(); // main data tools box end
             }

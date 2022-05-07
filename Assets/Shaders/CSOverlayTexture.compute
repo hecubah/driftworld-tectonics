@@ -6,10 +6,12 @@
 #pragma kernel CSOverlayTextureCrustPlates
 #pragma kernel CSOverlayTextureDebugCrustTriangles
 #pragma kernel CSOverlayTextureElevationLaplacian
+#pragma kernel CSOverlayTextureDebugVectorNoise
 //#pragma kernel CSDataToRender
 #pragma warning(disable : 3557)
 #define MAX_DISTANCE 1000 // initialization protection
 #define MAX_DFS_STACK_SIZE 40
+//#define DISTANCE_TOLERANCE 0.002f
 #define DISTANCE_TOLERANCE 0.000f
 
 // Create a RenderTexture with enableRandomWrite flag and set it
@@ -693,5 +695,35 @@ void CSOverlayTextureElevationLaplacian(uint3 gID : SV_GroupID, uint3 gtID : SV_
     else {
       float lap_int = laplacian_interpolation(w_pixelpoint, found_index);
       Result[pix_coords] = HSVtoRGB((lap_int - el_min)/(el_max - el_min) * 180.0f, 1, 0.5f);
+    }
+}
+
+StructuredBuffer<float3> vector_noise;
+
+[numthreads(4, 4, 4)]
+void CSOverlayTextureDebugVectorNoise(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float)pix_coords.y+0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    int found_index = search_data_bvh_for_point(w_pixelpoint);
+
+    if (found_index == -1) {
+        Result[pix_coords] = float4(0, 0, 0, 1);
+    }
+    else {
+      float3 bcenter = normalize(data_vertex_locations[data_triangles[found_index].a] + data_vertex_locations[data_triangles[found_index].b] + data_vertex_locations[data_triangles[found_index].c]);
+      float3 longitude_direction = cross(bcenter, float3(0.0f, 1.0f, 0.0f));
+      longitude_direction = length(longitude_direction) > 0 ? normalize(longitude_direction) : longitude_direction;
+      float noise_localx = length(vector_noise[found_index] - (dot(vector_noise[found_index], longitude_direction) * longitude_direction));
+      float noise_localy = dot(vector_noise[found_index], longitude_direction);
+      float noise_hue_angle = max(0, atan2(noise_localy, noise_localx) + 3.141592653f);
+      float intensity = length(vector_noise[found_index]);
+      Result[pix_coords] = HSVtoRGB(noise_hue_angle/3.141593653f*180, min(1, intensity), 1);
+      //Result[pix_coords] = HSVtoRGB(noise_hue_angle/3.141593653f*90, min(1, intensity), 1);
     }
 }

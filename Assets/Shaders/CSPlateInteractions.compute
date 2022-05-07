@@ -9,7 +9,7 @@
 #define MAX_DISTANCE 500
 #define MAX_BVS_SEARCHED 512
 #define MAX_DFS_STACK_SIZE 40
-#define INTERSECT_TOLERANCE 0.0f //0.00005f
+#define INTERSECT_TOLERANCE 0.0001f //0.00005f
 
 struct s_BV {
     int n_children;
@@ -568,8 +568,6 @@ StructuredBuffer<int> terrane_collided_plates;
 StructuredBuffer<int> terrane_vertices;
 StructuredBuffer<int> terrane_vertices_sps;
 
-RWStructuredBuffer<float> debug;
-
 
 [numthreads(64, 1, 1)]
 void CSContinentalCollisionUplift(uint3 dID : SV_DispatchThreadID)
@@ -602,7 +600,6 @@ void CSContinentalCollisionUplift(uint3 dID : SV_DispatchThreadID)
     if (mindist <= collision_max_distance) {
       uplift_sum += collision_coefficient * terrane_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
     }
-    debug[ivi] += terrane_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
   }
   uplift[ivi] = uplift_sum;
 }

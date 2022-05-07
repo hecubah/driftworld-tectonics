@@ -38,6 +38,8 @@ public class TectonicPlanet
     public List<List<int>> m_RenderTrianglesOfVertices;
     public List<PointData> m_RenderPointData;
 
+    public List<Vector3> m_VectorNoise;
+
     public int m_RenderVerticesCount;
     public int m_RenderTrianglesCount;
 
@@ -81,6 +83,8 @@ public class TectonicPlanet
         m_RenderVerticesNeighbours = new List<List<int>>();
         m_RenderTrianglesOfVertices = new List<List<int>>();
         m_RenderPointData = new List<PointData>();
+
+        m_VectorNoise = new List<Vector3>();
 
         m_RenderVerticesCount = 0;
         m_RenderTrianglesCount = 0;
@@ -486,6 +490,22 @@ public class TectonicPlanet
         return Mathf.Acos(dot <= 1.0f ? dot : 1.0f);
     }
 
+    public float WarpedSphereDistance(int data_vertex_index, Vector3 b)
+    {
+        /*
+        float dot = Vector3.Dot(m_DataVertices[data_vertex_index], b);
+        if (Mathf.Abs(dot) > 1.0f)
+        {
+            return 0;
+        }
+        float dist = Mathf.Acos(dot);
+        float corr = (b - m_DataVertices[data_vertex_index]).magnitude > 0 ? Vector3.Dot((b - m_DataVertices[data_vertex_index]).normalized, m_VectorNoise[data_vertex_index])  : 0;
+        return dist - corr * m_PlanetManager.m_Settings.BorderNoiseWeight;
+        */
+        float dot = Mathf.Clamp(Vector3.Dot(m_DataVertices[data_vertex_index], b), -1.0f, 1.0f);
+        return Mathf.Acos(dot <= 1.0f ? dot : 1.0f);
+    }
+
     public static float SphereDistance(Vector3 a, Vector3 b, float radius)
     {
         return radius * UnitSphereDistance(a, b);
@@ -774,19 +794,28 @@ public class TectonicPlanet
             int plate_index = 0;
             for (int j = 0; j < centroids.Count; j++)
             {
-                float dist = TectonicPlanet.UnitSphereDistance(m_DataVertices[i], centroids[j]);
+                float dist = UnitSphereDistance(m_DataVertices[i], centroids[j]);
                 if (dist < mindist)
                 {
                     mindist = dist;
                     plate_index = j;
                 }
             }
-            m_DataPointData[i].elevation = plate_elevations[plate_index];
             m_DataPointData[i].thickness = m_PlanetManager.m_Settings.NewCrustThickness;
             m_DataPointData[i].plate = plate_index;
             m_DataPointData[i].orogeny = OroType.UNKNOWN;
             m_DataPointData[i].age = 0;
-            plates[plate_index].m_PlateVertices.Add(i);
+        }
+
+        for (int i = 0; i < m_PlanetManager.m_Settings.VoronoiBorderNoiseIterations; i++)
+        {
+            WarpCrustBordersGlobal();
+        }
+
+        for (int i = 0; i < m_DataVertices.Count; i++) // for all vertices on the global mesh
+        {
+            m_DataPointData[i].elevation = plate_elevations[m_DataPointData[i].plate];
+            plates[m_DataPointData[i].plate].m_PlateVertices.Add(i);
             m_CrustVertices.Add(m_DataVertices[i]);
             m_CrustPointData.Add(new PointData(m_DataPointData[i]));
         }
@@ -802,7 +831,7 @@ public class TectonicPlanet
         foreach (Plate it in plates)
         {
             List<BoundingVolume> bvt_leaves = new List<BoundingVolume>();
-            int plate_tricount = it.m_PlateTriangles.Count();
+            int plate_tricount = it.m_PlateTriangles.Count;
             for (int i = 0; i < plate_tricount; i++) // for all triangles in data
             {
                 int tri_index = it.m_PlateTriangles[i];
@@ -811,8 +840,15 @@ public class TectonicPlanet
                 m_CrustTriangles[tri_index].m_BVolume = new_bb; // denote the leaf to the respective triangle
                 bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
             }
-            it.m_BVHPlate = ConstructBVH(bvt_leaves);
-            it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
+            if (bvt_leaves.Count != 0)
+            {
+                it.m_BVHPlate = ConstructBVH(bvt_leaves);
+                it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
+            } else
+            {
+                Debug.Log("bad plate: " + it.m_PlateVertices.Count + " vertices");
+                Debug.Log("bad plate: " + it.m_PlateTriangles.Count + " triangles");
+            }
         }
 
         m_TectonicPlates = plates;
@@ -881,7 +917,7 @@ public class TectonicPlanet
         {
             foreach (int it in m_TectonicPlates[i].m_PlateVertices)
             {
-                plate_scores[i] += (m_CrustPointData[it].elevation < 0.0f ? -m_CrustPointData[it].elevation : 10 * m_CrustPointData[it].elevation);
+                plate_scores[i] += (m_CrustPointData[it].elevation < 0.0f ? -m_CrustPointData[it].elevation : 100 * m_CrustPointData[it].elevation);
             }
         }
         for (int i = 0; i < m_TectonicPlatesCount; i++)
@@ -1084,9 +1120,9 @@ public class TectonicPlanet
         {
             if (m_TectonicPlates[i].m_PlateVertices.Count < 1)
             {
-                Debug.Log("Cleaning plate " + i + "...");
+                //Debug.Log("Cleaning plate " + i + "...");
                 overlap_matrix_recalculation_need = true;
-                Debug.Log("Checking clean triangle sets...");
+                //Debug.Log("Checking clean triangle sets...");
                 if (m_TectonicPlates[i].m_PlateTriangles.Count > 0)
                 {
                     Debug.Log("Error: empty plate with non-empty triangle set!");
@@ -1095,7 +1131,7 @@ public class TectonicPlanet
                 {
                     Debug.Log("Error: empty plate with non-empty border triangle set!");
                 }
-                Debug.Log("Correcting vertex plate indices...");
+                //Debug.Log("Correcting vertex plate indices...");
                 for (int j = 0; j < m_CrustVertices.Count; j++)
                 {
                     if (m_CrustPointData[j].plate >= i) { 
@@ -1106,15 +1142,15 @@ public class TectonicPlanet
                         m_CrustPointData[j].plate--;
                     }
                 }
-                Debug.Log("Removing plate " + i + "...");
+                //Debug.Log("Removing plate " + i + "...");
                 m_TectonicPlates.RemoveAt(i);
                 m_TectonicPlatesCount--;
-                Debug.Log("Plate " + i + " removed");
+                //Debug.Log("Plate " + i + " removed");
             }
         }
         if (overlap_matrix_recalculation_need)
         {
-            Debug.Log("Recalculating overlap matrix...");
+            //Debug.Log("Recalculating overlap matrix...");
             m_PlatesOverlap = CalculatePlatesVP();
             m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
         }
@@ -1249,7 +1285,6 @@ public class TectonicPlanet
             if (collision_occured)
             {
                 Debug.Log("Continental collision detected :<");
-                Debug.Log("Determining terranes...");
                 List<CollidingTerrane> c_terranes = new List<CollidingTerrane>();
 
                 int[] continental_vertex_collisions_terranes = new int[m_CrustVertices.Count];
@@ -1339,11 +1374,8 @@ public class TectonicPlanet
                 int continentalCollisionUpliftKernelHandle = work_shader.FindKernel("CSContinentalCollisionUplift");
 
                 float[] uplift_output = new float[m_VerticesCount];
-                float[] debug_output = new float[m_VerticesCount];
                 ComputeBuffer uplift_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
                 uplift_buffer.SetData(uplift_output);
-                ComputeBuffer debug_buffer = new ComputeBuffer(m_VerticesCount, 4, ComputeBufferType.Default);
-                debug_buffer.SetData(debug_output);
 
                 work_shader.SetInt("n_crust_vertices", m_CrustVertices.Count);
                 work_shader.SetInt("n_terranes", c_terranes.Count);
@@ -1364,19 +1396,15 @@ public class TectonicPlanet
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_vertices_sps", terrane_vertices_sps_buffer);
 
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "uplift", uplift_buffer);
-                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "debug", debug_buffer);
 
                 work_shader.Dispatch(continentalCollisionUpliftKernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1);
 
 
                 uplift_buffer.GetData(uplift_output);
-                debug_buffer.GetData(debug_output);
                 //Debug.Log("Extrema of uplift - min: " + Mathf.Min(uplift_output) + "; max: " + Mathf.Max(uplift_output));
                 float el_old, el_new;
                 float el_max = Mathf.NegativeInfinity;
                 float el_min = Mathf.Infinity;
-                float deb_max = Mathf.NegativeInfinity;
-                float deb_min = Mathf.Infinity;
                 for (int i = 0; i < m_VerticesCount; i++)
                 {
                     el_old = m_CrustPointData[i].elevation;
@@ -1388,14 +1416,7 @@ public class TectonicPlanet
                     }
                     el_max = (uplift_output[i] > el_max ? uplift_output[i] : el_max);
                     el_min = (uplift_output[i] < el_min ? uplift_output[i] : el_min);
-                    deb_max = (debug_output[i] > deb_max ? debug_output[i] : deb_max);
-                    deb_min = (debug_output[i] < deb_min ? debug_output[i] : deb_min);
                 }
-                Debug.Log("max uplift is " + el_max);
-                Debug.Log("min uplift is " + el_min);
-                Debug.Log("max debug is " + deb_max);
-                Debug.Log("min debug is " + deb_min);
-                debug_buffer.Release();
 
                 terrane_colliding_plates_buffer.Release();
                 terrane_collided_plates_buffer.Release();
@@ -1414,11 +1435,17 @@ public class TectonicPlanet
                 ResampleCrust(false);
                 foreach (CollidingTerrane it in c_terranes)
                 {
-                    Debug.Log("Terrain " + it.index + " in plate " + it.colliding_plate + ": " + it.m_Vertices.Count + " into plate " + it.collided_plate);
+                    foreach (int it2 in m_TectonicPlates[it.colliding_plate].m_PlateVertices)
+                    {
+                        m_DataPointData[it2].plate = it.collided_plate;
+                    }
+                    //Debug.Log("Terrain " + it.index + " in plate " + it.colliding_plate + ": " + it.m_Vertices.Count + " into plate " + it.collided_plate);
+                    /*
                     for (int i = 0; i < it.m_Vertices.Count; i++)
                     {
                         m_DataPointData[it.m_Vertices[i]].plate = it.collided_plate;
                     }
+                    */
                 }
                 ResampleCrust();
 
@@ -1612,6 +1639,89 @@ public class TectonicPlanet
             }
             pull_contributions_buffer.Release();
             m_CBufferUpdatesNeeded["plate_motion_axes"] = true;
+        }
+
+        if (m_PlanetManager.m_PlateRifting)
+        {
+            float initial_average_vertex_area = (float)m_CrustVertices.Count / m_PlanetManager.m_Settings.PlateInitNumberOfCentroids;
+            float adjusted_rift_frequency;
+            int plate_count = m_TectonicPlates.Count;
+            int ocean_count, continental_count;
+            float ratio_weight;
+            bool rift_occured = false;
+
+            /*
+            for (int i = 0; i < plate_count; i++)
+            {
+                if (m_TectonicPlates[i].m_PlateVertices.Count < 2)
+                {
+                    continue;
+                }
+                ocean_count = 0;
+                continental_count = 0;
+                for (int j = 0; j < m_TectonicPlates[i].m_PlateVertices.Count; j++)
+                {
+                    if (m_CrustPointData[m_TectonicPlates[i].m_PlateVertices[j]].elevation < 0) {
+                        ocean_count++;
+                    } else
+                    {
+                        continental_count++;
+                    }
+                }
+                ratio_weight = (float)continental_count / (continental_count + ocean_count) * 0.9f + 0.1f;
+                adjusted_rift_frequency = m_PlanetManager.m_Settings.PlateRiftsPerTectonicIterationStep * ratio_weight * (m_TectonicPlates[i].m_PlateVertices.Count) / initial_average_vertex_area;
+                if (m_Random.Random() < adjusted_rift_frequency * Mathf.Exp(-adjusted_rift_frequency))
+                {
+                    Debug.Log("Rift occured at plate " + i);
+                    PlateRift(i);
+                    rift_occured = true;
+                }
+            }
+            */
+
+            int max_vertices_plate = -1;
+            int max_vertices_n = 0;
+            for (int i = 0; i < plate_count; i++)
+            {
+                if (m_TectonicPlates[i].m_PlateVertices.Count > max_vertices_n)
+                {
+                    max_vertices_plate = i;
+                    max_vertices_n = m_TectonicPlates[i].m_PlateVertices.Count;
+                }
+            }
+
+            if (m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count >= 2)
+            {
+                ocean_count = 0;
+                continental_count = 0;
+                for (int j = 0; j < m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count; j++)
+                {
+                    if (m_CrustPointData[m_TectonicPlates[max_vertices_plate].m_PlateVertices[j]].elevation < 0)
+                    {
+                        ocean_count++;
+                    }
+                    else
+                    {
+                        continental_count++;
+                    }
+                }
+                ratio_weight = (float)continental_count / (continental_count + ocean_count) * 0.9f + 0.1f;
+                adjusted_rift_frequency = m_PlanetManager.m_Settings.PlateRiftsPerTectonicIterationStep * ratio_weight * (m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count) / initial_average_vertex_area;
+                if (m_Random.Random() < adjusted_rift_frequency * Mathf.Exp(-adjusted_rift_frequency))
+                {
+                    Debug.Log("Rift occured at plate " + max_vertices_plate);
+                    PlateRift(max_vertices_plate);
+                    rift_occured = true;
+                }
+            }
+
+            if (rift_occured)
+            {
+                ResampleCrust();
+                CalculatePlatesVP();
+            }
+            
+
         }
 
         for (int i = 0; i < m_CrustVertices.Count; i++)
@@ -1842,6 +1952,261 @@ public class TectonicPlanet
         if (m_TectonicPlates.Count > 0)
         {
             ResampleCrust();
+        }
+    }
+
+    public void CalculateThickness()
+    {
+        for (int i = 0; i < m_CrustVertices.Count; i++)
+        {
+            m_CrustPointData[i].thickness = m_PlanetManager.m_Settings.NewCrustThickness + m_CrustPointData[i].elevation;
+        }
+        m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
+    }
+
+    public void PlateRift(int rifted_plate)
+    {
+        if (m_TectonicPlates[rifted_plate].m_PlateVertices.Count < 2)
+        {
+            return;
+        }
+        CrustToData();
+        List<Vector3> centroids = new List<Vector3>(); // vertices are assigned around these centroids
+        int new_plate_index = m_TectonicPlates.Count;
+        int centroid1_index = m_Random.IRandom(0, m_TectonicPlates[rifted_plate].m_PlateVertices.Count);
+        int centroid2_index;
+        do { 
+            centroid2_index = m_Random.IRandom(0, m_TectonicPlates[rifted_plate].m_PlateVertices.Count);
+        } while (centroid2_index == centroid1_index);
+        Vector3 centroid1 = m_DataVertices[centroid1_index];
+        Vector3 centroid2 = m_DataVertices[centroid2_index];
+        Vector3 adjusted_centroid1 = Vector3.zero;
+        Vector3 adjusted_centroid2 = Vector3.zero;
+        float dist1, dist2;
+        for (int i = 0; i < m_TectonicPlates[rifted_plate].m_PlateVertices.Count; i++)
+        {
+            dist1 = UnitSphereDistance(m_DataVertices[m_TectonicPlates[rifted_plate].m_PlateVertices[i]], centroid1);
+            dist2 = UnitSphereDistance(m_DataVertices[m_TectonicPlates[rifted_plate].m_PlateVertices[i]], centroid2);
+            if (dist2 < dist1)
+            {
+                m_DataPointData[m_TectonicPlates[rifted_plate].m_PlateVertices[i]].plate = new_plate_index;
+            }
+        }
+
+        for (int i = 0; i < m_PlanetManager.m_Settings.VoronoiBorderNoiseIterations; i++)
+        {
+            WarpCrustBordersTwoPlates(rifted_plate, new_plate_index);
+        }
+
+
+        for (int i = 0; i < m_TectonicPlates[rifted_plate].m_PlateVertices.Count; i++)
+        {
+            if (m_DataPointData[m_TectonicPlates[rifted_plate].m_PlateVertices[i]].plate == rifted_plate) {
+                adjusted_centroid1 += m_DataVertices[m_TectonicPlates[rifted_plate].m_PlateVertices[i]];
+            } else
+            {
+                adjusted_centroid2 += m_DataVertices[m_TectonicPlates[rifted_plate].m_PlateVertices[i]];
+            }
+        }
+
+        Plate new_plate = new Plate(this);
+
+        adjusted_centroid1 = adjusted_centroid1.magnitude > 0 ? adjusted_centroid1.normalized : new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
+        adjusted_centroid2 = adjusted_centroid2.magnitude > 0 ? adjusted_centroid2.normalized : new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
+        m_TectonicPlates[rifted_plate].m_Centroid = adjusted_centroid1;
+        new_plate.m_Centroid = adjusted_centroid2;
+
+        new_plate.m_PlateAngularSpeed = m_TectonicPlates[rifted_plate].m_PlateAngularSpeed;
+        Vector3 new_axis1, new_axis2;
+        new_axis1 = Vector3.Cross(centroid1, centroid2);
+        new_axis1 = new_axis1.magnitude > 0 ? new_axis1.normalized : new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
+        new_axis2 = Vector3.Cross(centroid2, centroid1);
+        new_axis2 = new_axis2.magnitude > 0 ? new_axis2.normalized : new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
+        m_TectonicPlates[rifted_plate].m_RotationAxis = new_axis1;
+        new_plate.m_RotationAxis = new_axis2;
+        m_TectonicPlates.Add(new_plate);
+        m_TectonicPlatesCount++;
+    }
+
+    public void CreateVectorNoise ()
+    {
+        Vector3 noise_vec;
+        for (int i = 0; i < m_DataTriangles.Count; i++)
+        {
+            do
+            {
+                noise_vec = new Vector3(m_Random.Range(0.0f, 1.0f), m_Random.Range(0.0f, 1.0f), m_Random.Range(0.0f, 1.0f));
+                noise_vec = noise_vec - (Vector3.Dot(noise_vec, m_DataTriangles[i].m_BCenter)) * m_DataTriangles[i].m_BCenter;
+            } while (noise_vec.magnitude == 0.0f);
+            noise_vec = noise_vec.normalized;
+            m_VectorNoise.Add(noise_vec);
+        }
+        for (int i = 0; i < m_PlanetManager.m_Settings.VectorNoiseAveragingIterations; i++)
+        {
+            List<Vector3> work_noise = new List<Vector3>(m_VectorNoise);
+            for (int j = 0; j < m_DataTriangles.Count; j++)
+            {
+                foreach (int it in m_DataTriangles[j].m_Neighbours)
+                {
+                    Vector3 contrib = m_VectorNoise[it];
+                    work_noise[j] += contrib - (Vector3.Dot(contrib, m_DataTriangles[j].m_BCenter)) * m_DataTriangles[j].m_BCenter;
+
+                }
+
+            }
+            m_VectorNoise = work_noise;
+
+        }
+
+    }
+
+    public void WarpCrustBordersGlobal ()
+    {
+        int[] vertex_plates = new int[m_DataVertices.Count];
+        for (int i = 0; i < m_DataVertices.Count; i++)
+        {
+            vertex_plates[i] = m_DataPointData[i].plate;
+        }
+
+        for (int i = 0; i < m_DataTriangles.Count; i++)
+        {
+            int p1, p2, p3;
+            Vector3 v1, v2, v3;
+            float maxdot = Mathf.NegativeInfinity;
+            float mindot = Mathf.Infinity;
+            int maxdotind = -1;
+            int mindotind = -1;
+            p1 = m_DataPointData[m_DataTriangles[i].m_A].plate;
+            p2 = m_DataPointData[m_DataTriangles[i].m_B].plate;
+            p3 = m_DataPointData[m_DataTriangles[i].m_C].plate;
+            bool candidate = ((p1 == p2) && (p1 != p3)) || ((p2 == p3) && (p2 != p1)) || ((p3 == p1) && (p3 != p2));
+            if (!candidate)
+            {
+                continue;
+            } else
+            {
+                if (m_Random.Range(0.0f, 1.0f) < m_VectorNoise[i].magnitude)
+                {
+                    v1 = m_DataVertices[m_DataTriangles[i].m_A] - m_DataTriangles[i].m_BCenter;
+                    v2 = m_DataVertices[m_DataTriangles[i].m_B] - m_DataTriangles[i].m_BCenter;
+                    v3 = m_DataVertices[m_DataTriangles[i].m_C] - m_DataTriangles[i].m_BCenter;
+                    if (Vector3.Dot(m_VectorNoise[i], v1) > maxdot)
+                    {
+                        maxdot = Vector3.Dot(m_VectorNoise[i], v1);
+                        maxdotind = m_DataTriangles[i].m_A;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v1) < mindot)
+                    {
+                        mindot = Vector3.Dot(m_VectorNoise[i], v1);
+                        mindotind = m_DataTriangles[i].m_A;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v2) > maxdot)
+                    {
+                        maxdot = Vector3.Dot(m_VectorNoise[i], v2);
+                        maxdotind = m_DataTriangles[i].m_B;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v2) < mindot)
+                    {
+                        mindot = Vector3.Dot(m_VectorNoise[i], v2);
+                        mindotind = m_DataTriangles[i].m_B;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v3) > maxdot)
+                    {
+                        maxdotind = m_DataTriangles[i].m_C;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v3) < mindot)
+                    {
+                        mindotind = m_DataTriangles[i].m_C;
+                    }
+                    vertex_plates[maxdotind] = m_DataPointData[mindotind].plate;
+                }
+            }
+        }
+        for (int i = 0; i < m_DataVertices.Count; i++)
+        {
+            m_DataPointData[i].plate = vertex_plates[i];
+        }
+    }
+
+    public void WarpCrustBordersTwoPlates(int a, int b)
+    {
+        int[] vertex_plates = new int[m_DataVertices.Count];
+        for (int i = 0; i < m_DataVertices.Count; i++)
+        {
+            vertex_plates[i] = m_DataPointData[i].plate;
+        }
+
+        HashSet<int> allowed = new HashSet<int> { a, b };
+        HashSet<int> present = new HashSet<int>();
+        for (int i = 0; i < m_DataTriangles.Count; i++)
+        {
+            int p1, p2, p3;
+            Vector3 v1, v2, v3;
+            float maxdot = Mathf.NegativeInfinity;
+            float mindot = Mathf.Infinity;
+            int maxdotind = -1;
+            int mindotind = -1;
+            p1 = m_DataPointData[m_DataTriangles[i].m_A].plate;
+            p2 = m_DataPointData[m_DataTriangles[i].m_B].plate;
+            p3 = m_DataPointData[m_DataTriangles[i].m_C].plate;
+            allowed = new HashSet<int>{a, b};
+            present.Clear();
+            present.Add(p1);
+            present.Add(p2);
+            present.Add(p3);
+
+            if (!present.IsSubsetOf(allowed))
+            {
+                continue;
+            }
+
+            bool candidate = ((p1 == p2) && (p1 != p3)) || ((p2 == p3) && (p2 != p1)) || ((p3 == p1) && (p3 != p2));
+            if (!candidate)
+            {
+                continue;
+            }
+            else
+            {
+                if (m_Random.Range(0.0f, 1.0f) < m_VectorNoise[i].magnitude)
+                {
+                    v1 = m_DataVertices[m_DataTriangles[i].m_A] - m_DataTriangles[i].m_BCenter;
+                    v2 = m_DataVertices[m_DataTriangles[i].m_B] - m_DataTriangles[i].m_BCenter;
+                    v3 = m_DataVertices[m_DataTriangles[i].m_C] - m_DataTriangles[i].m_BCenter;
+                    if (Vector3.Dot(m_VectorNoise[i], v1) > maxdot)
+                    {
+                        maxdot = Vector3.Dot(m_VectorNoise[i], v1);
+                        maxdotind = m_DataTriangles[i].m_A;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v1) < mindot)
+                    {
+                        mindot = Vector3.Dot(m_VectorNoise[i], v1);
+                        mindotind = m_DataTriangles[i].m_A;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v2) > maxdot)
+                    {
+                        maxdot = Vector3.Dot(m_VectorNoise[i], v2);
+                        maxdotind = m_DataTriangles[i].m_B;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v2) < mindot)
+                    {
+                        mindot = Vector3.Dot(m_VectorNoise[i], v2);
+                        mindotind = m_DataTriangles[i].m_B;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v3) > maxdot)
+                    {
+                        maxdotind = m_DataTriangles[i].m_C;
+                    }
+                    if (Vector3.Dot(m_VectorNoise[i], v3) < mindot)
+                    {
+                        mindotind = m_DataTriangles[i].m_C;
+                    }
+                    vertex_plates[maxdotind] = m_DataPointData[mindotind].plate;
+                }
+            }
+        }
+        for (int i = 0; i < m_DataVertices.Count; i++)
+        {
+            m_DataPointData[i].plate = vertex_plates[i];
         }
     }
 

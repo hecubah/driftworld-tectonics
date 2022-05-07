@@ -5,7 +5,7 @@ using UnityEngine;
 
 public enum TexOverlay
 {
-    None, BasicTerrain, CrustPlates, DebugDataTriangles, DebugCrustTriangles, CrustAge, Orogeny, ElevationLaplacian
+    None, BasicTerrain, CrustPlates, DebugDataTriangles, DebugCrustTriangles, CrustAge, Orogeny, ElevationLaplacian, DebugVectorNoise
 }
 
 public enum RenderMode
@@ -45,6 +45,7 @@ public class PlanetManager : MonoBehaviour
     [HideInInspector] public bool m_StepErosionDamping = false;
     [HideInInspector] public bool m_SedimentAccretion = false;
     [HideInInspector] public bool m_ContinentalCollisions = false;
+    [HideInInspector] public bool m_PlateRifting = false;
 
     [HideInInspector] public bool m_FoldoutRenderOptions = false;
     [HideInInspector] public bool m_FoldoutTectonics = false;
@@ -95,6 +96,7 @@ public class PlanetManager : MonoBehaviour
         }
         m_Planet = new TectonicPlanet(m_Settings.PlanetRadius);
         m_Planet.LoadDefaultTopology(m_DataMeshFilename, m_RenderMeshFilename);
+        m_Planet.CreateVectorNoise();
         m_Planet.InitializeCBuffers();
         RenderPlanet();
     }
@@ -248,6 +250,9 @@ public class PlanetManager : MonoBehaviour
                     {
                         tex = OverlayElevationLaplacian();
                     }
+                    break;
+                case TexOverlay.DebugVectorNoise:
+                    tex = OverlayDebugVectorNoise();
                     break;
                 default:
                     no_overlay = true;
@@ -829,6 +834,50 @@ public class PlanetManager : MonoBehaviour
         tex.Apply();
         return tex;
 
+    }
+
+    public Texture2D OverlayDebugVectorNoise()
+    {
+
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugVectorNoise");
+
+        Vector3[] vector_noise = m_Planet.m_VectorNoise.ToArray();
+
+        ComputeBuffer vector_noise_buffer = new ComputeBuffer(vector_noise.Length, 12, ComputeBufferType.Default);
+
+        vector_noise_buffer.SetData(vector_noise);
+
+        m_Planet.UpdateCBBuffers();
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        //work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+
+        work_shader.SetBuffer(kernelHandle, "vector_noise", vector_noise_buffer);
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        vector_noise_buffer.Release();
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
     }
 
     public void CAPTriangleCollisionTestTexture()

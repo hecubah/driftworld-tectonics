@@ -40,6 +40,11 @@ public class SimulationSettings
     public float NeighbourSmoothWeight = 0.1f;
     public float ContinentalCollisionGlobalDistance = 0.659f;
     public float ContinentalCollisionCoefficient = 82e-3f;
+
+    public float PlateRiftsPerTectonicIterationStep = 0.01f;
+    public int VectorNoiseAveragingIterations = 3;
+    public float BorderNoiseWeight = 1.0f;
+    public int VoronoiBorderNoiseIterations = 6;
 }
 
 [System.Serializable]

@@ -142,6 +142,7 @@ public class PlanetBinaryData
     public List<PointData> m_DataPointData;
     public List<List<int>> m_DataVerticesNeighbours;
     public List<List<int>> m_DataTrianglesOfVertices;
+    public List<Vector3Serial> m_VectorNoise;
 
     public List<Vector3Serial> m_RenderVertices;
     public List<DRTriangleSerial> m_RenderTriangles;
@@ -169,6 +170,7 @@ public static class SaveManager
         data.m_DataPointData = new List<PointData>();
         data.m_DataVerticesNeighbours = new List<List<int>>();
         data.m_DataTrianglesOfVertices = new List<List<int>>();
+        data.m_VectorNoise = new List<Vector3Serial>();
         for (int i = 0; i < man.m_Planet.m_DataVertices.Count; i++)
         {
             if (data.m_TectonicsPresent)
@@ -190,6 +192,7 @@ public static class SaveManager
                 data.m_CrustTriangles.Add(new DRTriangleSerial(man.m_Planet.m_CrustTriangles[i]));
             }
             data.m_DataTriangles.Add(new DRTriangleSerial(man.m_Planet.m_DataTriangles[i]));
+            data.m_VectorNoise.Add(new Vector3Serial(man.m_Planet.m_VectorNoise[i]));
         }
         data.m_TectonicPlates = new List<PlateSerial>();
         for (int i = 0; i < man.m_Planet.m_TectonicPlatesCount; i++)
@@ -327,6 +330,12 @@ public static class SaveManager
             value_buffer = BitConverter.GetBytes(data.m_DataTriangles[i].neigh2);
             fs.Write(value_buffer, 0, 4);
             value_buffer = BitConverter.GetBytes(data.m_DataTriangles[i].neigh3);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_VectorNoise[i].x);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_VectorNoise[i].y);
+            fs.Write(value_buffer, 0, 4);
+            value_buffer = BitConverter.GetBytes(data.m_VectorNoise[i].z);
             fs.Write(value_buffer, 0, 4);
         }
 
@@ -469,6 +478,7 @@ public static class SaveManager
 
         man.m_Planet.m_CrustTriangles = new List<DRTriangle>();
         man.m_Planet.m_DataTriangles = new List<DRTriangle>();
+        man.m_Planet.m_VectorNoise = new List<Vector3>();
         DRTriangle new_tri;
         for (int i = 0; i < n_triangles; i++)
         {
@@ -488,6 +498,7 @@ public static class SaveManager
             new_tri.m_Neighbours.Add(source.neigh2);
             new_tri.m_Neighbours.Add(source.neigh3);
             man.m_Planet.m_DataTriangles.Add(new_tri);
+            man.m_Planet.m_VectorNoise.Add(new Vector3(data.m_VectorNoise[i].x, data.m_VectorNoise[i].y, data.m_VectorNoise[i].z));
 
         }
 
@@ -710,14 +721,16 @@ public static class SaveManager
 
         data.m_CrustTriangles = new List<DRTriangleSerial>();
         data.m_DataTriangles = new List<DRTriangleSerial>();
+        data.m_VectorNoise = new List<Vector3Serial>();
 
         for (int i = 0; i < n_triangles; i++)
         {
 
-            DRTriangleSerial triangle = new DRTriangleSerial();
+            DRTriangleSerial triangle;
 
             if (tectonics_present)
             {
+                triangle = new DRTriangleSerial();
                 ms.Read(value_read, 0, 4);
                 triangle.a = BitConverter.ToInt32(value_read, 0);
                 ms.Read(value_read, 0, 4);
@@ -733,6 +746,8 @@ public static class SaveManager
                 data.m_CrustTriangles.Add(triangle);
             }
 
+            triangle = new DRTriangleSerial();
+
             ms.Read(value_read, 0, 4);
             triangle.a = BitConverter.ToInt32(value_read, 0);
             ms.Read(value_read, 0, 4);
@@ -746,6 +761,15 @@ public static class SaveManager
             ms.Read(value_read, 0, 4);
             triangle.neigh3 = BitConverter.ToInt32(value_read, 0);
             data.m_DataTriangles.Add(triangle);
+            Vector3Serial new_vector = new Vector3Serial();
+            ms.Read(value_read, 0, 4);
+            new_vector.x = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            new_vector.y = BitConverter.ToInt32(value_read, 0);
+            ms.Read(value_read, 0, 4);
+            new_vector.z = BitConverter.ToInt32(value_read, 0);
+            data.m_VectorNoise.Add(new_vector);
+
         }
 
         if (tectonics_present)
