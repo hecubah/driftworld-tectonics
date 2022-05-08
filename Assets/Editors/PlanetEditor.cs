@@ -160,6 +160,11 @@ public class PlanetEditor : Editor
                 {
                     m_PlanetManager.m_Planet.CalculateThickness();
                 }
+                if (GUILayout.Button("Forced plate rift"))
+                {
+                    m_PlanetManager.m_Planet.ForcedPlateRift();
+                    m_PlanetManager.RenderPlanet();
+                }
                 GUILayout.EndVertical(); // main data tools box end
             }
 
@@ -175,10 +180,6 @@ public class PlanetEditor : Editor
                 if (GUILayout.Button("Elevation value diagnostics"))
                 {
                     m_PlanetManager.m_Planet.ElevationValueDiagnostics();
-                }
-                if (GUILayout.Button("Triangle Collision Test"))
-                {
-                    m_PlanetManager.CAPTriangleCollisionTestTexture(); // test triangle collision of random two triangles
                 }
                 GUILayout.EndVertical(); // main data tools box end
             }

@@ -5,17 +5,23 @@
 StructuredBuffer<float3> vertices_input;
 StructuredBuffer<float3> random_input;
 RWStructuredBuffer<float> elevations_output;
-uint vertices_number;
+int fractal_iterations;
+int vertices_number;
 float elevation_step;
 
 
+
+
 [numthreads(64, 1, 1)]
-void CSFractalTerrain(uint3 id : SV_DispatchThreadID)
+void CSFractalTerrain(uint3 dID : SV_DispatchThreadID)
 {
-    uint thread_coord = id.x;
-    float3 plane_normal = random_input[id.x];
-    uint i;
-    for (i = 0; i < vertices_number; i++) {
-        elevations_output[i] += (dot(vertices_input[i], plane_normal) >= 0 ? elevation_step : -elevation_step);
+    int ivi = dID.x; // interpolated triangle index
+    if (ivi >= vertices_number) {
+        return;
+    }
+
+    float3 plane_normal;
+    for (int i = 0; i < fractal_iterations; i++) {
+        elevations_output[ivi] += (dot(vertices_input[ivi], random_input[i]) >= 0 ? elevation_step : -elevation_step);
     }
 }

@@ -50,14 +50,10 @@ public class SimulationSettings
 [System.Serializable]
 public class SimulationShaders
 {
-    public ComputeShader m_DefaultTerrainTextureCShader = null;
-    public ComputeShader m_PlatesAreaTextureCShader = null;
     public ComputeShader m_FractalTerrainCShader = null;
-    public ComputeShader m_TriangleCollisionTestCShader = null;
     public ComputeShader m_CircleMergeShader = null;
     public ComputeShader m_BVHNearestNeighbourShader = null;
     public ComputeShader m_VertexDataInterpolationShader = null;
     public ComputeShader m_PlateInteractionsShader = null;
-    public ComputeShader m_DebugTextureShader = null;
     public ComputeShader m_OverlayTextureShader = null;
 }

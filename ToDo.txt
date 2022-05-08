@@ -1,3 +1,5 @@
-clean up code
-clean up shaders
-memory leaks
+code documentation
+manual documentation
+occasional code clean-up
+memory leaks?
+optimization?

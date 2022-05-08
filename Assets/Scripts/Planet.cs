@@ -490,27 +490,6 @@ public class TectonicPlanet
         return Mathf.Acos(dot <= 1.0f ? dot : 1.0f);
     }
 
-    public float WarpedSphereDistance(int data_vertex_index, Vector3 b)
-    {
-        /*
-        float dot = Vector3.Dot(m_DataVertices[data_vertex_index], b);
-        if (Mathf.Abs(dot) > 1.0f)
-        {
-            return 0;
-        }
-        float dist = Mathf.Acos(dot);
-        float corr = (b - m_DataVertices[data_vertex_index]).magnitude > 0 ? Vector3.Dot((b - m_DataVertices[data_vertex_index]).normalized, m_VectorNoise[data_vertex_index])  : 0;
-        return dist - corr * m_PlanetManager.m_Settings.BorderNoiseWeight;
-        */
-        float dot = Mathf.Clamp(Vector3.Dot(m_DataVertices[data_vertex_index], b), -1.0f, 1.0f);
-        return Mathf.Acos(dot <= 1.0f ? dot : 1.0f);
-    }
-
-    public static float SphereDistance(Vector3 a, Vector3 b, float radius)
-    {
-        return radius * UnitSphereDistance(a, b);
-    }
-
     public void CrustToData()
     {
         if (m_TectonicPlates.Count == 0)
@@ -728,21 +707,26 @@ public class TectonicPlanet
 
     public void GenerateFractalTerrain ()
     {
-        
-        int kernelHandle = m_PlanetManager.m_Shaders.m_FractalTerrainCShader.FindKernel("CSFractalTerrain");
 
-        Vector3[] vertices_input = new Vector3[m_VerticesCount];
-        Vector3[] random_input = new Vector3[64* m_PlanetManager.m_Settings.FractalTerrainIterations];
-        float[] elevations_output = new float[m_VerticesCount];
+        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_FractalTerrainCShader;
 
-        for (int i = 0; i < m_VerticesCount; i++)
+        int kernelHandle = work_shader.FindKernel("CSFractalTerrain");
+
+        Vector3[] vertices_input = m_DataVertices.ToArray();
+        Vector3[] random_input = new Vector3[m_PlanetManager.m_Settings.FractalTerrainIterations];
+        float[] elevations_output = new float[m_DataVertices.Count];
+
+
+
+
+        for (int i = 0; i < m_PlanetManager.m_Settings.FractalTerrainIterations; i++)
         {
-            vertices_input[i] = m_DataVertices[i];
-        }
-
-        for (int i = 0; i < 64* m_PlanetManager.m_Settings.FractalTerrainIterations; i++)
-        {
-            random_input[i] = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f));
+            Vector3 cand_input;
+            do
+            {
+                cand_input = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f));
+            } while (cand_input.magnitude == 0);
+            random_input[i] = cand_input.normalized;
         }
 
         ComputeBuffer vertices_input_buffer = new ComputeBuffer(vertices_input.Length, 12, ComputeBufferType.Default);
@@ -750,13 +734,15 @@ public class TectonicPlanet
         ComputeBuffer elevations_output_buffer = new ComputeBuffer(elevations_output.Length, 4, ComputeBufferType.Default);
         vertices_input_buffer.SetData(vertices_input);
         random_input_buffer.SetData(random_input);
+        elevations_output_buffer.SetData(elevations_output);
 
-        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetBuffer(kernelHandle, "vertices_input", vertices_input_buffer);
-        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetBuffer(kernelHandle, "random_input", random_input_buffer);
-        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetBuffer(kernelHandle, "elevations_output", elevations_output_buffer);
-        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetInt("vertices_number", m_VerticesCount);
-        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.SetFloat("elevation_step", m_PlanetManager.m_Settings.FractalTerrainElevationStep);
-        m_PlanetManager.m_Shaders.m_FractalTerrainCShader.Dispatch(kernelHandle, m_PlanetManager.m_Settings.FractalTerrainIterations, 1, 1);
+        work_shader.SetBuffer(kernelHandle, "vertices_input", vertices_input_buffer);
+        work_shader.SetBuffer(kernelHandle, "random_input", random_input_buffer);
+        work_shader.SetBuffer(kernelHandle, "elevations_output", elevations_output_buffer);
+        work_shader.SetInt("fractal_iterations", m_PlanetManager.m_Settings.FractalTerrainIterations);
+        work_shader.SetInt("vertices_number", m_VerticesCount);
+        work_shader.SetFloat("elevation_step", m_PlanetManager.m_Settings.FractalTerrainElevationStep);
+        work_shader.Dispatch(kernelHandle, m_DataVertices.Count / 64 + (m_DataVertices.Count % 64 != 0 ? 1 : 0), 1, 1);
 
         vertices_input_buffer.Release();
         random_input_buffer.Release();
@@ -2016,16 +2002,48 @@ public class TectonicPlanet
         m_TectonicPlates[rifted_plate].m_Centroid = adjusted_centroid1;
         new_plate.m_Centroid = adjusted_centroid2;
 
-        new_plate.m_PlateAngularSpeed = m_TectonicPlates[rifted_plate].m_PlateAngularSpeed;
+        m_TectonicPlates[rifted_plate].m_PlateAngularSpeed = m_Random.Range(0.0f, m_PlanetManager.m_Settings.MaximumPlateSpeed);
+        new_plate.m_PlateAngularSpeed = m_Random.Range(0.0f, m_PlanetManager.m_Settings.MaximumPlateSpeed);
+
+        //new_plate.m_PlateAngularSpeed = m_TectonicPlates[rifted_plate].m_PlateAngularSpeed;
         Vector3 new_axis1, new_axis2;
         new_axis1 = Vector3.Cross(centroid1, centroid2);
         new_axis1 = new_axis1.magnitude > 0 ? new_axis1.normalized : new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
-        new_axis2 = Vector3.Cross(centroid2, centroid1);
-        new_axis2 = new_axis2.magnitude > 0 ? new_axis2.normalized : new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
+        new_axis2 = -new_axis1;
         m_TectonicPlates[rifted_plate].m_RotationAxis = new_axis1;
         new_plate.m_RotationAxis = new_axis2;
         m_TectonicPlates.Add(new_plate);
         m_TectonicPlatesCount++;
+    }
+
+    public void ForcedPlateRift()
+    {
+        int plate_count = m_TectonicPlates.Count;
+
+        int max_vertices_plate = -1;
+        int max_vertices_n = 0;
+        for (int i = 0; i < plate_count; i++)
+        {
+            if (m_TectonicPlates[i].m_PlateVertices.Count > max_vertices_n)
+            {
+                max_vertices_plate = i;
+                max_vertices_n = m_TectonicPlates[i].m_PlateVertices.Count;
+            }
+        }
+
+        if (m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count >= 2)
+        {
+            Debug.Log("Rifting plate " + max_vertices_plate);
+            PlateRift(max_vertices_plate);
+            ResampleCrust();
+            CalculatePlatesVP();
+            m_CBufferUpdatesNeeded["plate_motion_axes"] = true;
+            m_CBufferUpdatesNeeded["plate_motion_angular_speeds"] = true;
+            m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
+        }
+        else {
+            Debug.LogError("WTF plate, no rift because reasons.");
+        }
     }
 
     public void CreateVectorNoise ()
