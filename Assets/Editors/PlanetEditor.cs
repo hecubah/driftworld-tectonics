@@ -9,6 +9,10 @@ public class PlanetEditor : Editor
     public override void OnInspectorGUI() // editor tools for manipulating the simulation
     {
         base.OnInspectorGUI(); // base function
+        if (m_PlanetManager.m_FileManager == null) // if missing, initialize new file manager with the planet manager reference - cannot initialize in DRFileManager constructor with GameObject.Find
+        {
+            m_PlanetManager.m_FileManager = new DRFileManager(m_PlanetManager);
+        }
         GUILayout.BeginVertical("box"); // component aligning
         bool planet_is_loaded = (m_PlanetManager.m_Planet != null); // planet load check variable
         GUILayout.Label("Planet: " + (planet_is_loaded ? "present" : "none")); // check if a planet is loaded
@@ -33,13 +37,13 @@ public class PlanetEditor : Editor
         {
             if (GUILayout.Button("Save planet to file")) // save simulated data to a file - needed form memory leak purposes, at least at 500k sample size
             {
-                SaveManager.SavePlanet(m_PlanetManager); // manager call - since SaveManager is static, provide a PlanetManager reference
+                m_PlanetManager.m_FileManager.SavePlanet();
             }
 
         }
         if (GUILayout.Button("Load planet from file")) // load simulated data from a file
         {
-            SaveManager.LoadPlanet(m_PlanetManager); // static manager call
+            m_PlanetManager.m_FileManager.LoadPlanet();
         }
 
         if (planet_is_loaded) // if a planet is loaded
@@ -167,7 +171,7 @@ public class PlanetEditor : Editor
                 }
                 if (GUILayout.Button("Export texture")) // save active texture to a file
                 {
-                    SaveManager.TextureSave(m_PlanetManager);
+                    m_PlanetManager.m_FileManager.TextureSave();
                 }
                 GUILayout.EndVertical();
             }

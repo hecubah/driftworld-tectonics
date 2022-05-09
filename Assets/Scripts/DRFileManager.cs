@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System;
 using System.IO;
+using System.Text;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
@@ -152,12 +153,24 @@ public class PlanetBinaryData
 
 }
 
-public static class SaveManager
+public class DRFileManager
 {
-    public static string filename = "save.dat";
-    public static string path = "";
+    public string filename;
+    public string path;
+    public PlanetManager man;
+    public string m_DataFileHeader;
+    public int m_Version;
 
-    public static void SavePlanet (PlanetManager man)
+    public DRFileManager (PlanetManager man_p)
+    {
+        man = man_p;
+        filename = "save.dat";
+        path = "";
+        m_DataFileHeader = "DRIFTWORLD";
+        m_Version = 1;
+    }
+
+    public void SavePlanet ()
     {
         PlanetBinaryData data = new PlanetBinaryData();
         data.m_TectonicsPresent = (man.m_Planet.m_TectonicPlates.Count > 0); 
@@ -222,13 +235,20 @@ public static class SaveManager
         }
         filename = man.m_SaveFilename;
         Save(data);
+        Debug.Log("File " + filename + " saved: header [" + m_DataFileHeader + "], version " + m_Version);
     }
 
-    public static void Save(PlanetBinaryData data)
+    public void Save(PlanetBinaryData data)
     {
         FileStream fs = new FileStream(filename, FileMode.Create);
         byte[] value_buffer;
         bool tectonics_present = data.m_TectonicsPresent;
+        byte[] header_buffer = Encoding.ASCII.GetBytes(m_DataFileHeader);
+        value_buffer = BitConverter.GetBytes(header_buffer.Length);
+        fs.Write(value_buffer, 0, 4);
+        fs.Write(header_buffer, 0, header_buffer.Length);
+        value_buffer = BitConverter.GetBytes(m_Version);
+        fs.Write(value_buffer, 0, 4);
         value_buffer = BitConverter.GetBytes((data.m_TectonicsPresent) ? 1 : 0);
         fs.Write(value_buffer, 0, 4); // this might be an oopsie, dunno
         value_buffer = BitConverter.GetBytes(data.m_Radius);
@@ -433,7 +453,7 @@ public static class SaveManager
     }
 
 
-    public static void LoadPlanet(PlanetManager man)
+    public void LoadPlanet()
     {
         filename = man.m_SaveFilename;
         PlanetBinaryData data = Load();
@@ -606,7 +626,7 @@ public static class SaveManager
         man.RenderPlanet();
     }
 
-    public static PlanetBinaryData Load()
+    public PlanetBinaryData Load()
     {
         PlanetBinaryData data = new PlanetBinaryData();
         FileStream fs = new FileStream(filename, FileMode.Open);
@@ -618,11 +638,23 @@ public static class SaveManager
         ms.m_Buffer = bytes;
         fs.Close();
 
-
+        string header;
+        int header_size, version;
         byte[] value_read = new byte[4];
 
+        ms.Read(value_read, 0, 4);
+        header_size = BitConverter.ToInt32(value_read, 0);
+
+        byte[] header_read = new byte[header_size];
+        ms.Read(header_read, 0, header_size);
+        header = Encoding.ASCII.GetString(header_read);
+
+        ms.Read(value_read, 0, 4);
+        version = BitConverter.ToInt32(value_read, 0);
+
+
         ms.Read(value_read, 0, 4); // bool as an int
-        data.m_TectonicsPresent = (BitConverter.ToInt32(value_read, 0) > 0 ? true : false);
+        data.m_TectonicsPresent = BitConverter.ToInt32(value_read, 0) > 0 ? true : false;
         bool tectonics_present = data.m_TectonicsPresent;
         ms.Read(value_read, 0, 4);
         data.m_Radius = BitConverter.ToSingle(value_read, 0);
@@ -901,10 +933,11 @@ public static class SaveManager
             data.m_RenderTriangles.Add(triangle);
         }
 
+        Debug.Log("File " + filename + " loaded: header [" + header + "], version " + version);
         return data;
     }
 
-    public static void TextureSave(PlanetManager man)
+    public void TextureSave()
     {
         Texture2D tex = (Texture2D)man.m_Surface.GetComponent<Renderer>().sharedMaterial.GetTexture("_MainTex");
 
@@ -916,6 +949,115 @@ public static class SaveManager
         {
             Debug.LogError("No texture, cannot export!");
         }
+    }
+
+    // a single binary file must be formatted in the following manner:
+    // first 4 byte int is the number of vertices -> V_n
+    // V_n groups of 3*8 byte values (double) follow with the specific XYZ coordinates - the interpreter switches Y for Z because of Unity's coordinate system
+    // 4 byte int for the number of triangles -> T_n
+    // T_n 3*4 byte values (int) with the vertex indices for each triangle - matched to the read array of vertices
+    // V_n groups of vertex neighbours, each starts with 4 byte int for the number of neighbours -> Vng_n, then Vng_n 4 byte int values for neighbours indices in the vertex array
+    // T_n groups of triangle neighbours, each has three 4 byte int values as neighbours indices in the triangle array (assume correct spherical topology)
+    // NO CHECKS!
+    public void ReadMesh(out List<Vector3> vertices_p, out List<DRTriangle> triangles_p, out List<List<int>> vertices_neighbours_p, out List<List<int>> triangles_of_vertices_p, string filename)
+    {
+        List<Vector3> vertices = new List<Vector3>();
+        List<DRTriangle> triangles = new List<DRTriangle>();
+        List<List<int>> vertices_neighbours = new List<List<int>>();
+        List<List<int>> triangles_of_vertices = new List<List<int>>();
+        List<int> vertex_neighbours;
+        string file_path = Application.dataPath + @"\Data/" + filename;
+        if (!File.Exists(file_path))
+        {
+            Debug.LogError("file " + file_path + " does not exist");
+        }
+        else
+        {
+            FileStream ps = new FileStream(file_path, FileMode.Open);
+            byte[] buffer = new byte[ps.Length];
+            ps.Read(buffer, 0, buffer.Length);
+            SimpleReadStream fs = new SimpleReadStream();
+            fs.m_StreamIndex = 0;
+            fs.m_BufferSize = buffer.Length;
+            fs.m_Buffer = buffer;
+            ps.Close();
+            byte[] int_read = new byte[4];
+            int n_vertices, n_triangles, n_vertex_neighbours, vertex_neighbour_index;
+            fs.Read(int_read, 0, 4);
+            n_vertices = BitConverter.ToInt32(int_read, 0);
+            byte[] vectorx_read = new byte[8];
+            byte[] vectory_read = new byte[8];
+            byte[] vectorz_read = new byte[8];
+            for (int i = 0; i < n_vertices; i++)
+            {
+                fs.Read(vectorx_read, 0, 8);
+                fs.Read(vectory_read, 0, 8);
+                fs.Read(vectorz_read, 0, 8);
+                Vector3 new_vector = Vector3.zero;
+                new_vector.x = (float)BitConverter.ToDouble(vectorx_read, 0);
+                new_vector.z = (float)BitConverter.ToDouble(vectory_read, 0);
+                new_vector.y = (float)BitConverter.ToDouble(vectorz_read, 0);
+                vertices.Add(new_vector.normalized);
+                triangles_of_vertices.Add(new List<int>());
+            }
+
+            fs.Read(int_read, 0, 4);
+            n_triangles = BitConverter.ToInt32(int_read, 0);
+            byte[] trianglea_read = new byte[4];
+            byte[] triangleb_read = new byte[4];
+            byte[] trianglec_read = new byte[4];
+            int a, b, c;
+            for (int i = 0; i < n_triangles; i++)
+            {
+                fs.Read(trianglea_read, 0, 4);
+                fs.Read(triangleb_read, 0, 4);
+                fs.Read(trianglec_read, 0, 4);
+                a = BitConverter.ToInt32(trianglea_read, 0);
+                b = BitConverter.ToInt32(triangleb_read, 0);
+                c = BitConverter.ToInt32(trianglec_read, 0);
+                DRTriangle new_triangle = new DRTriangle(a, b, c, vertices);
+                triangles.Add(new_triangle);
+            }
+            byte[] n_vertex_neighbours_read = new byte[4];
+            byte[] neighbour_read = new byte[4];
+            for (int i = 0; i < n_vertices; i++)
+            {
+                vertex_neighbours = new List<int>();
+
+                fs.Read(n_vertex_neighbours_read, 0, 4);
+                n_vertex_neighbours = BitConverter.ToInt32(n_vertex_neighbours_read, 0);
+                vertex_neighbours.Add(n_vertex_neighbours);
+                for (int j = 0; j < n_vertex_neighbours; j++)
+                {
+                    fs.Read(neighbour_read, 0, 4);
+                    vertex_neighbour_index = BitConverter.ToInt32(neighbour_read, 0);
+                    vertex_neighbours.Add(vertex_neighbour_index);
+                }
+                vertices_neighbours.Add(vertex_neighbours);
+            }
+            for (int i = 0; i < n_triangles; i++)
+            {
+                fs.Read(trianglea_read, 0, 4);
+                fs.Read(triangleb_read, 0, 4);
+                fs.Read(trianglec_read, 0, 4);
+                a = BitConverter.ToInt32(trianglea_read, 0);
+                b = BitConverter.ToInt32(triangleb_read, 0);
+                c = BitConverter.ToInt32(trianglec_read, 0);
+                triangles[i].m_Neighbours.Add(a);
+                triangles[i].m_Neighbours.Add(b);
+                triangles[i].m_Neighbours.Add(c);
+                triangles_of_vertices[triangles[i].m_A].Add(i);
+                triangles_of_vertices[triangles[i].m_B].Add(i);
+                triangles_of_vertices[triangles[i].m_C].Add(i);
+            }
+
+
+            //fs.Close();
+        }
+        vertices_p = vertices;
+        triangles_p = triangles;
+        vertices_neighbours_p = vertices_neighbours;
+        triangles_of_vertices_p = triangles_of_vertices;
     }
 
 

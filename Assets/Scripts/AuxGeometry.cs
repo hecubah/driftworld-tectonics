@@ -4,10 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public class DRVector
-{
-}
-
 public class DRTriangle
 {
     public int m_A, m_B, m_C;

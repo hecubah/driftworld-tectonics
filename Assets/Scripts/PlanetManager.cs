@@ -34,6 +34,7 @@ public class PlanetManager : MonoBehaviour
 
     public SimulationSettings m_Settings = new SimulationSettings(); // settings instance for the editor
     public SimulationShaders m_Shaders = new SimulationShaders(); // shader import object instance for the editor
+    public DRFileManager m_FileManager = null; // file manager instance - initialized in PlanetEditor
 
     [HideInInspector] public TexOverlay m_TextureOverlay = TexOverlay.None; // Texture switch
     [HideInInspector] public RenderMode m_RenderMode = RenderMode.Render; // Render switch - keep at RenderMode.Render unless testing

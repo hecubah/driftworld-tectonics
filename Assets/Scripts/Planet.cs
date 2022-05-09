@@ -669,7 +669,7 @@ public class TectonicPlanet
     // Loads topology data from two files - data part from which crust data has then to be initialized, and render part that should normally be displayed
     public void LoadDefaultTopology(string data_filename, string render_filename)
     {
-        TopoMeshInterpreter.ReadMesh(out m_DataVertices, out m_DataTriangles, out m_DataVerticesNeighbours, out m_DataTrianglesOfVertices, data_filename); // Read the data part
+        m_PlanetManager.m_FileManager.ReadMesh(out m_DataVertices, out m_DataTriangles, out m_DataVerticesNeighbours, out m_DataTrianglesOfVertices, data_filename); // Read the data part
         m_VerticesCount = m_DataVertices.Count; // set the data vertices count
         m_TrianglesCount = m_DataTriangles.Count; // set the data triangles count
         List<BoundingVolume> m_BVTLeaves = new List<BoundingVolume>();
@@ -689,7 +689,7 @@ public class TectonicPlanet
             m_DataPointData.Add(new PointData()); // add new point data
         }
 
-        TopoMeshInterpreter.ReadMesh(out m_RenderVertices, out m_RenderTriangles, out m_RenderVerticesNeighbours, out m_RenderTrianglesOfVertices, render_filename); // Read the render part
+        m_PlanetManager.m_FileManager.ReadMesh(out m_RenderVertices, out m_RenderTriangles, out m_RenderVerticesNeighbours, out m_RenderTrianglesOfVertices, render_filename); // Read the render part
         m_RenderVerticesCount = m_RenderVertices.Count; // set the render vertices count
         m_RenderTrianglesCount = m_RenderTriangles.Count; // set the render triangles count
         foreach (DRTriangle it in m_RenderTriangles) // for all triangles in render
@@ -707,7 +707,7 @@ public class TectonicPlanet
     public void GenerateFractalTerrain ()
     {
 
-        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_FractalTerrainCShader;
+        ComputeShader work_shader = m_PlanetManager.m_Shaders.m_FractalTerrainShader;
 
         int kernelHandle = work_shader.FindKernel("CSFractalTerrain");
 

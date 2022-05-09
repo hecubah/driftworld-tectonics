@@ -1,5 +1,7 @@
-code documentation
+unified TopoMeshInterpreter into new non-static DRFileManager class
+corrected some obsolete code documentation
+added datafile headers
+work on code documentation
+minor code changes
+shader clean-up
 code clean-up
-texture saving
-fractal texture fix
-added this file
