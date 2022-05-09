@@ -904,5 +904,19 @@ public static class SaveManager
         return data;
     }
 
+    public static void TextureSave(PlanetManager man)
+    {
+        Texture2D tex = (Texture2D)man.m_Surface.GetComponent<Renderer>().sharedMaterial.GetTexture("_MainTex");
+
+        if (tex != null)
+        {
+            byte[] bytes = tex.EncodeToPNG();
+            File.WriteAllBytes(man.m_TextureSaveFilenamePNG, bytes);
+        } else
+        {
+            Debug.LogError("No texture, cannot export!");
+        }
+    }
+
 
 }

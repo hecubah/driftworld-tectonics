@@ -548,7 +548,6 @@ public class TectonicPlanet
         {
             CrustToData();
         }
-
         ComputeShader work_shader = m_PlanetManager.m_Shaders.m_VertexDataInterpolationShader;
 
         int kernelHandle = work_shader.FindKernel("CSDataToRender");
@@ -752,7 +751,8 @@ public class TectonicPlanet
         {
             m_DataPointData[i].elevation = elevations_output[i];
         }
-        elevations_output_buffer.Release();   
+        elevations_output_buffer.Release();
+        InitializeCBuffers();
     }
 
     // Create new crust as random centroid set Voronoi map

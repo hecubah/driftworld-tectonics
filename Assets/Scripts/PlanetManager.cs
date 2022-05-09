@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public enum TexOverlay
@@ -13,111 +11,139 @@ public enum RenderMode
     Crust, Data, Render
 }
 
+/// <summary>
+/// Unity script holding the whole project together. Keeps track of planet data, settings and imported shaders. Relies on GUI Editor controls.
+/// Attached to a GameObject named 'Planet'
+/// </summary>
 [Serializable]
 public class PlanetManager : MonoBehaviour
 {
-    [HideInInspector] public GameObject m_Surface = null;
-    public TectonicPlanet m_Planet = null;
+    [HideInInspector] public GameObject m_Surface = null; // Rendered GameObject in Unity
+    public TectonicPlanet m_Planet = null; // Object containing all planetary data
 
-    public string m_DataMeshFilename = "";
-    public string m_RenderMeshFilename = "";
-    public string m_SaveFilename = "";
+    public string m_DataMeshFilename = ""; // filename with sphere Delauney triangulation & topology - data layer
+    public string m_RenderMeshFilename = ""; // filename with sphere Delauney triangulation & topology - render layer
+    public string m_SaveFilename = ""; // filename to save & restore planetary data
+    public string m_TextureSaveFilenamePNG = ""; // filename to save & restore planetary data
 
-    public uint m_RandomSeed = 0;
-    public int m_TectonicIterationSteps = 10;
-    public float m_ElevationScaleFactor = 1;
+    public uint m_RandomSeed = 0; // RNG initialization seed
+    public int m_TectonicIterationSteps = 10; // number of tectonic steps taken at a time
+    public float m_ElevationScaleFactor = 1; // rendering option to emphasize terrain
 
-    public RandomMersenne m_Random;
+    public RandomMersenne m_Random; // RNG instance
 
-    public SimulationSettings m_Settings = new SimulationSettings();
-    public SimulationShaders m_Shaders = new SimulationShaders();
+    public SimulationSettings m_Settings = new SimulationSettings(); // settings instance for the editor
+    public SimulationShaders m_Shaders = new SimulationShaders(); // shader import object instance for the editor
 
-    [HideInInspector] public TexOverlay m_TextureOverlay = TexOverlay.None;
-    [HideInInspector] public RenderMode m_RenderMode = RenderMode.Render;
-    [HideInInspector] public bool m_OverlayOnRender = false;
-    [HideInInspector] public bool m_PropagateCrust = false;
-    [HideInInspector] public bool m_PropagateData = false;
-    [HideInInspector] public bool m_ClampToOceanLevel = false;
+    [HideInInspector] public TexOverlay m_TextureOverlay = TexOverlay.None; // Texture switch
+    [HideInInspector] public RenderMode m_RenderMode = RenderMode.Render; // Render switch - keep at RenderMode.Render unless testing
+    [HideInInspector] public bool m_OverlayOnRender = true; // paint texture when rendering m_Surface
+    [HideInInspector] public bool m_PropagateCrust = true; // propagate data from crust layer to data layer
+    [HideInInspector] public bool m_PropagateData = true; // propagate data from data layer to render layer
+    [HideInInspector] public bool m_ClampToOceanLevel = false; // render ocean as a zero elevation terrain
 
-    [HideInInspector] public bool m_StepMovePlates = false;
-    [HideInInspector] public bool m_StepSubductionUplift = false;
-    [HideInInspector] public bool m_StepSlabPull = false;
-    [HideInInspector] public bool m_StepErosionDamping = false;
-    [HideInInspector] public bool m_SedimentAccretion = false;
-    [HideInInspector] public bool m_ContinentalCollisions = false;
-    [HideInInspector] public bool m_PlateRifting = false;
+    [HideInInspector] public bool m_StepMovePlates = true; // move tectonic plates on TectonicStep (oTS)
+    [HideInInspector] public bool m_StepSubductionUplift = true; // calculate and apply subduction of plates oTS
+    [HideInInspector] public bool m_StepSlabPull = true; // plate rotation axis drag by subduction oTS
+    [HideInInspector] public bool m_StepErosionDamping = false; // erode continents and damp ocean floors oTS
+    [HideInInspector] public bool m_SedimentAccretion = false; // sediment accretion on ocean floors (changed to trenches) oTS
+    [HideInInspector] public bool m_ContinentalCollisions = false; // calculate and apply continental collisins oTS
+    [HideInInspector] public bool m_PlateRifting = false; // occasional plate rifts on largest plates oTS
 
+    // editor variables - foldouts for GUI compartmentalization
     [HideInInspector] public bool m_FoldoutRenderOptions = false;
     [HideInInspector] public bool m_FoldoutTectonics = false;
     [HideInInspector] public bool m_FoldoutDataManipulation = false;
     [HideInInspector] public bool m_FoldoutDiagnostics = false;
     [HideInInspector] public bool m_FoldoutWIPTools = false;
 
+    /// <summary>
+    /// Testing function - slot 1
+    /// </summary>
     public void DebugFunction()
-    {
+    {        
     }
 
+    /// <summary>
+    /// Testing function - slot 2
+    /// </summary>
     public void DebugFunction2()
     {
     }
 
+    /// <summary>
+    /// Testing function - slot 3
+    /// </summary>
     public void DebugFunction3()
     {
     }
 
+    /// <summary>
+    /// Testing function - slot 4
+    /// </summary>
     public void DebugFunction4()
     {
     }
 
-    // Start is called before the first frame update
+    /// <summary>
+    /// Placeholder because MonoBehaviour
+    /// </summary>
     void Start()
     {
     }
 
-    // Update is called once per frame
+    /// <summary>
+    /// Placeholder because MonoBehaviour
+    /// </summary>
     void Update()
     {
         
     }
 
+    /// <summary>
+    /// Set up a new render object unless already existing, load topology from a template file and create basic vector noise over triangles
+    /// </summary>
     public void LoadNewPlanet()
     {
-        if (m_Surface == null)
+        if (m_Surface == null) // if no render object
         {
-            m_Surface = new GameObject("Surface");
-            m_Surface.transform.parent = transform;
-            MeshFilter newMeshFilter = m_Surface.AddComponent<MeshFilter>();
-            m_Surface.AddComponent<MeshRenderer>().sharedMaterial = new Material(Shader.Find("Custom/SphereTextureShader"));
-            newMeshFilter.sharedMesh = new Mesh();
+            m_Surface = new GameObject("Surface"); // create new GameObject to render
+            m_Surface.transform.parent = transform; // set to Planet GameObject transform
+            MeshFilter newMeshFilter = m_Surface.AddComponent<MeshFilter>(); // new mesh reference because the rendered object is created from topology data
+            m_Surface.AddComponent<MeshRenderer>().sharedMaterial = new Material(Shader.Find("Custom/SphereTextureShader")); // custom shader for correct texturing
+            newMeshFilter.sharedMesh = new Mesh(); // set a new mesh
         }
-        if (m_Random == null)
+        if (m_Random == null) // initialize a new RNG if it does not exist
         {
             m_Random = new RandomMersenne(m_RandomSeed);
         }
-        m_Planet = new TectonicPlanet(m_Settings.PlanetRadius);
-        m_Planet.LoadDefaultTopology(m_DataMeshFilename, m_RenderMeshFilename);
-        m_Planet.CreateVectorNoise();
-        m_Planet.InitializeCBuffers();
-        RenderPlanet();
+        m_Planet = new TectonicPlanet(m_Settings.PlanetRadius); // create a new planetary object
+        m_Planet.LoadDefaultTopology(m_DataMeshFilename, m_RenderMeshFilename); // load a template file
+        m_Planet.CreateVectorNoise(); // create a vector noise overlay
+        m_Planet.InitializeCBuffers(); // initialize persistent shader buffers
+        RenderPlanet(); // show planet
     }
 
+    /// <summary>
+    /// Unified function for planet rendering, with switched overlays and different layers.
+    /// </summary>
     public void RenderPlanet()
     {
-        MeshFilter meshFilter = m_Surface.GetComponent<MeshFilter>();
-        meshFilter.sharedMesh.Clear();
-        Vector3[] vertices;
-        int[] triangles;
-        switch (m_RenderMode)
+        MeshFilter meshFilter = m_Surface.GetComponent<MeshFilter>(); // mesh to be altered
+        meshFilter.sharedMesh.Clear(); // clear old mesh
+        Vector3[] vertices; // vertex array to be fed to the mesh
+        int[] triangles; // triangle array to be fed to the mesh
+        switch (m_RenderMode) // render is driven by the RenderMode switch variable
         {
             case RenderMode.Crust:
-                if (m_Planet.m_TectonicPlates.Count > 0)
+                if (m_Planet.m_TectonicPlates.Count > 0) // render crust layer only when there are tectonic plates
                 {
                     m_Planet.CrustMesh(out vertices, out triangles);
                 }
                 else
                 {
                     Debug.Log("No tectonic plates, rendering data layer.");
-                    m_RenderMode = RenderMode.Data;
+                    m_RenderMode = RenderMode.Data; // switch if no crust layer
                     m_Planet.DataMesh(out vertices, out triangles, m_PropagateCrust);
                 }
                 break;
@@ -131,45 +157,45 @@ public class PlanetManager : MonoBehaviour
                 m_Planet.NormalMesh(out vertices, out triangles, m_PropagateData, m_PropagateCrust);
                 break;
         }
-        meshFilter.sharedMesh.vertices = vertices;
-        meshFilter.sharedMesh.triangles = triangles;
-        meshFilter.sharedMesh.RecalculateNormals();
-        if (m_OverlayOnRender)
+        meshFilter.sharedMesh.vertices = vertices; // assigned vertices from mesh functions
+        meshFilter.sharedMesh.triangles = triangles; // assigned triangles from mesh functions
+        meshFilter.sharedMesh.RecalculateNormals(); // recalculate normals on the readied mesh
+        if (m_OverlayOnRender) // if an overlay is allowed, switch between functions that create a texture
         {
-            Texture2D tex = null;
-            bool problem = false;
-            bool no_overlay = false;
+            Texture2D tex = null; // value assigned by the texturing functions - all use compute shaders
+            bool problem = false; // detect missing crust on crust plates overlay etc.
+            bool no_overlay = false; // overlay presence switch - on false remove texture
             switch (m_TextureOverlay)
             {
-                case TexOverlay.None:
+                case TexOverlay.None: // wash texture
                     no_overlay = true;
                     break;
-                case TexOverlay.BasicTerrain:
+                case TexOverlay.BasicTerrain: // green on points above or equal to zero elevation, blue below
                     if (m_RenderMode == RenderMode.Crust)
                     {
                         if (m_PropagateCrust)
                         {
-                            m_Planet.CrustToData();
+                            m_Planet.CrustToData(); // interpolate crust layer to data
                         }
                         else
                         {
-                            problem = true;
+                            problem = true; // no interpolation available or disabled
 
                         }
                     }
                     if (problem)
                     {
-                        tex = MissingDataTexture();
+                        tex = MissingDataTexture(); // return default missing data texture
                     }
                     else
                     {
-                        tex = OverlayBasicTerrain();
+                        tex = OverlayBasicTerrain(); // return texture normally
                     }
                     break;
-                case TexOverlay.DebugDataTriangles:
+                case TexOverlay.DebugDataTriangles: // paint individual triangles on data layer
                     tex = OverlayDebugDataTriangles();
                     break;
-                case TexOverlay.DebugCrustTriangles:
+                case TexOverlay.DebugCrustTriangles: // paint individual transformed crust plate triangles on data layer
                     if (m_Planet.m_TectonicPlates.Count == 0)
                     {
                         Debug.LogError("Debug Crust Triangle overlay impossible when there are no plates.");
@@ -184,7 +210,7 @@ public class PlanetManager : MonoBehaviour
                         tex = OverlayDebugCrustTriangles();
                     }
                     break;
-                case TexOverlay.CrustPlates:
+                case TexOverlay.CrustPlates: // paint transformed crust plates on data layer
                     if (m_Planet.m_TectonicPlates.Count == 0)
                     {
                         Debug.LogError("Plate borders overlay impossible when there are no plates.");
@@ -199,7 +225,7 @@ public class PlanetManager : MonoBehaviour
                         tex = OverlayCrustPlates();
                     }
                     break;
-                case TexOverlay.CrustAge:
+                case TexOverlay.CrustAge: // paint crust age on data layer
                     if (m_Planet.m_TectonicPlates.Count == 0)
                     {
                         Debug.LogError("Crust age overlay impossible when there are no plates.");
@@ -214,7 +240,7 @@ public class PlanetManager : MonoBehaviour
                         tex = OverlayCrustAge();
                     }
                     break;
-                case TexOverlay.Orogeny:
+                case TexOverlay.Orogeny: // paint crust orogeny on data layer
                     if (m_Planet.m_TectonicPlates.Count == 0)
                     {
                         Debug.LogError("Crust age overlay impossible when there are no plates.");
@@ -229,7 +255,7 @@ public class PlanetManager : MonoBehaviour
                         tex = OverlayOrogeny();
                     }
                     break;
-                case TexOverlay.ElevationLaplacian:
+                case TexOverlay.ElevationLaplacian: // paint elevation values graph laplacian on data layer
                     if (m_RenderMode == RenderMode.Crust)
                     {
                         if (m_PropagateCrust)
@@ -251,37 +277,41 @@ public class PlanetManager : MonoBehaviour
                         tex = OverlayElevationLaplacian();
                     }
                     break;
-                case TexOverlay.DebugVectorNoise:
+                case TexOverlay.DebugVectorNoise: // paint a representation of vector noise on data layer - hue is longitude angle, saturation length
                     tex = OverlayDebugVectorNoise();
                     break;
-                default:
+                default: // wash texture if unknown overlay
                     no_overlay = true;
                     break;
             }
-            if (no_overlay)
+            if (no_overlay) // wash when no overlay
             {
                 m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null); // remove the planet texture
                 GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null); // remove the plane texture
-            } else
+            } else // normal function - texture the object, missing data or error texture included
             {
-                GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
-                m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex);
+                GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex); // set the planet texture
+                m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", tex); // set the plane texture
             }
-        } else
+        } else // if overlay is switched off, wash texture
         {
             m_Surface.GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null); // remove the planet texture
             GameObject.Find("TexturePlane").GetComponent<Renderer>().sharedMaterial.SetTexture("_MainTex", null); // remove the plane texture
         }
     }
 
+    /// <summary>
+    /// Single color texture if data is missing or other unspecified error.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D MissingDataTexture()
     {
-        Texture2D tex = new Texture2D(4096,4096);
+        Texture2D tex = new Texture2D(4096,4096); // all textures are 4096x4096
         for (int i = 0; i < tex.height; i++)
         {
             for (int j = 0; j < tex.width; j++)
             {
-                tex.SetPixel(i, j, Color.red);
+                tex.SetPixel(i, j, Color.red); // red color by default
             }
         }
         tex.Apply ();
@@ -289,111 +319,48 @@ public class PlanetManager : MonoBehaviour
 
     }
 
+    /// <summary>
+    /// Simple green on non-negative elevation, blue for negative.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D OverlayBasicTerrain()
     {
 
-        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader; // unified shader variable
 
-        int kernelHandle = work_shader.FindKernel("CSOverlayTextureBasicTerrain");
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureBasicTerrain"); // kernel handle switch
 
-        m_Planet.UpdateCBBuffers();
-        /*
-        work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
-        work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
-        work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
-        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
+        m_Planet.UpdateCBBuffers(); // update persistent buffers
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]); // basic data vertices positions for interpolating
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]); // PointData information 
 
-        work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_Planet.m_CBuffers["overlap_matrix"]);
-        work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
-        work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
-        work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
-        */
-        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
-        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount); // number of data vertices, used for determining thread IDs bijection to data vertices
 
-        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]); // bounding volume hiearchy array for point look-up
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]); // data triangles for look-up and final interpolation
 
-        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
-        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
-        //work_shader.SetFloat("ocean_base_floor", m_Settings.OceanBaseFloor);
-
-        //work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation);
-        //work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation);
-        //work_shader.SetFloat("oceanic_ridge_elevation_falloff", m_PlanetManager.m_Settings.OceanicRidgeElevationFalloff);
-
-        //work_shader.SetInt("n_data_vertices", m_VerticesCount);
-
-        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles", m_CBuffers["crust_border_triangles"]);
-        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles_sps", m_CBuffers["crust_border_triangles_sps"]);
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24); // initialize a uniform 4096 x 4096 texture
+        com_tex.enableRandomWrite = true; // pixels will be rewritten by the shader output
+        com_tex.Create(); // initialize texture in memory
 
 
-        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
-        com_tex.enableRandomWrite = true;
-        com_tex.Create();
+        work_shader.SetTexture(kernelHandle, "Result", com_tex); // link texture to shader output
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1); // run the shader - ids correspond to thread batches to correctly identify individual pixels (1 pixel per thread)
 
+        RenderTexture.active = com_tex; // assign the texture to currently active render texture
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height); // create new Texture2D
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0); // read the shader output into the new texture
+        RenderTexture.active = null; // unassign the currently active  render texture
+        com_tex.Release(); // release the shader texture
+        tex.Apply(); // apply the new texture changes
+        return tex; // return texture
 
-        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
-        work_shader.SetTexture(kernelHandle, "Result", com_tex);
-        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
-
-        RenderTexture.active = com_tex;
-        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
-        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
-        RenderTexture.active = null;
-        com_tex.Release();
-        tex.Apply();
-        return tex;
-
-        /*
-        int kernelHandle = m_Shaders.m_DefaultTerrainTextureCShader.FindKernel("CSDefaultTerrainTexture");
-
-        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
-        com_tex.enableRandomWrite = true;
-        com_tex.Create();
-
-        Vector3[] triangle_points = new Vector3[3 * m_Planet.m_TrianglesCount];
-        float[] point_values = new float[3 * m_Planet.m_TrianglesCount];
-        int[] triangle_neighbours = new int[3 * m_Planet.m_TrianglesCount];
-        for (int i = 0; i < m_Planet.m_TrianglesCount; i++)
-        {
-            triangle_points[3 * i + 0] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_A];
-            triangle_points[3 * i + 1] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_B];
-            triangle_points[3 * i + 2] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_C];
-            point_values[3 * i + 0] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_A].elevation;
-            point_values[3 * i + 1] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_B].elevation;
-            point_values[3 * i + 2] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_C].elevation;
-            triangle_neighbours[3 * i + 0] = m_Planet.m_DataTriangles[i].m_Neighbours[0];
-            triangle_neighbours[3 * i + 1] = m_Planet.m_DataTriangles[i].m_Neighbours[1];
-            triangle_neighbours[3 * i + 2] = m_Planet.m_DataTriangles[i].m_Neighbours[2];
-        }
-
-        ComputeBuffer triangle_points_buffer = new ComputeBuffer(triangle_points.Length, 12, ComputeBufferType.Default);
-        ComputeBuffer point_values_buffer = new ComputeBuffer(point_values.Length, 4, ComputeBufferType.Default);
-        ComputeBuffer triangle_neighbours_buffer = new ComputeBuffer(triangle_neighbours.Length, 4, ComputeBufferType.Default);
-        triangle_points_buffer.SetData(triangle_points);
-        point_values_buffer.SetData(point_values);
-        triangle_neighbours_buffer.SetData(triangle_neighbours);
-
-        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
-        m_Shaders.m_DefaultTerrainTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
-        triangle_points_buffer.Release();
-        point_values_buffer.Release();
-        triangle_neighbours_buffer.Release();
-
-        RenderTexture.active = com_tex;
-        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
-        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
-        RenderTexture.active = null;
-        com_tex.Release();
-        tex.Apply();
-        return tex;
-        */
     }
 
+    /// <summary>
+    /// Colored data triangles. Sorting visible on hue patterns as the hue is rotated in order.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D OverlayDebugDataTriangles()
     {
 
@@ -402,17 +369,6 @@ public class PlanetManager : MonoBehaviour
         int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugDataTriangles");
 
         m_Planet.UpdateCBBuffers();
-        /*
-        work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
-        work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
-        work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
-        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
-
-        work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_Planet.m_CBuffers["overlap_matrix"]);
-        work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
-        work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
-        work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
-        */
         work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
         work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
 
@@ -420,16 +376,6 @@ public class PlanetManager : MonoBehaviour
 
         work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
         work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
-        //work_shader.SetFloat("ocean_base_floor", m_Settings.OceanBaseFloor);
-
-        //work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation);
-        //work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation);
-        //work_shader.SetFloat("oceanic_ridge_elevation_falloff", m_PlanetManager.m_Settings.OceanicRidgeElevationFalloff);
-
-        //work_shader.SetInt("n_data_vertices", m_VerticesCount);
-
-        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles", m_CBuffers["crust_border_triangles"]);
-        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles_sps", m_CBuffers["crust_border_triangles_sps"]);
 
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
@@ -437,7 +383,6 @@ public class PlanetManager : MonoBehaviour
         com_tex.Create();
 
 
-        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
         work_shader.SetTexture(kernelHandle, "Result", com_tex);
         work_shader.Dispatch(kernelHandle, 256, 1024, 1);
 
@@ -449,56 +394,12 @@ public class PlanetManager : MonoBehaviour
         tex.Apply();
         return tex;
 
-        /*
-        int kernelHandle = m_Shaders.m_DefaultTerrainTextureCShader.FindKernel("CSDefaultTerrainTexture");
-
-        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
-        com_tex.enableRandomWrite = true;
-        com_tex.Create();
-
-        Vector3[] triangle_points = new Vector3[3 * m_Planet.m_TrianglesCount];
-        float[] point_values = new float[3 * m_Planet.m_TrianglesCount];
-        int[] triangle_neighbours = new int[3 * m_Planet.m_TrianglesCount];
-        for (int i = 0; i < m_Planet.m_TrianglesCount; i++)
-        {
-            triangle_points[3 * i + 0] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_A];
-            triangle_points[3 * i + 1] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_B];
-            triangle_points[3 * i + 2] = m_Planet.m_DataVertices[m_Planet.m_DataTriangles[i].m_C];
-            point_values[3 * i + 0] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_A].elevation;
-            point_values[3 * i + 1] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_B].elevation;
-            point_values[3 * i + 2] = m_Planet.m_DataPointData[m_Planet.m_DataTriangles[i].m_C].elevation;
-            triangle_neighbours[3 * i + 0] = m_Planet.m_DataTriangles[i].m_Neighbours[0];
-            triangle_neighbours[3 * i + 1] = m_Planet.m_DataTriangles[i].m_Neighbours[1];
-            triangle_neighbours[3 * i + 2] = m_Planet.m_DataTriangles[i].m_Neighbours[2];
-        }
-
-        ComputeBuffer triangle_points_buffer = new ComputeBuffer(triangle_points.Length, 12, ComputeBufferType.Default);
-        ComputeBuffer point_values_buffer = new ComputeBuffer(point_values.Length, 4, ComputeBufferType.Default);
-        ComputeBuffer triangle_neighbours_buffer = new ComputeBuffer(triangle_neighbours.Length, 4, ComputeBufferType.Default);
-        triangle_points_buffer.SetData(triangle_points);
-        point_values_buffer.SetData(point_values);
-        triangle_neighbours_buffer.SetData(triangle_neighbours);
-
-        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
-        m_Shaders.m_DefaultTerrainTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
-        m_Shaders.m_DefaultTerrainTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
-        triangle_points_buffer.Release();
-        point_values_buffer.Release();
-        triangle_neighbours_buffer.Release();
-
-        RenderTexture.active = com_tex;
-        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
-        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
-        RenderTexture.active = null;
-        com_tex.Release();
-        tex.Apply();
-        return tex;
-        */
     }
 
+    /// <summary>
+    /// Paint top crust plates on data layer, hue scaled to number of plates.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D OverlayCrustPlates()
     {
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
@@ -515,27 +416,6 @@ public class PlanetManager : MonoBehaviour
         work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
         work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
         work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
-
-/*
-        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
-        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
-
-        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
-
-        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
-        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
-*/
-        //work_shader.SetFloat("ocean_base_floor", m_Settings.OceanBaseFloor);
-
-        //work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation);
-        //work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation);
-        //work_shader.SetFloat("oceanic_ridge_elevation_falloff", m_PlanetManager.m_Settings.OceanicRidgeElevationFalloff);
-
-        //work_shader.SetInt("n_data_vertices", m_VerticesCount);
-
-        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles", m_CBuffers["crust_border_triangles"]);
-        //work_shader.SetBuffer(kernelHandle, "crust_border_triangles_sps", m_CBuffers["crust_border_triangles_sps"]);
-
 
         RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
         com_tex.enableRandomWrite = true;
@@ -554,113 +434,12 @@ public class PlanetManager : MonoBehaviour
         tex.Apply();
         return tex;
 
-        /*
-        int kernelHandle = m_Shaders.m_PlatesAreaTextureCShader.FindKernel("CSPlatesAreaTexture");
-
-        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
-        com_tex.enableRandomWrite = true;
-        com_tex.Create();
-
-        Vector3[] triangle_points = new Vector3[3 * m_Planet.m_TrianglesCount];
-        int[] point_values = new int[3 * m_Planet.m_TrianglesCount];
-        int[] triangle_neighbours = new int[3 * m_Planet.m_TrianglesCount];
-        for (int i = 0; i < m_Planet.m_TrianglesCount; i++)
-        {
-            triangle_points[3 * i + 0] = m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_A];
-            triangle_points[3 * i + 1] = m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_B];
-            triangle_points[3 * i + 2] = m_Planet.m_CrustVertices[m_Planet.m_CrustTriangles[i].m_C];
-            point_values[3 * i + 0] = m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_A].plate;
-            point_values[3 * i + 1] = m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_B].plate;
-            point_values[3 * i + 2] = m_Planet.m_CrustPointData[m_Planet.m_CrustTriangles[i].m_C].plate;
-            triangle_neighbours[3 * i + 0] = m_Planet.m_CrustTriangles[i].m_Neighbours[0];
-            triangle_neighbours[3 * i + 1] = m_Planet.m_CrustTriangles[i].m_Neighbours[1];
-            triangle_neighbours[3 * i + 2] = m_Planet.m_CrustTriangles[i].m_Neighbours[2];
-        }
-
-        int[] overlap_matrix = new int[m_Planet.m_TectonicPlatesCount * m_Planet.m_TectonicPlatesCount];
-        int[] BVH_array_sizes = new int[m_Planet.m_TectonicPlatesCount];
-        List<BoundingVolumeStruct> BVArray_pass = new List<BoundingVolumeStruct>();
-        Vector4[] plate_transforms = new Vector4[m_Planet.m_TectonicPlatesCount];
-
-        int[] vertex_plates = new int[m_Planet.m_VerticesCount];
-        for (int i = 0; i < m_Planet.m_VerticesCount; i++)
-        {
-            vertex_plates[i] = m_Planet.m_CrustPointData[i].plate;
-        }
-
-        for (int i = 0; i < m_Planet.m_TectonicPlatesCount; i++)
-        {
-            for (int j = 0; j < m_Planet.m_TectonicPlatesCount; j++)
-            {
-                overlap_matrix[i * m_Planet.m_TectonicPlatesCount + j] = m_Planet.m_PlatesOverlap[i, j];
-            }
-            BVH_array_sizes[i] = m_Planet.m_TectonicPlates[i].m_BVHArray.Count;
-            BVArray_pass.AddRange(m_Planet.m_TectonicPlates[i].m_BVHArray);
-            Vector4 added_transform = new Vector4();
-            added_transform.x = m_Planet.m_TectonicPlates[i].m_Transform.x;
-            added_transform.y = m_Planet.m_TectonicPlates[i].m_Transform.y;
-            added_transform.z = m_Planet.m_TectonicPlates[i].m_Transform.z;
-            added_transform.w = m_Planet.m_TectonicPlates[i].m_Transform.w;
-            plate_transforms[i] = added_transform;
-
-        }
-        BoundingVolumeStruct[] BVArray_finished = BVArray_pass.ToArray();
-
-        ComputeBuffer triangle_points_buffer = new ComputeBuffer(triangle_points.Length, 12, ComputeBufferType.Default);
-        ComputeBuffer point_values_buffer = new ComputeBuffer(point_values.Length, 4, ComputeBufferType.Default);
-        ComputeBuffer overlap_matrix_buffer = new ComputeBuffer(overlap_matrix.Length, 4, ComputeBufferType.Default);
-        ComputeBuffer BVH_array_sizes_buffer = new ComputeBuffer(BVH_array_sizes.Length, 4, ComputeBufferType.Default);
-        ComputeBuffer BVArray_finished_buffer = new ComputeBuffer(BVArray_finished.Length, 32, ComputeBufferType.Default);
-        ComputeBuffer plate_transforms_buffer = new ComputeBuffer(plate_transforms.Length, 16, ComputeBufferType.Default);
-        ComputeBuffer triangle_neighbours_buffer = new ComputeBuffer(triangle_neighbours.Length, 4, ComputeBufferType.Default);
-        ComputeBuffer vertex_plates_buffer = new ComputeBuffer(vertex_plates.Length, 4, ComputeBufferType.Default);
-
-
-        triangle_points_buffer.SetData(triangle_points);
-        point_values_buffer.SetData(point_values);
-        triangle_neighbours_buffer.SetData(triangle_neighbours);
-        vertex_plates_buffer.SetData(vertex_plates);
-
-        overlap_matrix_buffer.SetData(overlap_matrix);
-        BVH_array_sizes_buffer.SetData(BVH_array_sizes);
-        BVArray_finished_buffer.SetData(BVArray_finished);
-        plate_transforms_buffer.SetData(plate_transforms);
-
-        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_points", triangle_points_buffer);
-        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "point_values", point_values_buffer);
-        m_Shaders.m_PlatesAreaTextureCShader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
-
-        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "overlap_matrix", overlap_matrix_buffer);
-        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array_sizes", BVH_array_sizes_buffer);
-        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "BVH_array", BVArray_finished_buffer);
-        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "plate_transforms", plate_transforms_buffer);
-        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "triangle_neighbours", triangle_neighbours_buffer);
-        m_Shaders.m_PlatesAreaTextureCShader.SetBuffer(kernelHandle, "vertex_plates", vertex_plates_buffer);
-
-        m_Shaders.m_PlatesAreaTextureCShader.SetTexture(kernelHandle, "Result", com_tex);
-        m_Shaders.m_PlatesAreaTextureCShader.Dispatch(kernelHandle, 256, 1024, 1);
-
-        triangle_points_buffer.Release();
-        point_values_buffer.Release();
-
-        overlap_matrix_buffer.Release();
-        BVH_array_sizes_buffer.Release();
-        BVArray_finished_buffer.Release();
-        plate_transforms_buffer.Release();
-
-        triangle_neighbours_buffer.Release();
-        vertex_plates_buffer.Release();
-
-        RenderTexture.active = com_tex;
-        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
-        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
-        RenderTexture.active = null;
-        tex.Apply();
-        com_tex.Release();
-        return tex;
-        */
     }
 
+    /// <summary>
+    /// Paint hue scaled crust age on data layer, red is older
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D OverlayCrustAge()
     {
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
@@ -699,6 +478,10 @@ public class PlanetManager : MonoBehaviour
 
     }
 
+    /// <summary>
+    /// Paint hue differentiated orogeny, red is unknown, yellow Andean and green Himalayan
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D OverlayOrogeny()
     {
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
@@ -707,8 +490,6 @@ public class PlanetManager : MonoBehaviour
 
         m_Planet.UpdateCBBuffers();
 
-        //work_shader.SetFloat("tectonic_iteration_step_time", m_Settings.TectonicIterationStepTime);
-        //work_shader.SetInt("total_tectonic_steps_taken", m_Planet.m_TotalTectonicStepsTaken);
         work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
         work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
 
@@ -723,7 +504,6 @@ public class PlanetManager : MonoBehaviour
         com_tex.Create();
 
 
-        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
         work_shader.SetTexture(kernelHandle, "Result", com_tex);
         work_shader.Dispatch(kernelHandle, 256, 1024, 1);
 
@@ -736,6 +516,10 @@ public class PlanetManager : MonoBehaviour
         return tex;
     }
 
+    /// <summary>
+    /// Colored crust triangles. Sorting visible on hue patterns as the hue is rotated in order.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D OverlayDebugCrustTriangles()
     {
 
@@ -773,6 +557,10 @@ public class PlanetManager : MonoBehaviour
         return tex;
     }
 
+    /// <summary>
+    /// Paint elevation values graph laplacian. Redder hue indicates more extreme values.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D OverlayElevationLaplacian()
     {
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
@@ -820,7 +608,6 @@ public class PlanetManager : MonoBehaviour
         com_tex.Create();
 
 
-        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
         work_shader.SetTexture(kernelHandle, "Result", com_tex);
         work_shader.Dispatch(kernelHandle, 256, 1024, 1);
 
@@ -836,6 +623,11 @@ public class PlanetManager : MonoBehaviour
 
     }
 
+    /// <summary>
+    /// Paint vector noise values at triangles. hue represents relative angle, saturation length value.
+    /// It is flawed, there is a hue bias. However, it gives sufficient representation of the noise.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
     public Texture2D OverlayDebugVectorNoise()
     {
 
@@ -851,7 +643,6 @@ public class PlanetManager : MonoBehaviour
 
         m_Planet.UpdateCBBuffers();
         work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
-        //work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
 
         work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
 
@@ -865,7 +656,6 @@ public class PlanetManager : MonoBehaviour
         com_tex.Create();
 
 
-        //work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
         work_shader.SetTexture(kernelHandle, "Result", com_tex);
         work_shader.Dispatch(kernelHandle, 256, 1024, 1);
 
