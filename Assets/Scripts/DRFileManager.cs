@@ -1,25 +1,31 @@
-using System.Collections;
 using System.Collections.Generic;
 using System;
 using System.IO;
 using System.Text;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
 
+/// <summary>
+/// Simplified reading stream to accelerate loading of larger files. Instances keep all data in memory.
+/// </summary>
 public class SimpleReadStream
 {
-    public int m_StreamIndex;
-    public byte[] m_Buffer;
-    public int m_BufferSize;
+    public int m_StreamIndex; // Byte position in a stream
+    public byte[] m_Buffer; // byte array of data in a stream
+    public int m_BufferSize; // length of the buffer
 
-    public SimpleReadStream()
+    public SimpleReadStream() // basic constructor
     {
         m_StreamIndex = 0; 
         m_BufferSize = 0;
         m_Buffer = null;
     }
 
+    /// <summary>
+    /// Modelled after C# stream function Read.
+    /// </summary>
+    /// <param name="output"></param>
+    /// <param name="offset"></param>
+    /// <param name="length"></param>
     public void Read(byte[] output, int offset, int length)
     {
         for (int i = 0; i < length; i++)
@@ -29,6 +35,9 @@ public class SimpleReadStream
     }
 }
 
+/// <summary>
+/// Serializable version of Vector3 for data files.
+/// </summary>
 [System.Serializable]
 public class Vector3Serial
 {
@@ -52,6 +61,9 @@ public class Vector3Serial
     }
 }
 
+/// <summary>
+/// Serializable version of Quaternion.
+/// </summary>
 [System.Serializable]
 public class QuaternionSerial
 {
@@ -76,6 +88,9 @@ public class QuaternionSerial
     }
 }
 
+/// <summary>
+/// Serializable version of DRTriangle. Simplified, only contains vertex indices and neighbours.
+/// </summary>
 [System.Serializable]
 public class DRTriangleSerial
 {
@@ -95,9 +110,11 @@ public class DRTriangleSerial
     {
         a = tri.m_A; b = tri.m_B; c = tri.m_C; neigh1 = tri.m_Neighbours[0]; neigh2 = tri.m_Neighbours[1]; neigh3 = tri.m_Neighbours[2];
     }
-
 }
 
+/// <summary>
+/// Serialized version of Plate. References must be supplied and BVH reconstructed upon load.
+/// </summary>
 [System.Serializable]
 public class PlateSerial
 {
@@ -121,17 +138,18 @@ public class PlateSerial
         m_Transform = new QuaternionSerial(plate.m_Transform);
         m_Centroid = new Vector3Serial (plate.m_Centroid);
     }
-
 }
 
-
+/// <summary>
+/// Main data model for files. Only contains data needed for reconstruction or data that would be too resource-intensive to reconstruct.
+/// </summary>
 [System.Serializable]
 public class PlanetBinaryData
 {
-    public bool m_TectonicsPresent;
-    public float m_Radius;
-    public int m_TotalTectonicStepsTaken;
-    public int m_TectonicStepsTakenWithoutResample;
+    public bool m_TectonicsPresent; // switch denoting whether tectonic data are included
+    public float m_Radius; // planet radius
+    public int m_TotalTectonicStepsTaken; // total tectonic steps taken for reference
+    public int m_TectonicStepsTakenWithoutResample; // tectonic steps taken without resampling
 
     public List<Vector3Serial> m_CrustVertices;
     public List<DRTriangleSerial> m_CrustTriangles;
@@ -150,41 +168,50 @@ public class PlanetBinaryData
     public List<List<int>> m_RenderVerticesNeighbours;
     public List<List<int>> m_RenderTrianglesOfVertices;
     public List<PointData> m_RenderPointData;
-
 }
 
+/// <summary>
+/// Facilitates loading of basic triangulation templates, saving and loading data files.
+/// </summary>
 public class DRFileManager
 {
-    public string filename;
-    public string path;
-    public PlanetManager man;
-    public string m_DataFileHeader;
-    public int m_Version;
+    public string filename; // placeholder filename
+    public string path; // not used
+    public PlanetManager man; // PlanetManager instance reference, used to get and assign data
+    public string m_DataFileHeader; // short description of the data file format
+    public int m_Version; // data file version
 
-    public DRFileManager (PlanetManager man_p)
+    /// <summary>
+    /// Initialization constructor. Has to be called from the GUI Editor, as PlanetManager is derived from MonoBehaviour.
+    /// </summary>
+    /// <param name="man_p">PlanetManager instance reference</param>
+    public DRFileManager(PlanetManager man_p)
     {
         man = man_p;
-        filename = "save.dat";
-        path = "";
-        m_DataFileHeader = "DRIFTWORLD";
-        m_Version = 1;
+        filename = "save.dat"; // taken later from the PlanetManger instance as demanded
+        path = ""; // not used
+        m_DataFileHeader = "DRIFTWORLD"; // simple header
+        m_Version = 1; // first planned version at the moment of initial public release
     }
 
+    /// <summary>
+    /// Gathers neccessary data into PlanetBinaryData instance and calls Save() function.
+    /// </summary>
     public void SavePlanet ()
     {
-        PlanetBinaryData data = new PlanetBinaryData();
-        data.m_TectonicsPresent = (man.m_Planet.m_TectonicPlates.Count > 0); 
+        PlanetBinaryData data = new PlanetBinaryData(); // new data instance
+        data.m_TectonicsPresent = (man.m_Planet.m_TectonicPlates.Count > 0); // tectonics are included, if available 
         data.m_Radius = man.m_Planet.m_Radius;
         data.m_TectonicStepsTakenWithoutResample = man.m_Planet.m_TectonicStepsTakenWithoutResample;
         data.m_TotalTectonicStepsTaken = man.m_Planet.m_TotalTectonicStepsTaken;
-        data.m_CrustVertices = new List<Vector3Serial>();
+        data.m_CrustVertices = new List<Vector3Serial>(); // lists are created as empty and later filled through PlanetManager
         data.m_CrustPointData = new List<PointData>();
         data.m_DataVertices = new List<Vector3Serial>();
         data.m_DataPointData = new List<PointData>();
         data.m_DataVerticesNeighbours = new List<List<int>>();
         data.m_DataTrianglesOfVertices = new List<List<int>>();
         data.m_VectorNoise = new List<Vector3Serial>();
-        for (int i = 0; i < man.m_Planet.m_DataVertices.Count; i++)
+        for (int i = 0; i < man.m_Planet.m_DataVertices.Count; i++) // copy data and crust (if available) vertices and auxiliary data
         {
             if (data.m_TectonicsPresent)
             {
@@ -198,7 +225,7 @@ public class DRFileManager
         }
         data.m_CrustTriangles = new List<DRTriangleSerial>();
         data.m_DataTriangles = new List<DRTriangleSerial>();
-        for (int i = 0; i < man.m_Planet.m_DataTriangles.Count; i++)
+        for (int i = 0; i < man.m_Planet.m_DataTriangles.Count; i++) // copy data and crust (if available) triangles
         {
             if (data.m_TectonicsPresent)
             {
@@ -208,20 +235,18 @@ public class DRFileManager
             data.m_VectorNoise.Add(new Vector3Serial(man.m_Planet.m_VectorNoise[i]));
         }
         data.m_TectonicPlates = new List<PlateSerial>();
-        for (int i = 0; i < man.m_Planet.m_TectonicPlatesCount; i++)
+        if (data.m_TectonicsPresent)
         {
-            if (data.m_TectonicsPresent) // maybe redundant
+            for (int i = 0; i < man.m_Planet.m_TectonicPlatesCount; i++) // copy plates data
             {
                 data.m_TectonicPlates.Add(new PlateSerial(man.m_Planet.m_TectonicPlates[i]));
             }
         }
-
-
         data.m_RenderVertices = new List<Vector3Serial>();
         data.m_RenderPointData = new List<PointData>();
         data.m_RenderVerticesNeighbours = new List<List<int>>();
         data.m_RenderTrianglesOfVertices = new List<List<int>>();
-        for (int i = 0; i < man.m_Planet.m_RenderVertices.Count; i++)
+        for (int i = 0; i < man.m_Planet.m_RenderVertices.Count; i++) // copy render vertices and auxiliary data
         {
             data.m_RenderVertices.Add(new Vector3Serial(man.m_Planet.m_RenderVertices[i]));
             data.m_RenderPointData.Add(new PointData(man.m_Planet.m_RenderPointData[i]));
@@ -229,28 +254,32 @@ public class DRFileManager
             data.m_RenderTrianglesOfVertices.Add(new List<int>(man.m_Planet.m_RenderTrianglesOfVertices[i]));
         }
         data.m_RenderTriangles = new List<DRTriangleSerial>();
-        for (int i = 0; i < man.m_Planet.m_RenderTriangles.Count; i++)
+        for (int i = 0; i < man.m_Planet.m_RenderTriangles.Count; i++) // copy render triangles
         {
             data.m_RenderTriangles.Add(new DRTriangleSerial(man.m_Planet.m_RenderTriangles[i]));
         }
-        filename = man.m_SaveFilename;
-        Save(data);
-        Debug.Log("File " + filename + " saved: header [" + m_DataFileHeader + "], version " + m_Version);
+        filename = man.m_SaveFilename; // read filename
+        Save(data); // save data into file
+        Debug.Log("File " + filename + " saved: header [" + m_DataFileHeader + "], version " + m_Version); // feedback
     }
 
+    /// <summary>
+    /// Saves data read out from PlanetManager into a file. Called by SavePlanet().
+    /// </summary>
+    /// <param name="data">data to be saved</param>
     public void Save(PlanetBinaryData data)
     {
-        FileStream fs = new FileStream(filename, FileMode.Create);
-        byte[] value_buffer;
-        bool tectonics_present = data.m_TectonicsPresent;
-        byte[] header_buffer = Encoding.ASCII.GetBytes(m_DataFileHeader);
-        value_buffer = BitConverter.GetBytes(header_buffer.Length);
-        fs.Write(value_buffer, 0, 4);
+        FileStream fs = new FileStream(filename, FileMode.Create); // create file at the beginning
+        byte[] value_buffer; // universal 4 byte buffer used almost exclusively (save for header)
+        bool tectonics_present = data.m_TectonicsPresent; // if the tectonics are included
+        byte[] header_buffer = Encoding.ASCII.GetBytes(m_DataFileHeader); // byte array with the header
+        value_buffer = BitConverter.GetBytes(header_buffer.Length); // standard assignment, used for all values
+        fs.Write(value_buffer, 0, 4); // standard write call
         fs.Write(header_buffer, 0, header_buffer.Length);
         value_buffer = BitConverter.GetBytes(m_Version);
         fs.Write(value_buffer, 0, 4);
-        value_buffer = BitConverter.GetBytes((data.m_TectonicsPresent) ? 1 : 0);
-        fs.Write(value_buffer, 0, 4); // this might be an oopsie, dunno
+        value_buffer = BitConverter.GetBytes((data.m_TectonicsPresent) ? 1 : 0); // bool stored as an integer
+        fs.Write(value_buffer, 0, 4);
         value_buffer = BitConverter.GetBytes(data.m_Radius);
         fs.Write(value_buffer, 0, 4);
         if (tectonics_present)
@@ -260,7 +289,7 @@ public class DRFileManager
             value_buffer = BitConverter.GetBytes(data.m_TotalTectonicStepsTaken);
             fs.Write(value_buffer , 0, 4);
         }
-        int n_vertices = data.m_DataVertices.Count;
+        int n_vertices = data.m_DataVertices.Count; // bytestream has to contain the number of values before every array
         value_buffer = BitConverter.GetBytes(n_vertices);
         fs.Write(value_buffer, 0, 4);
         int n_neighbours;
@@ -448,16 +477,17 @@ public class DRFileManager
             value_buffer = BitConverter.GetBytes(data.m_RenderTriangles[i].neigh3);
             fs.Write(value_buffer, 0, 4);
         }
-
         fs.Close();
     }
 
-
+    /// <summary>
+    /// Reads data from a file into a PlanetBinaryData instance and reconstructs the project.
+    /// </summary>
     public void LoadPlanet()
     {
         filename = man.m_SaveFilename;
-        PlanetBinaryData data = Load();
-        if (man.m_Surface == null)
+        PlanetBinaryData data = Load(); // load a file using SimpleReadStream
+        if (man.m_Surface == null) // reconstruct the mesh object, if neccessary
         {
             man.m_Surface = new GameObject("Surface");
             man.m_Surface.transform.parent = man.transform;
@@ -465,14 +495,13 @@ public class DRFileManager
             man.m_Surface.AddComponent<MeshRenderer>().sharedMaterial = new Material(Shader.Find("Custom/SphereTextureShader"));
             newMeshFilter.sharedMesh = new Mesh();
         }
-        if (man.m_Random == null)
+        if (man.m_Random == null) // new RandomMersenne, if needed
         {
             man.m_Random = new RandomMersenne(man.m_RandomSeed);
         }
         man.m_Planet = new TectonicPlanet(man.m_Settings.PlanetRadius);
 
-        //CONSTRUCT PLANET HERE
-
+        // Start of planet reconstruction.
         int n_vertices, n_triangles;
         n_vertices = data.m_DataVertices.Count;
         man.m_Planet.m_CrustVertices = new List<Vector3>();
@@ -528,7 +557,7 @@ public class DRFileManager
         {
             man.m_Planet.m_TectonicPlatesCount = data.m_TectonicPlates.Count;
             man.m_Planet.m_TectonicPlates = new List<Plate>();
-            for (int i = 0; i < data.m_TectonicPlates.Count; i++)
+            for (int i = 0; i < data.m_TectonicPlates.Count; i++) // plates are only created, filled later
             {
                 Plate target = new Plate(man.m_Planet);
                 target.m_RotationAxis = new Vector3(data.m_TectonicPlates[i].m_RotationAxis.x, data.m_TectonicPlates[i].m_RotationAxis.y, data.m_TectonicPlates[i].m_RotationAxis.z);
@@ -565,22 +594,22 @@ public class DRFileManager
 
         }
 
-        man.m_Planet.m_RenderVerticesCount = man.m_Planet.m_RenderVertices.Count; // set the render vertices count
-        man.m_Planet.m_RenderTrianglesCount = man.m_Planet.m_RenderTriangles.Count; // set the render triangles count
+        man.m_Planet.m_RenderVerticesCount = man.m_Planet.m_RenderVertices.Count;
+        man.m_Planet.m_RenderTrianglesCount = man.m_Planet.m_RenderTriangles.Count;
 
         man.m_Planet.m_VerticesCount = man.m_Planet.m_DataVertices.Count;
         man.m_Planet.m_TrianglesCount = man.m_Planet.m_DataTriangles.Count;
 
-        List<BoundingVolume> m_BVTLeaves = new List<BoundingVolume>();
-        for (int i = 0; i < man.m_Planet.m_TrianglesCount; i++) // for all triangles in data
+        List<BoundingVolume> m_BVTLeaves = new List<BoundingVolume>(); // reconstruct the data layer BVH
+        for (int i = 0; i < man.m_Planet.m_TrianglesCount; i++)
         {
-            BoundingVolume new_bb = new BoundingVolume(man.m_Planet.m_DataTriangles[i].m_CCenter, man.m_Planet.m_DataTriangles[i].m_CUnitRadius); // create a leaf bounding box
+            BoundingVolume new_bb = new BoundingVolume(man.m_Planet.m_DataTriangles[i].m_CCenter, man.m_Planet.m_DataTriangles[i].m_CUnitRadius); // create a leaf bounding volume
             new_bb.m_TriangleIndex = i; // denote the triangle index to the leaf
             man.m_Planet.m_DataTriangles[i].m_BVolume = new_bb; // denote the leaf to the respective triangle
             m_BVTLeaves.Add(new_bb); // add the new bounding volume to the list of leaves
         }
         man.m_Planet.m_DataBVH = man.m_Planet.ConstructBVH(m_BVTLeaves); // construct BVH from bottom
-        man.m_Planet.m_DataBVHArray = BoundingVolume.BuildBVHArray(man.m_Planet.m_DataBVH); //
+        man.m_Planet.m_DataBVHArray = BoundingVolume.BuildBVHArray(man.m_Planet.m_DataBVH); // set the BVH array for shader use
 
         if (data.m_TectonicsPresent)
         {
@@ -589,7 +618,7 @@ public class DRFileManager
                 man.m_Planet.m_TectonicPlates[man.m_Planet.m_CrustPointData[i].plate].m_PlateVertices.Add(i);
             }
 
-            for (int i = 0; i < man.m_Planet.m_TrianglesCount; i++) // for all triangles
+            for (int i = 0; i < man.m_Planet.m_TrianglesCount; i++)
             {
                 if ((man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_A].plate == man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_B].plate) && (man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_B].plate == man.m_Planet.m_CrustPointData[man.m_Planet.m_CrustTriangles[i].m_C].plate)) // if the triangle only has vertices of one type (qquivalence is a transitive relation)
                 {
@@ -601,10 +630,10 @@ public class DRFileManager
             {
                 List<BoundingVolume> bvt_leaves = new List<BoundingVolume>();
                 int plate_tricount = it.m_PlateTriangles.Count;
-                for (int i = 0; i < plate_tricount; i++) // for all triangles in data
+                for (int i = 0; i < plate_tricount; i++) // reconstruct the plate BVH
                 {
                     int tri_index = it.m_PlateTriangles[i];
-                    BoundingVolume new_bb = new BoundingVolume(man.m_Planet.m_CrustTriangles[tri_index].m_CCenter, man.m_Planet.m_CrustTriangles[tri_index].m_CUnitRadius); // create a leaf bounding box
+                    BoundingVolume new_bb = new BoundingVolume(man.m_Planet.m_CrustTriangles[tri_index].m_CCenter, man.m_Planet.m_CrustTriangles[tri_index].m_CUnitRadius); // create a leaf bounding volume
                     new_bb.m_TriangleIndex = tri_index; // denote the triangle index to the leaf
                     man.m_Planet.m_CrustTriangles[tri_index].m_BVolume = new_bb; // denote the leaf to the respective triangle
                     bvt_leaves.Add(new_bb); // add the new bounding volume to the list of leaves
@@ -615,35 +644,37 @@ public class DRFileManager
                     it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
                 }
             }
-            man.m_Planet.DetermineBorderTriangles();
-            man.m_Planet.m_PlatesOverlap = man.m_Planet.CalculatePlatesVP();
-            man.m_Planet.InitializeCBuffers();
+            man.m_Planet.DetermineBorderTriangles(); // find all border triangles and assign
+            man.m_Planet.m_PlatesOverlap = man.m_Planet.CalculatePlatesVP(); // recalculate overlap matrix
         }
+        // End of planet reconstruction.
 
-        //PLANET SHOULD BE CONSTRUCTED BY NOW
-
-        man.m_Planet.InitializeCBuffers();
-        man.RenderPlanet();
+        man.m_Planet.InitializeCBuffers(); // initialize the buffers
+        man.RenderPlanet(); // finally, render
     }
 
+    /// <summary>
+    /// Loads data from a file. Called by LoadPlanet().
+    /// </summary>
+    /// <returns>data from which the planet is reconstructed</returns>
     public PlanetBinaryData Load()
     {
         PlanetBinaryData data = new PlanetBinaryData();
-        FileStream fs = new FileStream(filename, FileMode.Open);
-        byte[] bytes = new byte[fs.Length];
-        fs.Read(bytes, 0, (int)fs.Length);
-        SimpleReadStream ms = new SimpleReadStream();
+        FileStream fs = new FileStream(filename, FileMode.Open); // open the file for memory copy
+        byte[] bytes = new byte[fs.Length]; // file contents variable
+        fs.Read(bytes, 0, (int)fs.Length); // load the whole file at once
+        SimpleReadStream ms = new SimpleReadStream(); // stream providing the data as needed
         ms.m_BufferSize = bytes.Length;
         ms.m_StreamIndex = 0;
         ms.m_Buffer = bytes;
-        fs.Close();
+        fs.Close(); // close the file
 
         string header;
         int header_size, version;
-        byte[] value_read = new byte[4];
+        byte[] value_read = new byte[4]; // universal buffer, used almost exclusively (save for header)
 
-        ms.Read(value_read, 0, 4);
-        header_size = BitConverter.ToInt32(value_read, 0);
+        ms.Read(value_read, 0, 4); // standard bytes read
+        header_size = BitConverter.ToInt32(value_read, 0); // standard conversion and assignment
 
         byte[] header_read = new byte[header_size];
         ms.Read(header_read, 0, header_size);
@@ -932,14 +963,16 @@ public class DRFileManager
             triangle.neigh3 = BitConverter.ToInt32(value_read, 0);
             data.m_RenderTriangles.Add(triangle);
         }
-
-        Debug.Log("File " + filename + " loaded: header [" + header + "], version " + version);
+        Debug.Log("File " + filename + " loaded: header [" + header + "], version " + version); // feedback
         return data;
     }
 
+    /// <summary>
+    /// Save overlay texture for reference.
+    /// </summary>
     public void TextureSave()
     {
-        Texture2D tex = (Texture2D)man.m_Surface.GetComponent<Renderer>().sharedMaterial.GetTexture("_MainTex");
+        Texture2D tex = (Texture2D)man.m_Surface.GetComponent<Renderer>().sharedMaterial.GetTexture("_MainTex"); // read directly from painted object, does not work if texture is unassigned
 
         if (tex != null)
         {
@@ -958,7 +991,14 @@ public class DRFileManager
     // T_n 3*4 byte values (int) with the vertex indices for each triangle - matched to the read array of vertices
     // V_n groups of vertex neighbours, each starts with 4 byte int for the number of neighbours -> Vng_n, then Vng_n 4 byte int values for neighbours indices in the vertex array
     // T_n groups of triangle neighbours, each has three 4 byte int values as neighbours indices in the triangle array (assume correct spherical topology)
-    // NO CHECKS!
+    /// <summary>
+    /// Loads template triangulation and auxiliary data from a file.
+    /// </summary>
+    /// <param name="vertices_p">vertex locations</param>
+    /// <param name="triangles_p">triangle indices</param>
+    /// <param name="vertices_neighbours_p">triangulation vertex neighbours</param>
+    /// <param name="triangles_of_vertices_p">triangles belonging to vertices</param>
+    /// <param name="filename">filename to be read</param>
     public void ReadMesh(out List<Vector3> vertices_p, out List<DRTriangle> triangles_p, out List<List<int>> vertices_neighbours_p, out List<List<int>> triangles_of_vertices_p, string filename)
     {
         List<Vector3> vertices = new List<Vector3>();
@@ -966,17 +1006,17 @@ public class DRFileManager
         List<List<int>> vertices_neighbours = new List<List<int>>();
         List<List<int>> triangles_of_vertices = new List<List<int>>();
         List<int> vertex_neighbours;
-        string file_path = Application.dataPath + @"\Data/" + filename;
+        string file_path = Application.dataPath + @"\Data/" + filename; // templates are in a subdirectory
         if (!File.Exists(file_path))
         {
             Debug.LogError("file " + file_path + " does not exist");
         }
         else
         {
-            FileStream ps = new FileStream(file_path, FileMode.Open);
+            FileStream ps = new FileStream(file_path, FileMode.Open); // contents are read into a SimpleReadStream and the file closed
             byte[] buffer = new byte[ps.Length];
             ps.Read(buffer, 0, buffer.Length);
-            SimpleReadStream fs = new SimpleReadStream();
+            SimpleReadStream fs = new SimpleReadStream(); // fs is recycled, so that old code could be kept
             fs.m_StreamIndex = 0;
             fs.m_BufferSize = buffer.Length;
             fs.m_Buffer = buffer;
@@ -1050,11 +1090,8 @@ public class DRFileManager
                 triangles_of_vertices[triangles[i].m_B].Add(i);
                 triangles_of_vertices[triangles[i].m_C].Add(i);
             }
-
-
-            //fs.Close();
         }
-        vertices_p = vertices;
+        vertices_p = vertices; // final assignments
         triangles_p = triangles;
         vertices_neighbours_p = vertices_neighbours;
         triangles_of_vertices_p = triangles_of_vertices;

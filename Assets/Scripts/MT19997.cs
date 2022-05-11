@@ -16,12 +16,24 @@ public class RandomMersenne
 	uint[] mt = new uint[MERS_N];          // state vector
 	uint mti;                            // index into mt
 
+	/// <summary>
+	/// Dummy constructor.
+	/// </summary>
 	private RandomMersenne() { }
 
+	/// <summary>
+	/// Initializing constructor.
+	/// </summary>
+	/// <param name="seed"></param>
 	public RandomMersenne(uint seed)
 	{       // constructor
 		RandomInit(seed);
 	}
+
+	/// <summary>
+	/// Seed initialization.
+	/// </summary>
+	/// <param name="seed"></param>
 	public void RandomInit(uint seed)
 	{
 		uint used_seed = seed; // adaptation for seed = 0
@@ -33,6 +45,11 @@ public class RandomMersenne
 		for (mti = 1; mti < MERS_N; mti++)
 			mt[mti] = (1812433253U * (mt[mti - 1] ^ (mt[mti - 1] >> 30)) + mti);
 	}
+
+	/// <summary>
+	/// Initialization by an array of seeds.
+	/// </summary>
+	/// <param name="seeds"></param>
 	public void RandomInitByArray(uint[] seeds)
 	{
 		// seed by more than 32 bits
@@ -57,6 +74,13 @@ public class RandomMersenne
 		}
 		mt[0] = 0x80000000U; // MSB is 1; assuring non-zero initial array
 	}
+
+	/// <summary>
+	/// Integer range.
+	/// </summary>
+	/// <param name="min">Minimum to be returned.</param>
+	/// <param name="max">Maximum to be returned, INCLUSIVELY!</param>
+	/// <returns>A random number between min and max.</returns>
 	public int IRandom(int min, int max)
 	{
 		// output random integer in the interval min <= x <= max
@@ -68,6 +92,11 @@ public class RandomMersenne
 			return -2147483648;
 		return r;
 	}
+
+	/// <summary>
+	/// Basic double RNG number generating function.
+	/// </summary>
+	/// <returns>A double number from interval <0; 1)</returns>
 	public double Random()
 	{
 		// output random float number in the interval 0 <= x < 1
@@ -83,6 +112,11 @@ public class RandomMersenne
 		return r * (1.0 / (0xFFFFFFFF + 1.0));
 	}
 
+
+	/// <summary>
+	/// Basic double RNG number generating function.
+	/// </summary>
+	/// <returns>A float number from interval <0; 1)</returns>
 	public float FRandom()
 	{
 		// output random float number in the interval 0 <= x < 1
@@ -98,7 +132,13 @@ public class RandomMersenne
 		return (float)(r * (1.0 / (0xFFFFFFFF + 1.0)));
 	}
 
-	public float Range(float a, float b)
+	/// <summary>
+	/// Generalize float RNG number generating function.
+	/// </summary>
+	/// <param name="a">Minimum number to be returned.</param>
+	/// <param name="b">Upper limit of the returned number.</param>
+	/// <returns>A float number from interval <a; b)</returns>
+	public float Range(float a, float b) // adapted
 	{
 		// output random float number in the interval a <= x < b
 		uint r = BRandom(); // get 32 random bits
@@ -113,6 +153,10 @@ public class RandomMersenne
 		return (b-a)*((float)(r * (1.0 / (0xFFFFFFFF + 1.0)))) + a;
 	}
 
+	/// <summary>
+	/// A basic uint RNG generating function. Used as the basis for other functions.
+	/// </summary>
+	/// <returns>A random 32 bit sequence interpreted as uint.</returns>
 	public uint BRandom()
 	{
 		// generate 32 random bits

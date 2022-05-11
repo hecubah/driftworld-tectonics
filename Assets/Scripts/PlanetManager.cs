@@ -59,42 +59,42 @@ public class PlanetManager : MonoBehaviour
     [HideInInspector] public bool m_FoldoutWIPTools = false;
 
     /// <summary>
-    /// Testing function - slot 1
+    /// Testing function - slot 1.
     /// </summary>
     public void DebugFunction()
     {        
     }
 
     /// <summary>
-    /// Testing function - slot 2
+    /// Testing function - slot 2.
     /// </summary>
     public void DebugFunction2()
     {
     }
 
     /// <summary>
-    /// Testing function - slot 3
+    /// Testing function - slot 3.
     /// </summary>
     public void DebugFunction3()
     {
     }
 
     /// <summary>
-    /// Testing function - slot 4
+    /// Testing function - slot 4.
     /// </summary>
     public void DebugFunction4()
     {
     }
 
     /// <summary>
-    /// Placeholder because MonoBehaviour
+    /// Placeholder because MonoBehaviour.
     /// </summary>
     void Start()
     {
     }
 
     /// <summary>
-    /// Placeholder because MonoBehaviour
+    /// Placeholder because MonoBehaviour.
     /// </summary>
     void Update()
     {
@@ -102,7 +102,7 @@ public class PlanetManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Set up a new render object unless already existing, load topology from a template file and create basic vector noise over triangles
+    /// Set up a new render object unless already existing, load topology from a template file and create basic vector noise over triangles.
     /// </summary>
     public void LoadNewPlanet()
     {
@@ -304,7 +304,7 @@ public class PlanetManager : MonoBehaviour
     /// <summary>
     /// Single color texture if data is missing or other unspecified error.
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D MissingDataTexture()
     {
         Texture2D tex = new Texture2D(4096,4096); // all textures are 4096x4096
@@ -323,7 +323,7 @@ public class PlanetManager : MonoBehaviour
     /// <summary>
     /// Simple green on non-negative elevation, blue for negative.
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayBasicTerrain()
     {
 
@@ -361,7 +361,7 @@ public class PlanetManager : MonoBehaviour
     /// <summary>
     /// Colored data triangles. Sorting visible on hue patterns as the hue is rotated in order.
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayDebugDataTriangles()
     {
 
@@ -400,7 +400,7 @@ public class PlanetManager : MonoBehaviour
     /// <summary>
     /// Paint top crust plates on data layer, hue scaled to number of plates.
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayCrustPlates()
     {
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
@@ -440,7 +440,7 @@ public class PlanetManager : MonoBehaviour
     /// <summary>
     /// Paint hue scaled crust age on data layer, red is older
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayCrustAge()
     {
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
@@ -482,7 +482,7 @@ public class PlanetManager : MonoBehaviour
     /// <summary>
     /// Paint hue differentiated orogeny, red is unknown, yellow Andean and green Himalayan
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayOrogeny()
     {
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
@@ -520,7 +520,7 @@ public class PlanetManager : MonoBehaviour
     /// <summary>
     /// Colored crust triangles. Sorting visible on hue patterns as the hue is rotated in order.
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayDebugCrustTriangles()
     {
 
@@ -561,7 +561,7 @@ public class PlanetManager : MonoBehaviour
     /// <summary>
     /// Paint elevation values graph laplacian. Redder hue indicates more extreme values.
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayElevationLaplacian()
     {
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
@@ -628,7 +628,7 @@ public class PlanetManager : MonoBehaviour
     /// Paint vector noise values at triangles. hue represents relative angle, saturation length value.
     /// It is flawed, there is a hue bias. However, it gives sufficient representation of the noise.
     /// </summary>
-    /// <returns>Texture2D to be applied to the surface of the sphere and the plane</returns>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayDebugVectorNoise()
     {
 
