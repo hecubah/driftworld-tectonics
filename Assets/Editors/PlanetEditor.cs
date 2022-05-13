@@ -185,9 +185,9 @@ public class PlanetEditor : Editor
                 {
                     m_PlanetManager.m_Planet.BVHDiagnostics();
                 }
-                if (GUILayout.Button("Elevation value diagnostics")) // test elevation values health - differences, inifinities
+                if (GUILayout.Button("Mesh and elevation value diagnostics")) // test vertex lengths and elevation values health - differences, inifinities
                 {
-                    m_PlanetManager.m_Planet.ElevationValueDiagnostics();
+                    m_PlanetManager.m_Planet.MeshAndElevationValueDiagnostics();
                 }
                 GUILayout.EndVertical();
             }

@@ -23,9 +23,9 @@ public class SimpleReadStream
     /// <summary>
     /// Modelled after C# stream function Read.
     /// </summary>
-    /// <param name="output"></param>
-    /// <param name="offset"></param>
-    /// <param name="length"></param>
+    /// <param name="output">output byte array</param>
+    /// <param name="offset">where to start in the array</param>
+    /// <param name="length">how many bytes read</param>
     public void Read(byte[] output, int offset, int length)
     {
         for (int i = 0; i < length; i++)

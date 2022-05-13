@@ -1,6 +1,6 @@
-code documentation
 shader code documentation
 manual documentation
 occasional code clean-up
 memory leaks?
 optimization?
+cubemap overlays?

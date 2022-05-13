@@ -37,8 +37,8 @@ public class DRTriangle
     /// <summary>
     /// Copy constructor, requires vertex location reference.
     /// </summary>
-    /// <param name="source"></param>
-    /// <param name="reference"></param>
+    /// <param name="source">source triangle to be copied</param>
+    /// <param name="reference">reference to be supplanted</param>
     public DRTriangle(DRTriangle source, List<Vector3> reference)
     {
         m_A = source.m_A;
@@ -56,8 +56,8 @@ public class DRTriangle
     /// <summary>
     /// Distance on a unit sphere, corrected for rounding error at Acos (cases of Cos > 1).
     /// </summary>
-    /// <param name="a">first vertex position</param>
-    /// <param name="b">second vertex position</param>
+    /// <param name="a">first point position</param>
+    /// <param name="b">second point position</param>
     /// <returns>float distance on a unit sphere</returns>
     static float UnitSphereDistance(Vector3 a, Vector3 b)
     {
@@ -69,7 +69,7 @@ public class DRTriangle
     /// </summary>
     void UpdateBCenter()
     {
-        m_BCenter = (m_VertexReference[m_A] + m_VertexReference[m_B] + m_VertexReference[m_C]).normalized;
+        m_BCenter = (m_VertexReference[m_A] + m_VertexReference[m_B] + m_VertexReference[m_C]).normalized; // plane centroid - due to triangle size sufficient and always within triangle
     }
 
     /// <summary>
@@ -77,10 +77,10 @@ public class DRTriangle
     /// </summary>
     void UpdateCCenter()
     {
-        Vector3 center_ray = Vector3.Cross(m_VertexReference[m_B] - m_VertexReference[m_A], m_VertexReference[m_C] - m_VertexReference[m_A]);
-        center_ray = (Vector3.Dot(center_ray, m_VertexReference[m_A]) < 0 ? -center_ray: center_ray);
-        m_CCenter = center_ray.normalized;
-        m_CUnitRadius = UnitSphereDistance(m_VertexReference[m_A], m_CCenter);
+        Vector3 center_ray = Vector3.Cross(m_VertexReference[m_B] - m_VertexReference[m_A], m_VertexReference[m_C] - m_VertexReference[m_A]); // cross section of the triangle plane sides is the normal vector of a plane in which the circumcircle lies
+        center_ray = (Vector3.Dot(center_ray, m_VertexReference[m_A]) < 0 ? -center_ray: center_ray); // take the smaller circle as spherical triangles actually have two circumcircles, one with much larger radius (even if they fall onto the same curve)
+        m_CCenter = center_ray.normalized; // normalize the circumcenter to the unit sphere
+        m_CUnitRadius = UnitSphereDistance(m_VertexReference[m_A], m_CCenter); // calculate the circumradius
 
     }
 
