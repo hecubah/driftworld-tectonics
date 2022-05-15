@@ -529,7 +529,6 @@ public class TectonicPlanet
 
         work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_CBuffers["data_vertex_locations"]); // shader looks up these
         work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_CBuffers["data_vertex_data"]); // interpolation goal
-        work_shader.SetFloat("ocean_base_floor", m_PlanetManager.m_Settings.OceanBaseFloor); // new crust parameters
 
         work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation); // new crust parameters, ocean ridges
         work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation); // new crust parameters
@@ -2169,7 +2168,6 @@ public class TectonicPlanet
             m_DataPointData[i].plate = vertex_plates[i];
         }
     }
-
 }
 
 

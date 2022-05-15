@@ -8,7 +8,6 @@ public class SimulationSettings // single object for simulation parameters, make
     public int PlateInitNumberOfCentroids = 7; // number of initial tectonic plates (Voronoi centers)
 
     public float NewCrustThickness = 0.01f; // initial crust thickness on generated points
-    public float OceanBaseFloor = -0.004f; // base floor level when rendering without sample interpolation outside of tectonic plates
     public float OceanicRidgeElevationFalloff = 0.05f; // new ocean crust ridge distance exponential scaling parameter
     public int BVHConstructionRadius = 20; // array range for Morton code nearest neighbour look-up
     public float AverageOceanicDepth = -0.004f; // currently it is used as a threshold elevation for sediment accretion

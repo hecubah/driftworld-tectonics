@@ -47,7 +47,6 @@ StructuredBuffer<float4> plate_transforms;
 int n_data_vertices;
 float tectonic_iteration_step_time;
 int tectonic_steps_taken_without_resample;
-float ocean_base_floor;
 
 float highest_oceanic_ridge_elevation;
 float abyssal_plains_elevation;

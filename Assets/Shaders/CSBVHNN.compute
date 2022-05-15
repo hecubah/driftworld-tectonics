@@ -1,32 +1,28 @@
-﻿
-// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSBVHNN
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-RWStructuredBuffer<int> nearest_neighbours;
-StructuredBuffer<float3> cluster_positions;
-int array_size;
-int BVH_radius;
+int array_size; // size of the cluster array
+int BVH_radius; // array look-up subrange
+StructuredBuffer<float3> cluster_positions; // position of the clusters where we look for nearest neighbours
+RWStructuredBuffer<int> nearest_neighbours; // array identical in size to cluster_positions, keeps indices of the nearest neighbours for the corresponding cluster in the given array subrange
 
-[numthreads(64, 1, 1)]
+[numthreads(64, 1, 1)] // max batch of 64, no other coordinates needed
 void CSBVHNN(uint3 id : SV_DispatchThreadID)
 {
-    int i = id.x;
+    int i = id.x; // index corresponds to thread ID
 
-    if (i < array_size) {
-        int min_ind = (int)max(i - BVH_radius, 0);
-        int max_ind = (int)min(i + BVH_radius, array_size - 1);
-        float mindist = 100000;
-        float dist;
-        for (int j = min_ind; j <= max_ind; j++)
+    if (i < array_size) { // only indices that exist in the array are evaluated
+        int min_ind = (int)max(i - BVH_radius, 0); // lowest checked index with left bound correction
+        int max_ind = (int)min(i + BVH_radius, array_size - 1); // highest checked index with right bound correction
+        float mindist = 100000; // stores the smallest distance so far - infinity at the beginning
+        float dist; // calculated immediate distance
+        for (int j = min_ind; j <= max_ind; j++) // check the nearest neighbour within the given subrange for all clusters
         {
-            dist = acos(dot(cluster_positions[i], cluster_positions[j]));
+            dist = acos(dot(cluster_positions[i], cluster_positions[j])); // if the immediate distance is smaller, rewritte NN index and the smallest distance
             if ((i != j) && (dist < mindist))
             {
                 mindist = dist;
                 nearest_neighbours[i] = j;
             }
-        }       
+        }
     }
 }

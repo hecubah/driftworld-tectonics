@@ -1,27 +1,22 @@
 ﻿#pragma kernel CSFractalTerrain
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-StructuredBuffer<float3> vertices_input;
-StructuredBuffer<float3> random_input;
-RWStructuredBuffer<float> elevations_output;
-int fractal_iterations;
-int vertices_number;
-float elevation_step;
+int fractal_iterations; // how many times to repeat the algorithm
+int vertices_number; // how many vertices
+float elevation_step; // single step elevation change
+StructuredBuffer<float3> vertices_input; // vertex positions
+StructuredBuffer<float3> random_input; // list of random unit vectors, count equal to fractal_iterations
+RWStructuredBuffer<float> elevations_output; // total elevation contributions to each vertex
 
-
-
-
-[numthreads(64, 1, 1)]
+[numthreads(64, 1, 1)] // max batch of 64, no other coordinates needed
 void CSFractalTerrain(uint3 dID : SV_DispatchThreadID)
 {
-    int ivi = dID.x; // interpolated triangle index
-    if (ivi >= vertices_number) {
+    int ivi = dID.x; // which vertex to change
+    if (ivi >= vertices_number) { // exclude indices out of bounds
         return;
     }
 
-    float3 plane_normal;
-    for (int i = 0; i < fractal_iterations; i++) {
+    float3 plane_normal; // on a unit sphere, the random input is a normal of a plane passing through origin - random halving the sphere
+    for (int i = 0; i < fractal_iterations; i++) { // for all fractal_iterations decide the sign of a dot product (one side of the plane or the other) and add elevation accordingly
         elevations_output[ivi] += (dot(vertices_input[ivi], random_input[i]) >= 0 ? elevation_step : -elevation_step);
     }
 }
