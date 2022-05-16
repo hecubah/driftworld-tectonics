@@ -55,7 +55,7 @@ public struct CS_PlateContact // size of 28 B
 {
     public int contact_occured; // bool substitute for checking whether the respective border triangle intersects another plate
     public Vector3 contact_point; // centroid of the contacting border triangle, normalized to unit sphere
-    public float elevation; // average elevation of the intersected triangle vertices
+    public float elevation; // average elevation of the border triangle vertices
     public int contacting_plate; // plate index the contacting triangles belongs to
     public int contacted_plate; // contacted plate index
     public CS_PlateContact(int contact_occured_p, Vector3 contact_point_p, float elevation_p, int contacting_plate_p, int contacted_plate_p) // complete constructor

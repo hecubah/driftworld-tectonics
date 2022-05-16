@@ -1,9 +1,6 @@
-shader code documentation
 manual documentation
-occasional code clean-up
 memory leaks?
 optimization?
 cubemap overlays?
 
-
-sources: RGB to HSV, barycentric interpolation
+citation sources: RGB to HSV, barycentric interpolation, quaternion multiplication

@@ -75,7 +75,7 @@ bool is_point_in_tri(float3 vertex_location, s_triangle tested_triangle) {
 // vl - point to search for
 int search_data_bvh_for_point(float3 vl)
 {
-    int candidate_triangle_index = -1; //
+    int candidate_triangle_index = -1; // initialize candidate index out of bounds
     int dfs_stack[MAX_DFS_STACK_SIZE]; // stack for BV indices - DFS because memory
     int stack_index = 0; // stack top index - first array element is actually the stack bottom
 
@@ -90,7 +90,7 @@ int search_data_bvh_for_point(float3 vl)
     while (stack_index >= 0) { // while stack is not empty - negative stack index means empty
         dot_prod = dot(vl, data_BVH[dfs_stack[stack_index]].circumcenter); // dot product of circumcenter of the stack top BV and the point
 
-        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f); // calculate distance, clamp cos at 1
+        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f); // calculate distance, clamp cos to 1
 
         if (dist > data_BVH[dfs_stack[stack_index]].circumradius * 1.01f) { // underestimate the distance, test if the point is outside BV
             if (stack_index > 0) { // if the stack has other BVs than root
@@ -171,7 +171,7 @@ int search_data_bvh_for_point(float3 vl)
             }
             // triangle test END
             // if the triangle has not been found, go back through stack until an unexpanded right child has been found or only the BVH root remains
-            while ((stack_index > 0) && (data_BVH[dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) //
+            while ((stack_index > 0) && (data_BVH[dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
             {
                 stack_index--;
             }
@@ -185,7 +185,7 @@ int search_data_bvh_for_point(float3 vl)
     return -1; // we reached the BVH root, search was unsuccessful
 }
 
-// Interpolate crust values at a point, given a triangle
+// Interpolate data values at a point, given a triangle
 vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
     float3 a = data_vertex_locations[data_triangles[triangle_index].a]; // triangle vertices
     float3 b = data_vertex_locations[data_triangles[triangle_index].b];

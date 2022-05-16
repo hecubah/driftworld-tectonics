@@ -1,16 +1,16 @@
-﻿#pragma kernel CSTrianglePlateContacts
+#pragma kernel CSTrianglePlateContacts
 #pragma kernel CSSubductionUplift
 #pragma kernel CSErosionDampingSediments
 #pragma kernel CSPlateVerticesSlabContributions
 #pragma kernel CSContinentalContacts
 #pragma kernel CSContinentalCollisionUplift
 
-#pragma warning( disable : 3557 ) // loop unroll
-#define MAX_DISTANCE 500
-#define MAX_BVS_SEARCHED 512
-#define MAX_DFS_STACK_SIZE 40
-#define INTERSECT_TOLERANCE 0.0001f //0.00005f
+#pragma warning( disable : 3557 ) // disable simple loop - unroll warning
+#define MAX_DISTANCE 500 // initialization distance protection - some ridiculous number considered infinity on a unit sphere
+#define MAX_DFS_STACK_SIZE 40 // max depth of the dfs search stack because of memory
+#define DISTANCE_TOLERANCE 0.0001f // tolerance for close check comparations
 
+// structs are pretty much the same as in CSVertexDataInterpolation
 struct s_BV {
     int n_children;
     int left_child;
@@ -38,36 +38,34 @@ struct vertex_data {
     float age;
 };
 
-struct s_platecontact // size of 28 B
+ // border triangle collision with other plate
+struct s_platecontact
 {
-    int contact_occured;
-    float3 contact_point;
-    float elevation;
-    int contacting_plate;
-    int contacted_plate;
+    int contact_occured; // does it collide with another plate
+    float3 contact_point; // where does it collide - barycenter of the colliding border triangle
+    float elevation; // average elevation of the colliding border triangle
+    int contacting_plate; // plate the colliding triangle belongs to
+    int contacted_plate; // uppermost collided plate index
 };
 
-int n_crust_triangles;
-int n_plates;
-int n_crust_border_triangles;
-int n_crust_vertices;
+int n_crust_triangles; // how many crust triangles
+int n_plates; // how many tectonic plates
+int n_crust_border_triangles; // how many crust border triangles total (for all plates)
+int n_crust_vertices; // how many crust vertices
 
-StructuredBuffer<float3> crust_vertex_locations;
-StructuredBuffer<s_triangle> crust_triangles; // triangle vertex vectors
-StructuredBuffer<vertex_data> crust_vertex_data; // triangle vertex vectors
-StructuredBuffer<int> crust_triangle_plates; // triangle plate indices
-StructuredBuffer<int> overlap_matrix; // plates' overlaps
-StructuredBuffer<s_BV> crust_BVH; // BV hiearchy of all respective plate triangles
-StructuredBuffer<int> crust_BVH_sps; // prefix sum of BV hiearchy sizes
-StructuredBuffer<float4> plate_transforms; // quaternion array of geometry rotations
-StructuredBuffer<int> crust_border_triangles;
-StructuredBuffer<float3> crust_border_triangle_circumcenters;
-StructuredBuffer<float> crust_border_triangle_circumradii;
-StructuredBuffer<int> crust_border_triangles_sps;
+StructuredBuffer<float3> crust_vertex_locations; // locations of crust vertices - crust layer deals with plate motion and topological changes
+StructuredBuffer<s_triangle> crust_triangles; // crust triangles
+StructuredBuffer<vertex_data> crust_vertex_data; // crust points information
+StructuredBuffer<int> overlap_matrix; // plate overlap matrix
+StructuredBuffer<s_BV> crust_BVH; // all plate bounding volume hiearchies, concatenated
+StructuredBuffer<int> crust_BVH_sps; // indices referencing plate array boundaries in crust_BVH - index corresponding to plate order in m_TectonicPlates is starting offset, next one is upper limit, where the next BVH starts - last is total upper limit
+StructuredBuffer<float4> plate_transforms; // transforms used to compute actual point locations from their original positions
+StructuredBuffer<int> crust_border_triangles; // all plate border triangles, concatenated
+StructuredBuffer<int> crust_border_triangles_sps; // indices referencing plate array boundaries in crust_border_triangles - index corresponding to plate order in m_TectonicPlates is starting offset, next one is upper limit, where the next BVH starts - last is total upper limit
 
-RWStructuredBuffer<s_platecontact> contact_points; // array of border triangle contact results (collision positions defining the collision front)
+RWStructuredBuffer<s_platecontact> contact_points; // matrix of collisions - border triangle collisions with other plates
 
-
+// Multiply quaternion transforms.
 float4 qmul(float4 q1, float4 q2) {
     return float4(
         q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
@@ -75,63 +73,67 @@ float4 qmul(float4 q1, float4 q2) {
         );
 }
 
+// Apply unitary quaternion transform.
 float3 quat_rot(float3 v, float4 r) {
     float4 r_c = r * float4(-1, -1, -1, 1);
     return qmul(r, qmul(float4(v, 0), r_c)).xyz;
 }
 
-
+// Same as CSVertexDataInterpolation function is_point_in_crust_tri(...)
 bool is_point_in_crust_tri_transformed(float3 searchedpoint, float3 a, float3 b, float3 c) {
-    float3 abcross, bccross, cacross, triangle_barycenter;
+    float3 abcross, bccross, cacross;
     float abplane_test, bcplane_test, caplane_test;
     abcross = cross(a, b);
     bccross = cross(b, c);
     cacross = cross(c, a);
-    triangle_barycenter = normalize(a + b + c);
     abplane_test = dot(abcross, searchedpoint);
     bcplane_test = dot(bccross, searchedpoint);
     caplane_test = dot(cacross, searchedpoint);
-    return ((abplane_test + INTERSECT_TOLERANCE >= 0) && (bcplane_test + INTERSECT_TOLERANCE >= 0) && (caplane_test + INTERSECT_TOLERANCE >= 0));
+    return ((abplane_test + DISTANCE_TOLERANCE >= 0) && (bcplane_test + DISTANCE_TOLERANCE >= 0) && (caplane_test + DISTANCE_TOLERANCE >= 0));
 }
 
+// Test of two spherical segments a and b intersect.
+// parameters - endpoints of the segments
 bool segments_intersect(float3 a1, float3 a2, float3 b1, float3 b2) {
-
-    float3 intersection = cross(cross(a1, a2), cross(b1, b2));
-    if (length(intersection) > 0) {
+    float3 intersection = cross(cross(a1, a2), cross(b1, b2)); // candidate for segment intersection - an intersection of two great circles on which the segments lie
+    if (length(intersection) > 0) { // normalize the intersection vector
         intersection = normalize(intersection);
     }
-    else {
+    else { // should not occur, but weird results can serve as debug
         return true;
     }
-    if (dot(a1, -intersection) > dot(a1, intersection)) {
+    if (dot(a1, -intersection) > dot(a1, intersection)) { // if it is the other intersection too far, invert it
         intersection = -intersection;
     }
-    if (dot(a1, intersection) >= dot(a1, a2) && dot(a2, intersection) >= dot(a1, a2) && dot(b1, intersection) >= dot(b1, b2) && dot(b2, intersection) >= dot(b1, b2)) {
+    if (dot(a1, intersection) >= dot(a1, a2) && dot(a2, intersection) >= dot(a1, a2) && dot(b1, intersection) >= dot(b1, b2) && dot(b2, intersection) >= dot(b1, b2)) { // if the dot products of the intersection with both endpoints are larger than the dot product of the endpoints for both segments, the intersection candidate lies within the segments and the segments intersect
         return true;
     }
-    else {
+    else { // or not
         return false;
     }
 
 
 }
 
+// Test if two crust triangles intersect.
+// parameters, triangle indices and their respective plate indices
 bool crust_triangles_intersect(int triangle_a, int triangle_b, int plate_index_a, int plate_index_b) {
-    float3 a1, a2, a3, b1, b2, b3;
-    float4 transform_a, transform_b;
-    transform_a = plate_transforms[plate_index_a];
+    float3 a1, a2, a3, b1, b2, b3; // triangle vertex positions
+    float4 transform_a, transform_b; // triangle transforms
+    transform_a = plate_transforms[plate_index_a]; // read the transforms
     transform_b = plate_transforms[plate_index_b];
-    a1 = quat_rot(crust_vertex_locations[crust_triangles[triangle_a].a], transform_a);
+    a1 = quat_rot(crust_vertex_locations[crust_triangles[triangle_a].a], transform_a); // apply the transforms to get actual vertex positions
     a2 = quat_rot(crust_vertex_locations[crust_triangles[triangle_a].b], transform_a);
     a3 = quat_rot(crust_vertex_locations[crust_triangles[triangle_a].c], transform_a);
     b1 = quat_rot(crust_vertex_locations[crust_triangles[triangle_b].a], transform_b);
     b2 = quat_rot(crust_vertex_locations[crust_triangles[triangle_b].b], transform_b);
     b3 = quat_rot(crust_vertex_locations[crust_triangles[triangle_b].c], transform_b);
 
+    // if any point of one of the triangles lies within the other one, the triangles intersect - other tests follow (catches the case where one triangle is inside the other)
     if (is_point_in_crust_tri_transformed(b1, a1, a2, a3) || is_point_in_crust_tri_transformed(b2, a1, a2, a3) || is_point_in_crust_tri_transformed(b3, a1, a2, a3) || is_point_in_crust_tri_transformed(a1, b1, b2, b3) || is_point_in_crust_tri_transformed(a2, b1, b2, b3) || is_point_in_crust_tri_transformed(a3, b1, b2, b3)) {
         return true;
     }
-    if (segments_intersect(a1, a2, b1, b2)) {
+    if (segments_intersect(a1, a2, b1, b2)) { // if any two triangle segments intersect, the triangles intersect
         return true;
     }
     if (segments_intersect(a1, a2, b2, b3)) {
@@ -158,13 +160,13 @@ bool crust_triangles_intersect(int triangle_a, int triangle_b, int plate_index_a
     if (segments_intersect(a3, a1, b3, b1)) {
         return true;
     }
-    return false;
+    return false; // none of the tests passed, the triangles do not intersect
 }
 
-
+// Same DFS mechanism as CSVertexDataInterpolation function search_plate_bvh_for_point(...), but triangles are tested and other data than an index is returned
 s_platecontact triangle_contact_with_plate_bvh(int triangle_index, int triangle_plate_index, int bv_plate_index) {
 
-    s_platecontact retval;
+    s_platecontact retval; // return value init with negative collision flag
 
     retval.contact_occured = 0;
     retval.contact_point = float3(0, 0, 0);
@@ -212,15 +214,10 @@ s_platecontact triangle_contact_with_plate_bvh(int triangle_index, int triangle_
         else {
             // triangle test START
             if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) {
-                if (crust_triangles_intersect(triangle_index, crust_BVH[offset + dfs_stack[stack_index]].triangle_index, triangle_plate_index, bv_plate_index)) {
+                if (crust_triangles_intersect(triangle_index, crust_BVH[offset + dfs_stack[stack_index]].triangle_index, triangle_plate_index, bv_plate_index)) { // triangle was found intersecting, calculate values and return
                     retval.contact_occured = 1;
                     retval.contact_point = normalize(crust_vertex_locations[crust_triangles[triangle_index].a] + crust_vertex_locations[crust_triangles[triangle_index].b] + crust_vertex_locations[crust_triangles[triangle_index].c]);
-                    //retval.elevation = (crust_vertex_data[crust_triangles[triangle_index].a].elevation + crust_vertex_data[crust_triangles[triangle_index].b].elevation + crust_vertex_data[crust_triangles[triangle_index].c].elevation) / 3.0f;
                     retval.elevation = (crust_vertex_data[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].a].elevation + crust_vertex_data[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].b].elevation + crust_vertex_data[crust_triangles[crust_BVH[offset + dfs_stack[stack_index]].triangle_index].c].elevation) / 3.0f;
-                    /*
-                    int contacting_plate = ;
-                    int contacted_plate;
-                    */
                     return retval;
                 }
             }
@@ -230,65 +227,69 @@ s_platecontact triangle_contact_with_plate_bvh(int triangle_index, int triangle_
                 stack_index--;
             }
             if (stack_index == 0) {
-                return retval;
+                return retval; // no collision found, return default with negative collision flag
             }
             dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
         }
     }
-    return retval;
-
+    return retval; // no collision found, return default with negative collision flag
 }
 
+// Calculate border triangle collision matrix to see where plates are in contact.
 [numthreads(64,1,1)]
 void CSTrianglePlateContacts(uint3 dID : SV_DispatchThreadID)
 {
-    int ivi = dID.x; // interpolated triangle index
-    if (ivi >= n_crust_border_triangles) {
+    int ivi = dID.x; // interpolated border triangle index
+    if (ivi >= n_crust_border_triangles) { // cut off at max border triangle index
         return;
     }
-    int main_plate_index = 0;
+    int main_plate_index = 0; // to which plate the border triangle belongs - search by looking-up the sps size array (array ordered by plate indices)
     while (ivi >= crust_border_triangles_sps[main_plate_index+1]) {
         main_plate_index++;
     }
 
-    for (int i = 0; i < n_plates; i++) {
+    for (int i = 0; i < n_plates; i++) { // test the collision with all other plates except the same one
         if (i == main_plate_index) {
             continue;
         }
-        contact_points[i * n_crust_border_triangles + ivi] = triangle_contact_with_plate_bvh(crust_border_triangles[ivi], main_plate_index, i);
+        contact_points[i * n_crust_border_triangles + ivi] = triangle_contact_with_plate_bvh(crust_border_triangles[ivi], main_plate_index, i); // fill the output data
     }
-
 }
 
+float subduction_control_distance; // shaping subduction cubic distance parameter
+float subduction_max_distance; // maximum subduction distance
+float oceanic_trench_elevation; // lowest possible ocean elevation
+float highest_continental_altitude; // highest possible continental elevation
+float maximum_plate_speed; // maximum plate angular speed
+float subduction_uplift; // global subduction uplift parameter
 
+StructuredBuffer<float3> plate_motion_axes; // axes around which the plates rotate
+StructuredBuffer<float> plate_motion_angular_speeds; // angular speeds with which the plates rotate
+RWStructuredBuffer<float> uplift; // output uplift contributions for all vertices
 
-float subduction_control_distance;
-float subduction_max_distance;
-float oceanic_trench_elevation;
-float highest_continental_altitude;
-float maximum_plate_speed;
-float subduction_uplift;
-
-StructuredBuffer<float3> plate_motion_axes;
-StructuredBuffer<float> plate_motion_angular_speeds;
-RWStructuredBuffer<float> uplift;
-
+// Calculate the influence weight of the distance during subduction.
 float subduction_distance_transfer(float distance) {
-    if (distance > subduction_max_distance) {
+    if (distance > subduction_max_distance) { // max distance cut-off
         return 0;
     }
+    // piecewise cubic function with controling of the peak
     float normal = (pow(subduction_max_distance, 3) - pow(subduction_control_distance, 3)) / 6.0f + (pow(subduction_control_distance, 2) * subduction_max_distance - pow(subduction_max_distance, 2) * subduction_control_distance) * 0.5f;
     float value = pow(distance, 3) / 3.0f - (subduction_control_distance + subduction_max_distance) * pow(distance, 2) * 0.5f + subduction_control_distance * subduction_max_distance * distance + pow(subduction_max_distance, 3) / 6.0f - pow(subduction_max_distance, 2) * subduction_control_distance * 0.5f;
     return value / normal;
 }
+
+// Calculate the influence weight of the relative speed during subduction.
 float subduction_speed_transfer(float3 location, int plate1, int plate2) {
-    return length(cross(plate_motion_angular_speeds[plate1] * plate_motion_axes[plate1] - plate_motion_angular_speeds[plate2] * plate_motion_axes[plate2], location)) / maximum_plate_speed;
+    return length(cross(plate_motion_angular_speeds[plate1] * plate_motion_axes[plate1] - plate_motion_angular_speeds[plate2] * plate_motion_axes[plate2], location)) / maximum_plate_speed; // simple relative speed to maximum speed ratio
 }
 
+// Calculate the influence weight of the subducted plate elevation during subduction.
 float subduction_height_transfer(float source_elevation) {
+    // square of the ratio of shifted elevation to maximum elevation extreme
     return pow((source_elevation - oceanic_trench_elevation) / (highest_continental_altitude - oceanic_trench_elevation), 2);
 }
 
+// Calculate subduction uplift contributions for all vertices.
 [numthreads(64, 1, 1)]
 void CSSubductionUplift(uint3 dID : SV_DispatchThreadID)
 {
@@ -297,54 +298,52 @@ void CSSubductionUplift(uint3 dID : SV_DispatchThreadID)
     if (ivi >= n_crust_vertices) {
         return;
     }
-    float uplift_sum = 0.0f;
-    int ivi_plate = crust_vertex_data[ivi].plate;
-    float3 iv = quat_rot(crust_vertex_locations[ivi], plate_transforms[ivi_plate]);
+    float uplift_sum = 0.0f; // initial sum is 0
+    int ivi_plate = crust_vertex_data[ivi].plate; // read the plate
+    float3 iv = quat_rot(crust_vertex_locations[ivi], plate_transforms[ivi_plate]); // apply the transform
 
 
-    for (int i = 0; i < n_plates; i++) {
-        if (overlap_matrix[ivi_plate * n_plates + i] < 1) {
+    for (int i = 0; i < n_plates; i++) { // find the subduction contributions for all plates that influence the vertex
+        if (overlap_matrix[ivi_plate * n_plates + i] < 1) { // only plates below can contribute
             continue;
         }
-        float dist = MAX_DISTANCE;
+        float dist = MAX_DISTANCE; // distance init at infinity
 
 
-        int found_contact_index = -1;
+        int found_contact_index = -1; // nearest contacting triangle of the plate
         int cpi; // contact point index
         float dot_prod;
         float current_dist;
 
-        for (int j = 0; j < n_crust_border_triangles; j++) {
-            cpi = i * n_crust_border_triangles + j;
-            if ((contact_points[cpi].contact_occured != 0) && (contact_points[cpi].contacting_plate == ivi_plate) && (contact_points[cpi].contacted_plate == i)) {
-                dot_prod = dot(quat_rot(contact_points[cpi].contact_point, plate_transforms[ivi_plate]), iv);
+        for (int j = 0; j < n_crust_border_triangles; j++) { // find the nearest contacting border triangle
+            cpi = i * n_crust_border_triangles + j; // collision array index
+            if ((contact_points[cpi].contact_occured != 0) && (contact_points[cpi].contacting_plate == ivi_plate) && (contact_points[cpi].contacted_plate == i)) { // if a contacting triangle has been found that matches both respective plates
+                dot_prod = dot(quat_rot(contact_points[cpi].contact_point, plate_transforms[ivi_plate]), iv); // calculate distance
                 current_dist = (dot_prod < 1 ? acos(dot_prod) : 0);
-                if (current_dist < dist) {
+                if (current_dist < dist) { // if it is nearer, rewrite nearest
                     dist = current_dist;
                     found_contact_index = j;
                 }
             }
         }
-        if (found_contact_index != -1) {
+        if (found_contact_index != -1) { // if a correct contacting triangle was found, test the maximum distance and if in the area of influence, calculate partial uplift and add
             if (dist < subduction_max_distance) {
                 uplift_sum += subduction_distance_transfer(dist) * subduction_speed_transfer(iv, ivi_plate, i) * subduction_height_transfer(contact_points[i * n_crust_border_triangles + found_contact_index].elevation);
-                //uplift_sum += subduction_distance_transfer(dist) * subduction_speed_transfer(iv, ivi_plate, i); // WIP
             }
         }
     }
-    uplift[ivi] = uplift_sum * subduction_uplift;
-
+    uplift[ivi] = uplift_sum * subduction_uplift; // multiply the sum by a constant parameter and assign to the output array
 }
 
-float oceanic_elevation_damping;
-float continental_erosion;
-float sediment_accretion;
-float average_oceanic_depth;
+float oceanic_elevation_damping; // global oceanic elevation damping parameter
+float continental_erosion; // global continental erosion parameter
+float sediment_accretion; // global sediment accretion parameter
+float average_oceanic_depth; // currently it is used as a threshold elevation for sediment accretion
 
-RWStructuredBuffer<float> erosion_damping;
-RWStructuredBuffer<float> sediment;
+RWStructuredBuffer<float> erosion_damping; // output elevation erosion and damping values
+RWStructuredBuffer<float> sediment; // output elevation sediment values
 
-
+//Calculate erosion, damping and sediment elevation contributions for all vertices.
 [numthreads(64, 1, 1)]
 void CSErosionDampingSediments(uint3 dID : SV_DispatchThreadID)
 {
@@ -352,19 +351,20 @@ void CSErosionDampingSediments(uint3 dID : SV_DispatchThreadID)
     if (ivi >= n_crust_vertices) {
         return;
     }
-    if (crust_vertex_data[ivi].elevation >= 0) { // continental
-        erosion_damping[ivi] = -crust_vertex_data[ivi].elevation / highest_continental_altitude * continental_erosion;
-        sediment[ivi] = 0.0f;
+    if (crust_vertex_data[ivi].elevation >= 0) { // in case of continental vertex
+        erosion_damping[ivi] = -crust_vertex_data[ivi].elevation / highest_continental_altitude * continental_erosion; // ration of elevation to maximum elevation multiplied by a constant parameter
+        sediment[ivi] = 0.0f; // no sediment
     }
-    else {
-        erosion_damping[ivi] = -(1 - crust_vertex_data[ivi].elevation / oceanic_trench_elevation) * oceanic_elevation_damping;
-        sediment[ivi] = (crust_vertex_data[ivi].elevation < average_oceanic_depth ? sediment_accretion : 0.0f);
+    else { // in case of ocean vertex
+        erosion_damping[ivi] = -(1 - crust_vertex_data[ivi].elevation / oceanic_trench_elevation) * oceanic_elevation_damping; // the lower the elevation, the stronger the damping
+        sediment[ivi] = (crust_vertex_data[ivi].elevation < average_oceanic_depth ? sediment_accretion : 0.0f); // sediment accretion applied as a constant for values below average ocean depth
     }
 }
 
-RWStructuredBuffer<int> pull_contributions;
+RWStructuredBuffer<int> pull_contributions; // output axes changes due to subduction pull
 
-int search_plate_bvh_for_point(int vertex_index, int index_bv_plate) // no barycenter or neighbour zeroing in!
+// Like CSVertexDataInterpolation function search_plate_bvh_for_point.
+int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
 {
     int candidate_triangle_index = -1;
     int dfs_stack[MAX_DFS_STACK_SIZE];
@@ -379,7 +379,7 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate) // no baryc
     float3 vl = quat_rot(crust_vertex_locations[vertex_index], plate_transforms[crust_vertex_data[vertex_index].plate]);
     int offset = crust_BVH_sps[index_bv_plate];
 
-    s_triangle candidate, candidate_neighbour; // maybe delete
+    s_triangle candidate, candidate_neighbour;
 
     float dot_prod, dist, barycenter_dot_product, barycenter_dot_max;
 
@@ -432,6 +432,7 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate) // no baryc
     return -1;
 }
 
+// Calculate slab pull contributions to axes (axes shifts).
 [numthreads(64, 1, 1)]
 void CSPlateVerticesSlabContributions(uint3 dID : SV_DispatchThreadID)
 {
@@ -440,27 +441,26 @@ void CSPlateVerticesSlabContributions(uint3 dID : SV_DispatchThreadID)
         return;
     }
     int ivi_plate = crust_vertex_data[ivi].plate;
-    float3 vl = quat_rot(crust_vertex_locations[ivi], plate_transforms[crust_vertex_data[ivi].plate]);
-    for (int i = 0; i < n_plates; i++) {
-        if (overlap_matrix[ivi_plate * n_plates + i] > -1) {
+    float3 vl = quat_rot(crust_vertex_locations[ivi], plate_transforms[crust_vertex_data[ivi].plate]); // apply plate transform
+    for (int i = 0; i < n_plates; i++) { // look for all upper plates covering the point
+        if (overlap_matrix[ivi_plate * n_plates + i] > -1) { // check for upper plate
             continue;
         }
-
-        if (crust_vertex_data[ivi].plate == i) {
+        if (crust_vertex_data[ivi].plate == i) { // if it is the same plate, return
             continue;
         }
-        if (search_plate_bvh_for_point(ivi, i) != -1) {
+        if (search_plate_bvh_for_point(ivi, i) != -1) { // if the point is found in such a plate, it is in a subduction zone - flag it
             pull_contributions[ivi] = 1;
             break;
         }
     }
 }
 
-
-RWStructuredBuffer<int> continental_triangle_contacts_table; // array of triangle contact results
+RWStructuredBuffer<int> continental_triangle_contacts_table; // array of triangle contact results for all plates individually
 RWStructuredBuffer<int> continental_triangle_contacts; // array of triangle contact results
-StructuredBuffer<float4> plate_transforms_predictive; // quaternion array of geometry rotations - prediction
+StructuredBuffer<float4> plate_transforms_predictive; // quaternion array of geometry rotations - prediction for the next tectonic step
 
+// Similar to point look-up, but for triangles with test whether the colliding subducted triangle is continental.
 int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle_plate_index, int bv_plate_index) {
     int candidate_triangle_index = -1;
     int dfs_stack[MAX_DFS_STACK_SIZE];
@@ -471,10 +471,10 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
 
     float3 needle_circumcenter = crust_triangles[triangle_index].circumcenter;
     float needle_circumradius = crust_triangles[triangle_index].circumradius;
-    float3 needle_circumcenter_tr = quat_rot(needle_circumcenter, plate_transforms_predictive[triangle_plate_index]);
+    float3 needle_circumcenter_tr = quat_rot(needle_circumcenter, plate_transforms_predictive[triangle_plate_index]); // transform one step ahead to avoid thin borders of ocean crust and negative flags
     int offset = crust_BVH_sps[bv_plate_index];
 
-    s_triangle candidate, candidate_neighbour; // maybe delete
+    s_triangle candidate, candidate_neighbour;
 
     float dot_prod, dist, barycenter_dot_product, barycenter_dot_max;
 
@@ -506,7 +506,7 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
             if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) {
                 if (crust_triangles_intersect(triangle_index, crust_BVH[offset + dfs_stack[stack_index]].triangle_index, triangle_plate_index, bv_plate_index)) {
                     candidate_index = crust_BVH[offset + dfs_stack[stack_index]].triangle_index;
-                    if ((crust_vertex_data[crust_triangles[candidate_index].a].elevation >= 0) || (crust_vertex_data[crust_triangles[candidate_index].b].elevation >= 0) || (crust_vertex_data[crust_triangles[candidate_index].c].elevation >= 0)) {
+                    if ((crust_vertex_data[crust_triangles[candidate_index].a].elevation >= 0) || (crust_vertex_data[crust_triangles[candidate_index].b].elevation >= 0) || (crust_vertex_data[crust_triangles[candidate_index].c].elevation >= 0)) { // test for subducted continental triangle
                         return 1;
                     }
 
@@ -524,10 +524,9 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
         }
     }
     return 0;
-
 }
 
-
+// Look for continental triangles inside subduction areas below upper plates.
 [numthreads(64, 1, 1)]
 void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
 {
@@ -535,6 +534,7 @@ void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
     if (ivi >= n_crust_triangles) {
         return;
     }
+    // same plate and continental test
     if ((crust_vertex_data[crust_triangles[ivi].a].plate != crust_vertex_data[crust_triangles[ivi].b].plate) || (crust_vertex_data[crust_triangles[ivi].b].plate != crust_vertex_data[crust_triangles[ivi].c].plate)) {
         return;
     }
@@ -542,33 +542,34 @@ void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
         return;
     }
 
-    int main_plate_index = crust_vertex_data[crust_triangles[ivi].a].plate;
-    for (int i = 0; i < n_plates; i++) {
-        if (i == main_plate_index) {
+    int main_plate_index = crust_vertex_data[crust_triangles[ivi].a].plate; triangle plate
+    for (int i = 0; i < n_plates; i++) { // look for continental collisions with all other plates
+        if (i == main_plate_index) { // if it is the same plate, return
             continue;
         }
         if (overlap_matrix[i * n_plates + main_plate_index] < 1) { // only plates above can tear out terranes
             continue;
         }
-        if (continental_triangle_contact_with_plate_bvh(ivi, main_plate_index, i) != 0) {
-            continental_triangle_contacts_table[i * n_crust_triangles + ivi] = 1;
-            continental_triangle_contacts[ivi] = 1;
+        if (continental_triangle_contact_with_plate_bvh(ivi, main_plate_index, i) != 0) { // if found, flag collision
+            continental_triangle_contacts_table[i * n_crust_triangles + ivi] = 1; // flag individual plate collision
+            continental_triangle_contacts[ivi] = 1; // flag general collision
         }
     }
 }
 
-int n_terranes;
+int n_terranes; // number of terranes in the crust layer
 
-float collision_coefficient;
-float global_collision_distance;
-float initial_average_vertex_area;
+float collision_coefficient; // discrete output multiplication parameter
+float global_collision_distance; // global parameter
+float initial_average_vertex_area; // initial average number of vertices per plate
 
+// input variables for collision uplift contributions
 StructuredBuffer<int> terrane_colliding_plates;
 StructuredBuffer<int> terrane_collided_plates;
-StructuredBuffer<int> terrane_vertices;
-StructuredBuffer<int> terrane_vertices_sps;
+StructuredBuffer<int> terrane_vertices;  // all terranes vertices, concatenated
+StructuredBuffer<int> terrane_vertices_sps; // indices referencing terrane array boundaries in terrane_vertices - index corresponding to terrane order is starting offset, next one is upper limit, where the next terrane vertex set starts - last is total upper limit
 
-
+// Calculate discrete collision uplift contributions.
 [numthreads(64, 1, 1)]
 void CSContinentalCollisionUplift(uint3 dID : SV_DispatchThreadID)
 {
@@ -580,26 +581,26 @@ void CSContinentalCollisionUplift(uint3 dID : SV_DispatchThreadID)
   int ivi_plate = crust_vertex_data[ivi].plate;
   float3 iv = quat_rot(crust_vertex_locations[ivi], plate_transforms[ivi_plate]);
 
-  float collision_max_distance, mindist, dist, dot_prod, terrane_area;
-  int offset, terrane_size;
+  float collision_max_distance, mindist, dist, dot_prod, terrane_area; // distance and size variables
+  int offset, terrane_size; // array offset and terrane vertex count
 
   for (int i = 0; i < n_terranes; i++) {
-    if (ivi_plate != terrane_collided_plates[i]) {
+    if (ivi_plate != terrane_collided_plates[i]) { // if the terrane does not collide with the plate, move along
       continue;
     }
-    mindist = MAX_DISTANCE;
-    offset = terrane_vertices_sps[i];
+    mindist = MAX_DISTANCE; // our friendly inifinity
+    offset = terrane_vertices_sps[i]; // get the offset
     terrane_size = terrane_vertices_sps[i+1] - terrane_vertices_sps[i];
-    terrane_area = (float)terrane_size / (float)n_crust_vertices * 4.0f * 3.141592653f;
-    collision_max_distance = global_collision_distance * sqrt(subduction_speed_transfer(iv, ivi_plate, terrane_colliding_plates[i])) * (float)terrane_size / initial_average_vertex_area;
-    for (int j = 0; j < terrane_size; j++) {
+    terrane_area = (float)terrane_size / (float)n_crust_vertices * 4.0f * 3.141592653f; // terrane area is calculated from the number of its vertices, as one point on average corresponds to the sphere area divided by the number of vertices
+    collision_max_distance = global_collision_distance * sqrt(subduction_speed_transfer(iv, ivi_plate, terrane_colliding_plates[i])) * (float)terrane_size / initial_average_vertex_area; // max distance of terrane influence
+    for (int j = 0; j < terrane_size; j++) { // for all vertices of the terrane, calculate the closest point
       dot_prod = dot(iv, quat_rot(crust_vertex_locations[terrane_vertices[offset + j]], plate_transforms[terrane_colliding_plates[i]]));
       dist = (dot_prod <= 1 ? acos(dot_prod) : 0.0f);
       mindist = (dist < mindist ? dist : mindist);
     }
-    if (mindist <= collision_max_distance) {
+    if (mindist <= collision_max_distance) { // if the closest point is near enough, calculate the partial contribution
       uplift_sum += collision_coefficient * terrane_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
     }
   }
-  uplift[ivi] = uplift_sum;
+  uplift[ivi] = uplift_sum; // sum the contribution and MOVE ALONG HOME!!!
 }

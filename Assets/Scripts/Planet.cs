@@ -1415,7 +1415,7 @@ public class TectonicPlanet
         int plateContactsKernelHandle = work_shader.FindKernel("CSTrianglePlateContacts"); // find border triangle contacts kernel
 
         int n_total_border_triangles = m_CBuffers["crust_border_triangles"].count;
-        CS_PlateContact[] contact_points_output = new CS_PlateContact[m_TectonicPlatesCount * n_total_border_triangles]; // matrix of flags - border triangle collisions with other plates
+        CS_PlateContact[] contact_points_output = new CS_PlateContact[m_TectonicPlatesCount * n_total_border_triangles]; // matrix of collisions - border triangle collisions with other plates
 
         ComputeBuffer contact_points_buffer = new ComputeBuffer(contact_points_output.Length, 28, ComputeBufferType.Default);
         work_shader.SetInt("n_crust_triangles", m_CrustTriangles.Count);

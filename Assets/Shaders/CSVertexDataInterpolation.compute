@@ -1,74 +1,69 @@
-﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSCrustToData
-#pragma kernel CSDataToRender
-#pragma warning(disable : 3557)
-#define MAX_DISTANCE 1000 // initialization protection
-#define MAX_DFS_STACK_SIZE 40
-#define DISTANCE_TOLERANCE 0.001f
+#pragma kernel CSCrustToData // get data layer from crust layer
+#pragma kernel CSDataToRender // get render layer from data layer
+#pragma warning(disable : 3557) // disable simple loop - unroll warning
+#define MAX_DISTANCE 1000 // initialization distance protection - some ridiculous number considered infinity on a unit sphere
+#define MAX_DFS_STACK_SIZE 40 // max depth of the dfs search stack because of memory
+#define DISTANCE_TOLERANCE 0.001f // tolerance for close check comparations
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-
-
-struct BV {
-    int n_children;
-    int left_child;
-    int right_child;
-    int triangle_index;
-    float3 circumcenter;
-    float circumradius;
+struct BV {// bounding volume data from an array input - binary tree representation
+    int n_children; // 2 (merged volume) or 0 (leaf)
+    int left_child; // left (first) child index in a BVH_array
+    int right_child; // right (second) child index in a BVH_array
+    int triangle_index; // triangle reference in a triangles array (if it is a leaf)
+    float3 circumcenter; // bounding volume circumcenter - not transformed
+    float circumradius; // bound volume circumradius
 };
 
-struct s_triangle {
-    int a;
-    int b;
-    int c;
-    int neigh_1;
-    int neigh_2;
-    int neigh_3;
-    float3 circumcenter;
-    float circumradius;
+struct s_triangle { // triangle data
+    int a; // index of the first vertex
+    int b; // index of the second vertex
+    int c; // index of the third vertex
+    int neigh_1; // index of the first neighbour triangle
+    int neigh_2; // index of the second neighbour triangle
+    int neigh_3; // index of the third neighbour triangle
+    float3 circumcenter; // triangle circumcenter position - not transformed
+    float circumradius; // triangle circumradius
 };
 
-struct vertex_data {
-    float elevation;
-    int plate;
-    int orogeny;
-    float age;
+struct vertex_data { // vertex crust data representation
+    float elevation; // crust elevation
+    int plate; // crust plate index
+    int orogeny; // crust orogeny type
+    float age; // crust age
 };
 
-int n_plates;
+int n_plates; // number of tectonic plates
 
-StructuredBuffer<int> overlap_matrix;
+StructuredBuffer<int> overlap_matrix; // tectonic plate overlaps - matrix saying if row overlaps column (1 if it does, -1 if it goes under)
 
-StructuredBuffer<BV> BVH_array;
-StructuredBuffer<float4> plate_transforms;
+StructuredBuffer<float4> plate_transforms; // quaternion transforms for all plates
 
-int n_data_vertices;
-float tectonic_iteration_step_time;
-int tectonic_steps_taken_without_resample;
+int n_data_vertices; // how many vertices in data layer
+float tectonic_iteration_step_time; // simulation time-step in My, def: 2
+int tectonic_steps_taken_without_resample; // tectonic steps taken from the last resample
 
-float highest_oceanic_ridge_elevation;
-float abyssal_plains_elevation;
-float oceanic_ridge_elevation_falloff;
+float highest_oceanic_ridge_elevation; // divergent plate ridge top elevation
+float abyssal_plains_elevation; // natural elevation for ocean points far from ocean ridge
+float oceanic_ridge_elevation_falloff; // new ocean crust ridge distance exponential scaling parameter
 
-StructuredBuffer<float3> crust_vertex_locations;
-StructuredBuffer<s_triangle> crust_triangles;
-StructuredBuffer<vertex_data> crust_vertex_data;
+StructuredBuffer<float3> crust_vertex_locations; // position of crust vertices
+StructuredBuffer<s_triangle> crust_triangles; // crust triangle data
+StructuredBuffer<vertex_data> crust_vertex_data; // crust vertex data for age, elevation etc.
 
-StructuredBuffer<BV> crust_BVH;
-StructuredBuffer<int> crust_BVH_sps;
-StructuredBuffer<float3> data_vertex_locations;
-RWStructuredBuffer<vertex_data> data_vertex_data;
-StructuredBuffer<int> crust_border_triangles;
-StructuredBuffer<int> crust_border_triangles_sps;
+StructuredBuffer<BV> crust_BVH; // all plate bounding volume hiearchies, concatenated
+StructuredBuffer<int> crust_BVH_sps; // indices referencing plate array boundaries in crust_BVH - index corresponding to plate order in m_TectonicPlates is starting offset, next one is upper limit, where the next BVH starts - last is total upper limit
+StructuredBuffer<float3> data_vertex_locations; // positions of the data layer vertices
+RWStructuredBuffer<vertex_data> data_vertex_data; // crust data of the data layer vertices
+StructuredBuffer<int> crust_border_triangles; // all plate border triangles, concatenated
+StructuredBuffer<int> crust_border_triangles_sps; // indices referencing plate array boundaries in crust_border_triangles
 
-int n_render_vertices;
-StructuredBuffer<BV> data_BVH;
-StructuredBuffer<s_triangle> data_triangles;
-StructuredBuffer<float3> render_vertex_locations;
-RWStructuredBuffer<vertex_data> render_vertex_data;
+int n_render_vertices; // how many vertices in render layer
+StructuredBuffer<BV> data_BVH; // data layer bounding volume hiearchy
+StructuredBuffer<s_triangle> data_triangles; // data layer triangles data
+StructuredBuffer<float3> render_vertex_locations; // position of render vertices
+RWStructuredBuffer<vertex_data> render_vertex_data; // render vertex data for age, elevation etc.
 
+// Multiply quaternion transforms.
 float4 qmul(float4 q1, float4 q2) {
     return float4(
         q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
@@ -76,80 +71,87 @@ float4 qmul(float4 q1, float4 q2) {
         );
 }
 
+// Apply unitary quaternion transform.
 float3 quat_rot(float3 v, float4 r) {
     float4 r_c = r * float4(-1, -1, -1, 1);
     return qmul(r, qmul(float4(v, 0), r_c)).xyz;
 }
 
+// Returns true if a given point is in a crust triangle.
+// vertex_location - float3 tested point - inverse plate transformed must be applied before calling
+// tested_triangle - a triangle where to look for vertex_location
 bool is_point_in_crust_tri(float3 vertex_location, s_triangle tested_triangle) {
-    float3 abcross, bccross, cacross, triangle_barycenter;
+    float3 abcross, bccross, cacross;
     float abplane_test, bcplane_test, caplane_test;
     float3 A, B, C;
-    A = crust_vertex_locations[tested_triangle.a];
+    A = crust_vertex_locations[tested_triangle.a]; // get the triangle vertices
     B = crust_vertex_locations[tested_triangle.b];
     C = crust_vertex_locations[tested_triangle.c];
-    abcross = cross(A, B);
+    abcross = cross(A, B); // construct normal vectors of planes in which the origin and two of the triangle points lie
     bccross = cross(B, C);
     cacross = cross(C, A);
-    abplane_test = dot(abcross, vertex_location);
+    abplane_test = dot(abcross, vertex_location); // calculate dot products to see on which side the vertex is
     bcplane_test = dot(bccross, vertex_location);
     caplane_test = dot(cacross, vertex_location);
-    return ((abplane_test + DISTANCE_TOLERANCE >= 0) && (bcplane_test + DISTANCE_TOLERANCE >= 0) && (caplane_test + DISTANCE_TOLERANCE >= 0));
+    return ((abplane_test + DISTANCE_TOLERANCE >= 0) && (bcplane_test + DISTANCE_TOLERANCE >= 0) && (caplane_test + DISTANCE_TOLERANCE >= 0)); // test the signs with tolerance values
 }
 
+// Look for a point in plate bounding volume hiearchy.
+// vertex_index - index of a vertex point to search for
+// index_bv_plate - index of the searched plate
 int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
 {
-    int candidate_triangle_index = -1;
-    int dfs_stack[MAX_DFS_STACK_SIZE];
-    int stack_index = 0;
+    int candidate_triangle_index = -1; // initialize candidate index out of bounds
+    int dfs_stack[MAX_DFS_STACK_SIZE]; // stack for BV indices - DFS because memory
+    int stack_index = 0; // stack top index - first array element is actually the stack bottom
 
-    dfs_stack[stack_index] = 0;
+    dfs_stack[stack_index] = 0; // root is stack bottom
 
-    float3 vl = data_vertex_locations[vertex_index];
-    float3 vlt = quat_rot(data_vertex_locations[vertex_index], plate_transforms[index_bv_plate] * float4(-1, -1, -1, 1));
-    int offset = crust_BVH_sps[index_bv_plate];
+    float3 vl = data_vertex_locations[vertex_index]; // actual point without transform
+    float3 vlt = quat_rot(data_vertex_locations[vertex_index], plate_transforms[index_bv_plate] * float4(-1, -1, -1, 1)); // an inverse plate tranform is applied on the point for faster checks on untransformed plate BVs
+    int offset = crust_BVH_sps[index_bv_plate]; // offset for BVH array look-up
 
-    s_triangle candidate, candidate_neighbour; // maybe delete
+    s_triangle candidate, candidate_neighbour; // evaluated triangles
 
-    float dot_prod, dist, barycenter_dot_product, barycenter_dot_max;
+    float dot_prod, dist, barycenter_dot_product, barycenter_dot_max; // distance variables
 
-    bool nearest_barycenter_found, plate_check;
+    bool nearest_barycenter_found, plate_check; // distance look-up flag if bvh search fails, check if plates in a triangle correspond to the desired plate
 
-    while (stack_index >= 0) {
-        dot_prod = dot(vlt, crust_BVH[offset + dfs_stack[stack_index]].circumcenter);
+    while (stack_index >= 0) { // while stack is not empty - negative stack index means empty
+        dot_prod = dot(vlt, crust_BVH[offset + dfs_stack[stack_index]].circumcenter); // dot product of circumcenter of the stack top BV and the point
 
-        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
+        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f); // calculate distance, clamp cos to 1
 
-        if (dist > crust_BVH[offset + dfs_stack[stack_index]].circumradius * 1.01f) {
-            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) {
+        if (dist > crust_BVH[offset + dfs_stack[stack_index]].circumradius * 1.01f) { // underestimate the distance, test if the point is outside BV
+            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) {  // go back until only root is left in the stack or the stack top BV is left child of the element below - the algorithm then expands the right child
                 stack_index--;
             }
             if (stack_index == 0) {
                 return -1;
             }
-            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
-            continue;
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child; // rewrite current stack index BV with the right child of its parent
+            continue; // iterate, there is the right child to take care of
         }
+        // the point is apparently within BV
         if (crust_BVH[offset + dfs_stack[stack_index]].n_children == 2) {
-            dfs_stack[stack_index + 1] = crust_BVH[offset + dfs_stack[stack_index]].left_child;
+            dfs_stack[stack_index + 1] = crust_BVH[offset + dfs_stack[stack_index]].left_child; // if the BV has children, expand its left child
             stack_index++;
         }
-        else {
+        else { // BV is a leaf and passed the distance check - it is quite possibly in the primitive triangle or close by its neighbours
             // triangle test START
-            if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) {
-                // TODO - search by barycenters, test nearest barycenter triangle and its neighbours
+            if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) { // leaf has to have a triangle reference
                 candidate_triangle_index = crust_BVH[offset + dfs_stack[stack_index]].triangle_index;
-                if (is_point_in_crust_tri(vlt, crust_triangles[candidate_triangle_index])) {
+                if (is_point_in_crust_tri(vlt, crust_triangles[candidate_triangle_index])) { // if it is in the triangle, return its index
                     return candidate_triangle_index;
                 }
 
-                candidate = crust_triangles[candidate_triangle_index];
-                barycenter_dot_max = dot(vlt, normalize(crust_vertex_locations[candidate.a] + crust_vertex_locations[candidate.b] + crust_vertex_locations[candidate.c]));
-                nearest_barycenter_found = false;
-                while (!nearest_barycenter_found) {
-                    nearest_barycenter_found = true;
-                    candidate_neighbour = crust_triangles[candidate.neigh_1];
-                    plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
+                candidate = crust_triangles[candidate_triangle_index]; // current triangle to search
+                barycenter_dot_max = dot(vlt, normalize(crust_vertex_locations[candidate.a] + crust_vertex_locations[candidate.b] + crust_vertex_locations[candidate.c])); // distance is identified with dot product of point and a candidata barycenter - searching for maximum dot product
+                nearest_barycenter_found = false; // flag for identifying a barycenter with maximum global dot product
+                while (!nearest_barycenter_found) { // until the nearest barycenter is found, look through nearer neighbours
+                    nearest_barycenter_found = true; // assume the nearest bc is found
+                    candidate_neighbour = crust_triangles[candidate.neigh_1]; // test if one neighbour is does not have a nearer bc - if so, rewrite candidate and repeat
+                    plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate); // check if the plate indices for neighbouring triangle match the given plate index
                     barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
                     if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
                         barycenter_dot_max = barycenter_dot_product;
@@ -158,7 +160,7 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
                         nearest_barycenter_found = false;
                         continue;
                     }
-                    candidate_neighbour = crust_triangles[candidate.neigh_2];
+                    candidate_neighbour = crust_triangles[candidate.neigh_2]; // the same for the second neighbour
                     plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
                     barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
                     if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
@@ -168,7 +170,7 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
                         nearest_barycenter_found = false;
                         continue;
                     }
-                    candidate_neighbour = crust_triangles[candidate.neigh_3];
+                    candidate_neighbour = crust_triangles[candidate.neigh_3]; // the same for the third neighbour
                     plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
                     barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
                     if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
@@ -179,9 +181,9 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
                         continue;
                     }
                 }
-                if (is_point_in_crust_tri(vlt, candidate)) {
+                if (is_point_in_crust_tri(vlt, candidate)) { // if the point is found is within triangle, return its index
                     return candidate_triangle_index;
-                }
+                } // if not, it should be in one of the neighbours
                 candidate_neighbour = crust_triangles[candidate.neigh_1];
                 plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
                 barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
@@ -200,32 +202,34 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
                 if ((plate_check) && (is_point_in_crust_tri(vlt, candidate_neighbour))) {
                     return candidate.neigh_3;
                 }
-
-
             }
             // triangle test END
+            // if the triangle has not been found, go back through stack until an unexpanded right child has been found or only the BVH root remains
             while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
             {
                 stack_index--;
             }
-            if (stack_index == 0) {
+            if (stack_index == 0) { // we reached the BVH root, search was unsuccessful
                 return -1;
             }
-            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
+            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child; // expand the next available right child
         }
-
     }
-    return -1;
+    return -1; // we reached the BVH root, search was unsuccessful
 }
 
+// Interpolate crust values at a point, given a triangle
+// ipoint - point at which to evaluate
+// triangle_index - index of the triangle with values to be interpolated
+// triangle_transformation - plate transform for the specific triangle
 vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, float4 triangle_transformation) {
-    float3 a = crust_vertex_locations[crust_triangles[triangle_index].a];
+    float3 a = crust_vertex_locations[crust_triangles[triangle_index].a]; // triangle vertices
     float3 b = crust_vertex_locations[crust_triangles[triangle_index].b];
     float3 c = crust_vertex_locations[crust_triangles[triangle_index].c];
-    float u, v, w;
-    float3 v0 = b - a;
+    float u, v, w; // barycentric weights
+    float3 v0 = b - a; // calculate barycentric weights
     float3 v1 = c - a;
-    float3 v2 = quat_rot(ipoint, triangle_transformation * float4(-1, -1, -1, 1)) - a;
+    float3 v2 = quat_rot(ipoint, triangle_transformation * float4(-1, -1, -1, 1)) - a; // reference point - take inverse triangle transformation into account
     float d00 = dot(v0, v0);
     float d01 = dot(v0, v1);
     float d11 = dot(v1, v1);
@@ -237,7 +241,7 @@ vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, f
     u = 1.0f - v - w;
     vertex_data ret;
 
-    float e1, e2, e3, ag1, ag2, ag3;
+    float e1, e2, e3, ag1, ag2, ag3; // float crust values
     e1 = crust_vertex_data[crust_triangles[triangle_index].a].elevation;
     e2 = crust_vertex_data[crust_triangles[triangle_index].b].elevation;
     e3 = crust_vertex_data[crust_triangles[triangle_index].c].elevation;
@@ -245,10 +249,10 @@ vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, f
     ag2 = crust_vertex_data[crust_triangles[triangle_index].b].age;
     ag3 = crust_vertex_data[crust_triangles[triangle_index].c].age;
 
-    ret.elevation = (u * e1 + v * e2 + w * e3);
+    ret.elevation = (u * e1 + v * e2 + w * e3); // float values are simply a weighed average of the triangle vertices
     ret.age = (u * ag1 + v * ag2 + w * ag3);
 
-    ret.plate = crust_vertex_data[crust_triangles[triangle_index].a].plate;
+    ret.plate = crust_vertex_data[crust_triangles[triangle_index].a].plate; // integer values are asssigned by the largest weight
     ret.orogeny = crust_vertex_data[crust_triangles[triangle_index].a].orogeny;
     if (v > u) {
       ret.plate = crust_vertex_data[crust_triangles[triangle_index].b].plate;
@@ -258,67 +262,68 @@ vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, f
       ret.plate = crust_vertex_data[crust_triangles[triangle_index].c].plate;
       ret.orogeny = crust_vertex_data[crust_triangles[triangle_index].c].orogeny;
     }
-    return ret;
+    return ret; // return computed crust vertex data
 }
 
+// Batch size 64. Interpolates crust layer to form data layer. Creates new crust where points are missing.
 [numthreads(64, 1, 1)]
 void CSCrustToData(uint3 dID : SV_DispatchThreadID)
 {
 
     int ivi = dID.x; // interpolated vertex index
-    if (ivi >= n_data_vertices) {
+    if (ivi >= n_data_vertices) { // if the id from dID exceeds the bounds of render vertex array, close the shop
         return;
     }
 
-    float3 iv = data_vertex_locations[ivi];
-    int found_index = -1;
+    float3 iv = data_vertex_locations[ivi]; // actual interpolated point
+    int found_index = -1; // look for specific plates, when they are overlapping at the point
     int found_plate = -1;
 
-    for (int i = 0; i < n_plates; i++) {
+    for (int i = 0; i < n_plates; i++) { // look through all plates and remember only the top
         int help_index;
-        if ((found_plate == -1) || (overlap_matrix[i * n_plates + found_plate] != -1)) {
-
+        if ((found_plate == -1) || (overlap_matrix[i * n_plates + found_plate] != -1)) { // if no plate has been found yet or there is an upper plate to the current one, try to search the upper
             help_index = search_plate_bvh_for_point(ivi, i);
-            if (help_index != -1) {
+            if (help_index != -1) { // if found, forget the old plate and remember the upper
                 found_index = help_index;
                 found_plate = i;
             }
         }
     }
-    float3 iv_transformed;
-    if (found_index == -1) {
+    float3 iv_transformed; // point with inverse transforms applied for faster test
+    if (found_index == -1) { // if the point has not been found in any plate BVH, construct the vertex data as if the vertex had been on a diverging ocean plate
+        // look for the two nearest plates by searching for the nearest triangles belonging to those plates
         float dist_1 = MAX_DISTANCE; // start from far
         int plate_1 = -1; // no plate yet
-        s_triangle triangle_1 = crust_triangles[crust_border_triangles[0]]; // dummy init
-        float elevation_1 = abyssal_plains_elevation;
+        s_triangle triangle_1 = crust_triangles[crust_border_triangles[0]]; // dummy initialization
+        float elevation_1 = abyssal_plains_elevation; // data - dummy initialization
         float dist_2 = MAX_DISTANCE; // start from far
-        int plate_2 = -1; // no plate yet
+        int plate_2 = -1; // the same for the plate 2
         s_triangle triangle_2 = crust_triangles[crust_border_triangles[0]];
         float elevation_2 = abyssal_plains_elevation;
-        float check_dist = MAX_DISTANCE;
-        s_triangle check_triangle;
-        float3 check_bcenter;
-        s_triangle control_triangle = crust_triangles[crust_border_triangles[0]];
+        float check_dist = MAX_DISTANCE; // distance variable
+        s_triangle check_triangle; // triangle candidate
+        float3 check_bcenter; // barycenter check
+        s_triangle control_triangle = crust_triangles[crust_border_triangles[0]]; // placeholder triangle for shuffles - dummy initialization
 
-        for (int i = 0; i < n_plates; i++) {
-            float check_dist = MAX_DISTANCE;
-            int crust_border_loop_size = crust_border_triangles_sps[i + 1] - crust_border_triangles_sps[i];
-            iv_transformed = quat_rot(iv, plate_transforms[i] * float4(-1, -1, -1, 1));
-
-            for (int j = 0; j < crust_border_loop_size; j++) {
-                check_triangle = crust_triangles[crust_border_triangles[crust_border_triangles_sps[i] + j]];
-                check_bcenter = normalize(crust_vertex_locations[check_triangle.a] + crust_vertex_locations[check_triangle.b] + crust_vertex_locations[check_triangle.c]);
-                float dot_product = dot(check_bcenter, iv_transformed);
-                if ((dot_product <= 1 ? acos(dot_product) : 0) < check_dist) {
-                    check_dist = (dot_product <= 1 ? acos(dot_product) : 0);
+        for (int i = 0; i < n_plates; i++) { // for all plates, try to find the nearest triangle, overwrite if found a nearer one
+            float check_dist = MAX_DISTANCE; // init the distance to maximum
+             // if the point is not on any plate, the nearest triangle should be a border one
+            int crust_border_loop_size = crust_border_triangles_sps[i + 1] - crust_border_triangles_sps[i]; // array range for the considered border triangles
+            iv_transformed = quat_rot(iv, plate_transforms[i] * float4(-1, -1, -1, 1)); // apply the inverse plate transform to the point
+            for (int j = 0; j < crust_border_loop_size; j++) { // brute-force looking for the nearest border triangle, should only be a few thousand of them at most
+                check_triangle = crust_triangles[crust_border_triangles[crust_border_triangles_sps[i] + j]]; // candidate triangle
+                check_bcenter = normalize(crust_vertex_locations[check_triangle.a] + crust_vertex_locations[check_triangle.b] + crust_vertex_locations[check_triangle.c]); // calculate its barycenter
+                float dot_product = dot(check_bcenter, iv_transformed); // dot product of between the barycenter and the point
+                if ((dot_product <= 1 ? acos(dot_product) : 0) < check_dist) { // if the distance is shorter than the shortest distance yet, rewrite the placeholder as the nearest so far
+                    check_dist = (dot_product <= 1 ? acos(dot_product) : 0); // rewrite minimal distance
                     control_triangle = check_triangle;
                 }
             }
-            if (i == 0) {
+            if (i == 0) { // for the first loop, nearest triangle of the first plate is the nearest of them all
                 dist_1 = check_dist;
                 plate_1 = 0;
                 triangle_1 = control_triangle;
-            } else if (i == 1) {
+            } else if (i == 1) { // for the second loop, the nearest triangle of the second plate could be even nearer than the first, in which case swap them
                 if (check_dist < dist_1) {
                     dist_2 = dist_1;
                     plate_2 = 0;
@@ -327,14 +332,14 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
                     plate_1 = 1;
                     triangle_1 = control_triangle;
                 }
-                else {
+                else { // otherwise, it's the second nearest triangle (plate)
                     dist_2 = check_dist;
                     plate_2 = 1;
                     triangle_2 = control_triangle;
                 }
             }
-            else if (check_dist < dist_2) {
-                if (check_dist < dist_1) {
+            else if (check_dist < dist_2) { // for all other loops - if a plate is nearer check if its now the second nearest or the nearest
+                if (check_dist < dist_1) { // it's the nearest, swap the plates
                     dist_2 = dist_1;
                     plate_2 = plate_1;
                     triangle_2 = triangle_1;
@@ -342,14 +347,14 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
                     plate_1 = i;
                     triangle_1 = control_triangle;
                 }
-                else {
+                else { // it's the second nearest
                     dist_2 = check_dist;
                     plate_2 = i;
                     triangle_2 = control_triangle;
                 }
             }
 
-            float3 control_point = crust_vertex_locations[triangle_1.a];
+            float3 control_point = crust_vertex_locations[triangle_1.a]; // look for the nearest point of the nearest triangle and remember its elevation
             float dot_product = dot(control_point, iv_transformed);
             float max_dot_product = dot_product;
             elevation_1 = crust_vertex_data[triangle_1.a].elevation;
@@ -368,21 +373,19 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
                 max_dot_product = dot_product;
             }
 
-            // second plate
-
-            control_point = crust_vertex_locations[triangle_1.a];
+            control_point = crust_vertex_locations[triangle_2.a]; // the same for the second plate
             dot_product = dot(control_point, iv_transformed);
             max_dot_product = dot_product;
             elevation_2 = crust_vertex_data[triangle_2.a].elevation;
 
-            control_point = crust_vertex_locations[triangle_1.b];
+            control_point = crust_vertex_locations[triangle_2.b];
             dot_product = dot(control_point, iv_transformed);
             if (dot_product > max_dot_product) {
                 elevation_2 = crust_vertex_data[triangle_2.b].elevation;
                 max_dot_product = dot_product;
             }
 
-            control_point = crust_vertex_locations[triangle_1.c];
+            control_point = crust_vertex_locations[triangle_2.c];
             dot_product = dot(control_point, iv_transformed);
             if (dot_product > max_dot_product) {
                 elevation_2 = crust_vertex_data[triangle_2.c].elevation;
@@ -391,28 +394,24 @@ void CSCrustToData(uint3 dID : SV_DispatchThreadID)
 
         }
 
-        float dist_ridge = 0.5f * (dist_1 + dist_2) - dist_1;
-        float alpha = dist_ridge / (dist_ridge + dist_1);
+        float dist_ridge = 0.5f * (dist_1 + dist_2) - dist_1; // calculate distance to the ridge, assume halfway on the direct line between the points
+        float alpha = dist_ridge / (dist_ridge + dist_1); // relative weigh parameter of the ridge distance to the distance of the ridge to the edge of the plate
 
-        //float plates_contribution = 0.5f * alpha * elevation_1 + (1 - 0.5f * alpha) * elevation_2;
-        float plates_contribution = alpha * elevation_1;
-        float ridge_contribution = (highest_oceanic_ridge_elevation - abyssal_plains_elevation) * exp2(-dist_ridge / oceanic_ridge_elevation_falloff) + abyssal_plains_elevation;
+        // computed elevation is weighed
+        float plates_contribution = alpha * elevation_1; // weighed contribution from the ridge distance - the nearer the plate, the more the elevation copies the plate profile
+        float ridge_contribution = (highest_oceanic_ridge_elevation - abyssal_plains_elevation) * exp2(-dist_ridge / oceanic_ridge_elevation_falloff) + abyssal_plains_elevation; // the further from the plate, the more the elevation follows the specific profile of the ocean ridge
 
-        data_vertex_data[ivi].elevation = alpha * plates_contribution + (1 - alpha) * ridge_contribution;
-        data_vertex_data[ivi].plate = plate_1;
-        data_vertex_data[ivi].age = alpha * (float)tectonic_iteration_step_time * (float)tectonic_steps_taken_without_resample;
-        //data_vertex_data[ivi].age = (float)tectonic_iteration_step_time * (float)tectonic_steps_taken_without_resample * dist_1;
-        //data_vertex_data[ivi].age = (float)tectonic_iteration_step_time * (float)tectonic_steps_taken_without_resample;
-        //data_vertex_data[ivi].age = dist_ridge * 400;
-        data_vertex_data[ivi].orogeny = 0;
+        data_vertex_data[ivi].elevation = alpha * plates_contribution + (1 - alpha) * ridge_contribution; // add the two contributions together
+        data_vertex_data[ivi].plate = plate_1; // assign the nearest plate as the vertex plate
+        data_vertex_data[ivi].age = alpha * (float)tectonic_iteration_step_time * (float)tectonic_steps_taken_without_resample; // compute the new crust age by estimating the drift time to the point from the ridge
+        data_vertex_data[ivi].orogeny = 0; // no orogeny yet - a new ocean vertex
     }
-    else {
-
+    else { // if the point has been found, simply interpolate from an existing triangle
         data_vertex_data[ivi] = crust_barycentric_interpolation(iv, found_index, plate_transforms[found_plate]);
     }
 }
 
-
+// Similar to is_point_in_crust_tri, without the need to apply the inverse transform to vertex_location beforehand
 bool is_point_in_data_tri(float3 vertex_location, s_triangle tested_triangle) {
     float3 abcross, bccross, cacross, triangle_barycenter;
     float abplane_test, bcplane_test, caplane_test;
@@ -429,6 +428,7 @@ bool is_point_in_data_tri(float3 vertex_location, s_triangle tested_triangle) {
     return ((abplane_test + DISTANCE_TOLERANCE >= 0) && (bcplane_test + DISTANCE_TOLERANCE >= 0) && (caplane_test + DISTANCE_TOLERANCE >= 0));
 }
 
+// Similar to search_plate_bvh_for_point, except there are not plate checks and the search is at the whole data layer bounding volume hiearchy
 int search_data_bvh_for_point(int vertex_index)
 {
     int candidate_triangle_index = -1;
@@ -542,6 +542,7 @@ int search_data_bvh_for_point(int vertex_index)
     return -1;
 }
 
+// Similar to crust_barycentric_interpolation, without the need for triangle transform
 vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
     float3 a = data_vertex_locations[data_triangles[triangle_index].a];
     float3 b = data_vertex_locations[data_triangles[triangle_index].b];
@@ -549,7 +550,7 @@ vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
     float u, v, w;
     float3 v0 = b - a;
     float3 v1 = c - a;
-    float3 v2 = ipoint - a;
+    float3 v2 = ipoint - a; // no need to apply the inverse triangle transform here
     float d00 = dot(v0, v0);
     float d01 = dot(v0, v1);
     float d11 = dot(v1, v1);
@@ -586,23 +587,26 @@ vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
 
 }
 
+// Batch size 64. Similar to CSCrustToData, but transforms data layer into render layer and there is no interpolated new crust from ridges as there should not be any need of it.
 [numthreads(64, 1, 1)]
 void CSDataToRender(uint3 dID : SV_DispatchThreadID)
 {
 
     int ivi = dID.x; // interpolated vertex index
-    if (ivi >= n_render_vertices) {
+    if (ivi >= n_render_vertices) { // if the id from dID exceeds the bounds of render vertex array, close the shop
         return;
     }
 
-    float3 iv = render_vertex_locations[ivi];
-    int found_index = search_data_bvh_for_point(ivi);
+    float3 iv = render_vertex_locations[ivi]; // actual interpolated point
+    int found_index = search_data_bvh_for_point(ivi); // look for the point in the bounding volume hiearchy
 
-    if (found_index == -1) {
+    if (found_index == -1) { // if not found, return some default values
         render_vertex_data[ivi].elevation = 0.0f; // should not happen, but hey
         render_vertex_data[ivi].plate = 0;
+        render_vertex_data[ivi].orogeny = 0;
+        render_vertex_data[ivi].age = 0;
     }
     else {
-        render_vertex_data[ivi] = data_barycentric_interpolation(iv, found_index);
+        render_vertex_data[ivi] = data_barycentric_interpolation(iv, found_index); // assign interpolated values
     }
 }

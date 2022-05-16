@@ -1,3 +1,3 @@
 some code clean-up
-work on code documentation
-minor code changes
+finished first working code documentation
+minor code changes - corrected new ocean crust interpolation
