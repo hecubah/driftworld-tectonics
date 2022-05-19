@@ -190,18 +190,9 @@ vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
     float3 a = data_vertex_locations[data_triangles[triangle_index].a]; // triangle vertices
     float3 b = data_vertex_locations[data_triangles[triangle_index].b];
     float3 c = data_vertex_locations[data_triangles[triangle_index].c];
-    float u, v, w; // barycentric weights
-    float3 v0 = b - a; // calculate barycentric weights
-    float3 v1 = c - a;
-    float3 v2 = ipoint - a;
-    float d00 = dot(v0, v0);
-    float d01 = dot(v0, v1);
-    float d11 = dot(v1, v1);
-    float d20 = dot(v2, v0);
-    float d21 = dot(v2, v1);
-    float denom = d00 * d11 - d01 * d01;
-    v = (d11 * d20 - d01 * d21) / denom;
-    w = (d00 * d21 - d01 * d20) / denom;
+    float u, v, w; // barycentric coordinates, corresponding to relative area ratios of smaller opposite triangle
+    v = length(cross(c-a, ipoint-a))/length(cross(b-a, c-a)); // calculations based on parallelogram areas
+    w = length(cross(b-a, ipoint-a))/length(cross(b-a, c-a));
     u = 1.0f - v - w;
     vertex_data ret;
 
@@ -521,21 +512,14 @@ int search_plate_bvh_for_point(float3 vl, int index_bv_plate)
 // Similar to data_barycentric_interpolation.
 // triangle_transformation - plate transform for the specific triangle
 vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, float4 triangle_transformation) {
+
     float3 a = crust_vertex_locations[crust_triangles[triangle_index].a];
     float3 b = crust_vertex_locations[crust_triangles[triangle_index].b];
     float3 c = crust_vertex_locations[crust_triangles[triangle_index].c];
-    float u, v, w;
-    float3 v0 = b - a;
-    float3 v1 = c - a;
-    float3 v2 = quat_rot(ipoint, triangle_transformation * float4(-1, -1, -1, 1)) - a;
-    float d00 = dot(v0, v0);
-    float d01 = dot(v0, v1);
-    float d11 = dot(v1, v1);
-    float d20 = dot(v2, v0);
-    float d21 = dot(v2, v1);
-    float denom = d00 * d11 - d01 * d01;
-    v = (d11 * d20 - d01 * d21) / denom;
-    w = (d00 * d21 - d01 * d20) / denom;
+    float3 p = quat_rot(ipoint, triangle_transformation * float4(-1, -1, -1, 1)); // inverse-transformed point
+    float u, v, w; // barycentric coordinates, corresponding to relative area ratios of smaller opposite triangle
+    v = length(cross(c-a, p-a))/length(cross(b-a, c-a)); // calculation based on parallelogram areas
+    w = length(cross(b-a, p-a))/length(cross(b-a, c-a));
     u = 1.0f - v - w;
     vertex_data ret;
 

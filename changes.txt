@@ -1,3 +1,2 @@
-some code clean-up
-finished first working code documentation
-minor code changes - corrected new ocean crust interpolation
+started work on PDF documentation
+updated .gitignore

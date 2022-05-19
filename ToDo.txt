@@ -2,5 +2,3 @@ manual documentation
 memory leaks?
 optimization?
 cubemap overlays?
-
-citation sources: RGB to HSV, barycentric interpolation, quaternion multiplication

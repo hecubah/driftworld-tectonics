@@ -12,5 +12,12 @@ Assets/Scenes/WorkScene.unity*
 Assets/Scenes/AScene.unity*
 MemoryCaptures*
 UserSettings*
+Doc/*.aux
+Doc/*.log
+Doc/*.synctex.gz
+Doc/*.toc
+Doc/*.out
+Doc/*.lof
+Doc/*.lot
 save.dat
 tex.png

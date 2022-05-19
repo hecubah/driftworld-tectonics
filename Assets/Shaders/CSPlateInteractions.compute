@@ -542,7 +542,7 @@ void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
         return;
     }
 
-    int main_plate_index = crust_vertex_data[crust_triangles[ivi].a].plate; triangle plate
+    int main_plate_index = crust_vertex_data[crust_triangles[ivi].a].plate; // triangle plate
     for (int i = 0; i < n_plates; i++) { // look for continental collisions with all other plates
         if (i == main_plate_index) { // if it is the same plate, return
             continue;
