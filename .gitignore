@@ -4,8 +4,8 @@ Temp*
 obj*
 Logs*
 Assembly-CSharp.csproj
-Driftworld.sln
-driftworld.sln
+Driftworld-tectonics.sln
+driftworld-tectonics.sln
 .vsconfig
 Assets/Scenes/SampleSceneSettings.lighting*
 Assets/Scenes/WorkScene.unity*
