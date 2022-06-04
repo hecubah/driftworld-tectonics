@@ -29,7 +29,8 @@
 \usepackage{array} % for better arrays (eg matrices) in maths
 \usepackage{paralist} % very flexible & customisable lists (eg. enumerate/itemize, etc.)
 \usepackage{verbatim} % adds environment for commenting out blocks of text & for better verbatim
-\usepackage{subfig} % make it possible to include more than one captioned figure/table in a single float
+%\usepackage{subfig} % make it possible to include more than one captioned figure/table in a single float
+\usepackage{subcaption} % make it possible to include more than one captioned figure/table in a single float
 % These packages are all incorporated in the memoir class to one degree or another...
 
 %%% HEADERS & FOOTERS
@@ -46,12 +47,14 @@
 
 %%% ToC (table of contents) APPEARANCE
 \usepackage[nottoc,section, numbib]{tocbibind} % Put the bibliography in the ToC
-\usepackage[titles,subfigure]{tocloft} % Alter the style of the Table of Contents
+\usepackage[titles]{tocloft} % Alter the style of the Table of Contents
 \renewcommand{\cftsecfont}{\rmfamily\mdseries\upshape}
 \renewcommand{\cftsecpagefont}{\rmfamily\mdseries\upshape} % No bold!
 %%% END Article customizations
-
+\graphicspath{ {./resources/} }
 \usepackage[hidelinks]{hyperref}
+\usepackage{amsmath}
+\usepackage{amsfonts}
 \hypersetup{
     colorlinks=true,
     citecolor=[RGB]{0,0,200},
@@ -62,7 +65,7 @@
     pdfauthor={Adalbert Delong},
     }
 
-\title{Driftworld 1.0: an overview}
+\title{Driftworld Tectonics 1.0: an overview}
 \author{Adalbert Delong}
 \date{19th May 2022}
 
