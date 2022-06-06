@@ -88,22 +88,79 @@ $\left[x\right]$ denotes the fractional part of $x$, $\Phi$ is the golden ratio 
 $$\mathbf{u}_i = (\sin{(\arccos{(z_i)})}\cdot\cos{\phi_i}, z_i, \sin{(\arccos{(z_i)})}\cdot\sin{\phi_i})$$
 Note that this mapping reflects Unity's axes orientation and the first and the last samples of $U$ do not fall exactly on the poles.
 \subsection{Centroids, data values and barycentric interpolation}
-Driftworld often makes computations for points inside sperical triangles - notably, it uses triangle centroids to evaluate triangle neighbours. Calculating these points is not a trivial procedure and although for a long time there have been methods to do so, it would be too resource-consuming when performed on a larger scale. To save computation time, we assume that all evaluated triangles are nearly planar, i. e. their \textit{triangle excess} is negligible (Legendre's Theorem\footnote{This theorem is also known as Saccheri-Legendre theorem.} \cite{todhunter}). We calculate the centroid of a triangle by simply normalizing the sum of its vertices:
+Driftworld often makes computations for points inside sperical triangles - notably, it uses triangle centroids to evaluate triangle neighbours. Calculating these points is not a trivial procedure and although for a long time there have been methods to do so, it would be too resource-consuming when performed on a larger scale. To save computation time, we assume that all evaluated triangles are nearly planar, i. e. their \textit{triangle excess} is negligible (Legendre's Theorem\footnote{This theorem is also known as Saccheri-Legendre theorem.} \cite{todhunter}). We calculate the centroid of a triangle by simply normalizing the sum of its vertices (Figure \ref{fig:triangle-centroid}):
 $$\mathbf{b}_\mathcal{T}=\frac{\mathbf{a} + \mathbf{b} + \mathbf{c}}{||\mathbf{a} + \mathbf{b} + \mathbf{c}||}$$
+\begin{figure}[ht]
+\centering
+\begin{subfigure}{7cm}
+\includegraphics[height=6cm]{triangle-centroid.png}
+\caption{sectional triangle centroid}
+\label{fig:triangle-centroid}
+\end{subfigure}
+\hspace*{1cm}
+\begin{subfigure}{7cm}
+\includegraphics[height=6cm]{triangle-barycentric.png}
+\caption{barycentric coordinates}
+\label{fig:triangle-barycentric}
+\end{subfigure}
+\caption{Centroid geometry}
+\label{fig:centroid-geometry}
+\end{figure}
 
-To store crust data, we must assign values to points on the sphere. These values may be of different types or have different meaning. Formally, we denote a sequence of arbitrary sets $C=\left(V_i\right)_{i=0}^{n-1}$, where $n$ is the number of different values assigned to a point and each $V_i$ is a specific type of value. The system of all possible value combinations is then a cartesian product of these value sets:
+To store crust data, we must assign values to points on the sphere. These values may be of different types or have different meaning. Formally, we denote a sequence of arbitrary sets $C=\left(V_i\right)_{i=0}^{n-1}$, where $n$ is the number of different values assigned to a point and each $V_i$ is a specific of value. The system of all possible value combinations is then a cartesian product of these value sets:
 $$V=\prod_{i=0}^{n-1}V_i$$
 Stored data can then be defined as a map:
 $$s: U\rightarrow V$$
 $$s_i: U\rightarrow V_i$$
-We store data only for sphere samples because of limited memory. Other values will be computed as needed using \textit{barycentric interpolation} \cite{scratchapixel}.
+We store data only for sphere samples because of limited memory. Other values will be computed as needed using \textit{barycentric interpolation} \cite{scratchapixel}.\newpage
 
-We come to the following problem: how to compute values anywhere on $\mathcal{S}$? We are effectively looking for some domain extension, since $U\subset\mathcal{S}$:
+Now it comes to the following problem: how to compute values anywhere on $\mathcal{S}$? We are effectively looking for some domain extension, since $U\subset\mathcal{S}$:
 $$s':\mathcal{S}\rightarrow V, \forall \mathbf{u}\in U:s'(\mathbf{u})=s(\mathbf{u})$$
 $$s_i':\mathcal{S}\rightarrow V_i, \forall \mathbf{u}\in U:s_i'(\mathbf{u})=s_i(\mathbf{u})$$
-Given some arbitrary point $\mathbf{x}\in\mathcal{S}$, we start with an assumption that $\mathbf{x}$ is found inside some spherical triangle $\mathcal{T}$ with negligible triangle excess and vertices $\{\mathbf{a}, \mathbf{b}, \mathbf{c}\} \subset U$ for which we already know the values of $s$. We would like $s'(\mathbf{x})$ to be computed 'fairly'.
-\subsection{Spherical mesh}
-\subsection{Delauney interpolation}
+Given some arbitrary point $\mathbf{x}\in\mathcal{S}$, we start with an assumption that $\mathbf{x}$ is found inside some spherical triangle $\mathcal{T}$ with negligible triangle excess and vertices $\{\mathbf{a}, \mathbf{b}, \mathbf{c}\} \subset U$ for which we already know the values of $s$. We would like $s'(\mathbf{x})$ to be computed 'fairly', i. e. the closer $\mathbf{x}$ is to some vertex, the more influence the vertex value should have on $s'(\mathbf{x})$. A good start might be in analogy with a political voting system based on area. If the population is homogeneous, any region vote is weighted by its area and transitionally, by its population.
+
+Let $P$ be some point within a triangle $ABC$ (Figure \ref{fig:triangle-barycentric}). This point is represented by a point vector $\mathbf{p}\in\mathcal{S}$. As stated earlier, we assume all points lie nearly on the same plane. If we construct three triangles $PBC$, $APC$ and $APB$, the triangle $ABC$ will be divided into three regions, each corresponding to their oposite vertex of $ABC$. The closer $P$ is to any of the vertices, the larger the corresponding triangle area is. Total area sum of the three triangles is equal to the area of $ABC$. Therefore, we can use these triangle areas as weights for interpolating values at $P$ -- we only need to find the respective areas of $S_A, S_B, S_C$ and $S_{ABC}$. This can be done using cross product:
+$$S_A=\frac{|(\mathbf{b}-\mathbf{p})\times(\mathbf{c}-\mathbf{p})|}{2}$$
+$$S_B=\frac{|(\mathbf{c}-\mathbf{p})\times(\mathbf{a}-\mathbf{p})|}{2}$$
+$$S_C=\frac{|(\mathbf{a}-\mathbf{p})\times(\mathbf{b}-\mathbf{p})|}{2}$$
+$$S_{ABC}=\frac{|(\mathbf{b}-\mathbf{a})\times(\mathbf{c}-\mathbf{a})|}{2}$$
+Since $S_A+S_B+S_C=S_{ABC}$, we can define normalized weights $u, v, w$ called \textit{barycentric coordinates}:
+$$u=\frac{|(\mathbf{b}-\mathbf{p})\times(\mathbf{c}-\mathbf{p})|}{|(\mathbf{b}-\mathbf{a})\times(\mathbf{c}-\mathbf{a})|}$$
+$$v=\frac{|(\mathbf{c}-\mathbf{p})\times(\mathbf{a}-\mathbf{p})|}{|(\mathbf{b}-\mathbf{a})\times(\mathbf{c}-\mathbf{a})|}$$
+$$w=\frac{|(\mathbf{a}-\mathbf{p})\times(\mathbf{b}-\mathbf{p})|}{|(\mathbf{b}-\mathbf{a})\times(\mathbf{c}-\mathbf{a})|}$$
+It is easy to confirm that $u+v+w=1$.
+
+There are basically two types of values interpolated in the project -- real values and categories. Real value interpolation is straightforward:
+$$s_i'(\mathbf{p})=us_i(\mathbf{a})+vs_i(\mathbf{b})+ws_i(\mathbf{c})$$
+Categories are simply assigned to $\mathbf{p}$ according to the largest weight:
+$$u=\mbox{max}(\{u,v,w\})\Rightarrow s_j'(\mathbf{p})=s_j(\mathbf{a})$$
+$$v=\mbox{max}(\{u,v,w\})\Rightarrow s_j'(\mathbf{p})=s_j(\mathbf{b})$$
+$$w=\mbox{max}(\{u,v,w\})\Rightarrow s_j'(\mathbf{p})=s_j(\mathbf{c})$$
+This effectively draws a Voronoi map according to categories \cite{voronoi}.
+\subsection{Spherical mesh and Delaunay triangulation}
+There is a basic sphere mesh, provided by Unity (Figure \ref{fig:unity-mesh}). It is like a detailed cubic mesh, projected onto a sphere. However, for finer terrain details, a much more detailed mesh is needed, preferably with uniform triangles (Figure \ref{fig:delaunay-mesh}). Scaling the mesh detail is also important.
+
+\begin{figure}[ht]
+\centering
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{unity-mesh.png}
+\caption{Unity sphere mesh}
+\label{fig:unity-mesh}
+\end{subfigure}
+\hspace*{1cm}
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{delaunay-mesh.png}
+\caption{Delaunay mesh}
+\label{fig:delaunay-mesh}
+\end{subfigure}
+\caption{Spherical meshes}
+\label{fig:spherical-mesh}
+\end{figure}
+Definition and description of a 3D mesh is way beyond the scope and purpose of this document. In this context, it is simply an approximation of the sphere surface. All samples $U$ are vertices connected into triangles so that the whole sphere is covered by them without any gaps. For Driftworld, a set of prepared meshes is provided, created by \textit{Delaunay triangulation} \cite{delaunay}.
+
+When interpolating surface data such as elevation, it is important that reasonable samples are used for the interpolation. Calculating elevation in a mountain range from a triangle with vertices too far apart may result in meaningless artifacts. Furthermore, the earlier mentioned requirement that the triangles are nearly planar would be undermined by extreme spherical triangles which exhibit considerable excess. It stands to reason that triangles used in the mesh should be as regular as possible. This is the goal and result of a Delaunay triangulation. There is a number of algorithms performing the triangulation on a plane \cite{knuth}. Since sphere has a closed mesh, an adaptation is needed.
+
+Delaunay meshes for Driftworld use an algorithm which originally triangulates a set of random samples \cite{ma}. Because $U$ is ordered, the initial tetrahedron is somewhat difficult to construct, especially because of the requirements imposed on a spherical triangle -- in a large number of cases at least one triangle had a circumcircle larger than a great circle. For this reason, the initial structure was set to be a nearly regular octahedron with vertices assigned by a brute-force look-up. Other than that, the algorithm follows the article \cite{ma}.
 \subsection{Bounding volume hiearchy}
 \subsection{Collisions}
 
