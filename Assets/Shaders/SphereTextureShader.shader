@@ -1,4 +1,4 @@
-﻿Shader "Custom/SphereTextureShader" // custom shader - main reason for this is correct texture mapping on a custom mesh
+﻿Shader "Custom/SphereTextureShader" // custom shader - main reason for this is correct texture mapping on a custom mesh (solution by bgolus on Unity Forum)
 {
     Properties
     {

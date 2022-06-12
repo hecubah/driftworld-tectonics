@@ -3,4 +3,9 @@
 \subsection{Rendering}
 \label{subsec:rendering}
 \subsection{GPU Computing}
+\subsection{Bounding volume hiearchy}
+\label{subsec:bvh}
+When dealing with interactions of objects consisting of many triangles, such as parts of a mesh or meshes, testing every triangle against each other is very inefficient, leading to algorithmic complexity of $\mathcal{O}(n^2)$. For this, Driftworld implements \textit{bounding volume hiearchy} (BVH) over the triangles of the sphere mesh \cite{sulaiman}. Bounding volume (BV) is a simple object that contains a primitive or a group of primitives. Its purpose is to simplify collision tests -- for this, bounding volumes are structured in a~hiearchy. The most common BVH is a tree -- its leaves are bounding volumes of individual primitives. Parent nodes of such a tree are bounding volumes created by convenient merging of their children node BVs. The root of the tree is then some whole object. For instance, it could be a bounding volume of a mesh, while the leaves would be the singular triangles or their bounding volumes. There are multiple types of various bounding volumes and multiple types of constructed BV trees.
+
+For our purpose, we construct a BVH for the triangles inside some region of the sphere triangulation. Our bounding volume is a spherical circle, the tree is a binary tree of merged circles. This choice makes sense because the triangles only move on the surface of the sphere and therefore we do not need spatial bounding volumes. Mathematically
 \subsection{Use}

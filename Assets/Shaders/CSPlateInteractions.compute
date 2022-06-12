@@ -99,10 +99,10 @@ bool segments_intersect(float3 a1, float3 a2, float3 b1, float3 b2) {
     if (length(intersection) > 0) { // normalize the intersection vector
         intersection = normalize(intersection);
     }
-    else { // should not occur, but weird results can serve as debug
+    else { // occurs e. g. if the edges lie within the same great circle
         return true;
     }
-    if (dot(a1, -intersection) > dot(a1, intersection)) { // if it is the other intersection too far, invert it
+    if (dot(a1, -intersection) > dot(a1, intersection)) { // if it is the opposite great circle intersection, invert it
         intersection = -intersection;
     }
     if (dot(a1, intersection) >= dot(a1, a2) && dot(a2, intersection) >= dot(a1, a2) && dot(b1, intersection) >= dot(b1, b2) && dot(b2, intersection) >= dot(b1, b2)) { // if the dot products of the intersection with both endpoints are larger than the dot product of the endpoints for both segments, the intersection candidate lies within the segments and the segments intersect

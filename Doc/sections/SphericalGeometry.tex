@@ -39,6 +39,7 @@ An important object on the surface of a sphere is a great circle. It is any circ
 \end{figure}
 
 \subsection{Spherical triangles}
+\label{subsec:spherical-triangles}
 Any three points on the surface of a sphere that do not lie on a single great circle form a~\textit{spherical triangle} (Figure \ref{fig:spherical-triangle}). This is the fundamental concept behind many of the computations in the project. However, strictly speaking, there are two triangles defined by such three points. The closure of the complement of any spherical triangle with respect to the sphere surface is also a spherical triangle, albeit one of the two is unintuitive as it is larger than half of the sphere surface area. To get around this, we construct somewhat narrower class of spherical triangles so that any three valid points define a triangle unambiguously.
 
 \begin{figure}[ht]
@@ -57,7 +58,7 @@ Any three points on the surface of a sphere that do not lie on a single great ci
 \label{fig:spherical-triangle}
 \end{figure}
 
- We denote the surface of a unit sphere $\mathcal{S} =  \{\mathbf{x} \in \mathbb{R}^3: ||\mathbf{x}||=1\}$. Given a triplet of three linearly independent point vectors $(\mathbf{a},\mathbf{b},\mathbf{c})\in \mathcal{S}\times\mathcal{S}\times\mathcal{S}$ (called \textit{vertices})\footnote{Linear independence of unit vectors is equivalent to the condition that the vectors do not lie on a single great circle.}, we can construct a vector $\mathbf{n}_\lambda$ normal to some sectional plane $\lambda$ cutting off a spherical cap (Figure \ref{fig:sectional-plane}):
+ We denote the surface of a unit sphere $\mathcal{S} =  \{\mathbf{x} \in \mathbb{R}^3: ||\mathbf{x}||=1\}$. Given a triplet of three linearly independent point vectors $(\mathbf{a},\mathbf{b},\mathbf{c})\in \mathcal{S}\times\mathcal{S}\times\mathcal{S}$ (called \textit{vertices})\footnote{Linear independence of unit vectors is equivalent to the condition that the vectors do not lie on a single great circle.}, we can construct a vector $\mathbf{n}_\lambda$ normal to some sectional plane $\lambda$ cutting off a spherical cap (Figure \ref{fig:triangle-circumcircle}):
  $$\mathbf{n}_\lambda=(\mathbf{b} - \mathbf{a})\times(\mathbf{c} - \mathbf{a})$$
 $$\forall\mathbf{x}\in\lambda: \mathbf{n}_\lambda\cdot\mathbf{x}+d_\lambda=0$$
 We can calculate $d_\lambda$ by assigning e. g. $\mathbf{x}=\mathbf{a}$ and solving the plane equation with respect to $d_\lambda$, but that will not be neccessary. We impose a further requirement $\mathbf{n}_\lambda\cdot\mathbf{a}>0$. This is not always true, in which case it can be ensured by swapping any two vertices in the triplet and recalculating $\mathbf{n}_\lambda$. This means that all three vertices and their circumcenter are all 'on one side' of the sphere. In Unity coordinate system, this also means that for an outside observer, the vertices are oriented \textit{clockwise} on the sphere surface.
@@ -107,7 +108,7 @@ $$\mathbf{b}_\mathcal{T}=\frac{\mathbf{a} + \mathbf{b} + \mathbf{c}}{||\mathbf{a
 \label{fig:centroid-geometry}
 \end{figure}
 
-To store crust data, we must assign values to points on the sphere. These values may be of different types or have different meaning. Formally, we denote a sequence of arbitrary sets $C=\left(V_i\right)_{i=0}^{n-1}$, where $n$ is the number of different values assigned to a point and each $V_i$ is a specific of value. The system of all possible value combinations is then a cartesian product of these value sets:
+To store crust data, we must assign values to points on the sphere. These values may be of different types or have different meaning. Formally, we denote a sequence of arbitrary sets $C=\left(V_i\right)_{i=0}^{n-1}$, where $n$ is the number of different values assigned to a point and each $V_i$ is a specific set of possible values. The system of all possible value combinations is then a cartesian product of these value sets:
 $$V=\prod_{i=0}^{n-1}V_i$$
 Stored data can then be defined as a map:
 $$s: U\rightarrow V$$
@@ -161,6 +162,70 @@ Definition and description of a 3D mesh is way beyond the scope and purpose of t
 When interpolating surface data such as elevation, it is important that reasonable samples are used for the interpolation. Calculating elevation in a mountain range from a triangle with vertices too far apart may result in meaningless artifacts. Furthermore, the earlier mentioned requirement that the triangles are nearly planar would be undermined by extreme spherical triangles which exhibit considerable excess. It stands to reason that triangles used in the mesh should be as regular as possible. This is the goal and result of a Delaunay triangulation. There is a number of algorithms performing the triangulation on a plane \cite{knuth}. Since sphere has a closed mesh, an adaptation is needed.
 
 Delaunay meshes for Driftworld use an algorithm which originally triangulates a set of random samples \cite{ma}. Because $U$ is ordered, the initial tetrahedron is somewhat difficult to construct, especially because of the requirements imposed on a spherical triangle -- in a large number of cases at least one triangle had a circumcircle larger than a great circle. For this reason, the initial structure was set to be a nearly regular octahedron with vertices assigned by a brute-force look-up. Other than that, the algorithm follows the article \cite{ma}.
-\subsection{Bounding volume hiearchy}
 \subsection{Collisions}
+The tectonic model in Driftworld computes many interactions on a regular basis and these computations must be as efficient as possible. There are two basic collisions used for evaluating interactions -- a collision of two circles and a collision of two triangles. To clarify, in both cases we only need to answer the question whether the two objects have a non-empty intersection -- not to fully classifiy the intersection. Algorithms for both collisions are fairly simple and the spherical geometry actually helps in the case of triangle collisions.
+
+The relative position of two circles $K,L\subset\mathcal{S}$ is governed by several parameters. Each circle has a~circumcenter $\mathbf{c} \in \mathcal{S}$ and a radius $r > 0$. We consider full circles to determine the intersection:
+$$\forall\mathbf{x}\in\mathcal{S}:\arccos(\mathbf{x}\cdot\mathbf{c}_K) \le r_K\Rightarrow\mathbf{x}\in K$$
+This means that there is only one case of relative circle position that has an empty intersection: disjoint circles. The case of one circle lying inside another has an intersection indentical to the inside triangle. Three major cases of the relative positions of circles are seen in Figure \ref{fig:circle-collisions}.
+\begin{figure}[ht]
+\centering
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{circle-intersection-a.png}
+\caption{disjoint circles}
+\label{fig:disjoint-circles}
+\end{subfigure}\\
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{circle-intersection-b.png}
+\caption{circles intersecting at two points}
+\label{fig:circles-intersecting-at-two-points}
+\end{subfigure}
+\hspace*{1cm}
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{circle-intersection-c.png}
+\caption{circle lying inside another}
+\label{fig:circle-lying-inside-another}
+\end{subfigure}
+\caption{Relative positions of two circles}
+\label{fig:circle-collisions}
+\end{figure}
+
+It is therefore easy to decide whether two circles collide or not - circles not colliding have a spherical distance larger than the sum of their radii:
+$$K \cap L = \emptyset \Longleftrightarrow \arccos(\mathbf{c}_K\cdot\mathbf{c}_L)>r_K+r_L$$
+
+In case of triangles the collision is more complex. There are four major cases of the relative position of two spherical triangles - three  similar to the case of circles and one specific (see Figure \ref{fig:triangle-collisions}). The second and the third case can be resolved by determining whether any point of one triangle lies within the other (see subsection \ref{subsec:spherical-triangles}). The fourth requires a more thorough test.
+
+\begin{figure}[ht]
+\centering
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{triangle-intersection-a.png}
+\caption{disjoint triangles}
+\label{fig:disjoint-triangles}
+\end{subfigure}
+\hspace*{1cm}
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{triangle-intersection-b.png}
+\caption{triangles intersecting at two points}
+\label{fig:triangles-intersecting-at-two-points}
+\end{subfigure}\\
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{triangle-intersection-c.png}
+\caption{triangle lying inside another}
+\label{fig:triangle-lying-inside-another}
+\end{subfigure}
+\hspace*{1cm}
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{triangle-intersection-d.png}
+\caption{Star of David}
+\label{fig:star-of-david}
+\end{subfigure}
+\caption{Relative positions of two triangles}
+\label{fig:triangle-collisions}
+\end{figure}
+
+If neither of the two triangles contain a vertex of the other one, we have to decide if any two edges intersect. Consider two edges defined by pairs of non-identical vertices $(\mathbf{a}_1, \mathbf{a}_2)$ and $(\mathbf{b}_1, \mathbf{b}_2)$. These define planes within which lie their respective great circles. The planes have normal vectors $\mathbf{a}_1 \times \mathbf{a}_2$ and $\mathbf{b}_1 \times \mathbf{b}_2$. Since the planes are central, Any intersection must be along the vector $(\mathbf{a}_1 \times \mathbf{a}_2)\times(\mathbf{b}_1 \times \mathbf{b}_2)$. There are two intersections in $\mathcal{S}$ and we consider the one maximizing the dot product with $\mathbf{a}_1$ (same hemisphere). We denote such intersection $\mathbf{i}$. The final test simply decides if $\mathbf{i}$ lies on both segments or is somewhere else on the great circles. This can be done by testing dot products, as i must be closer to both vertices than the distance of the vertices for both segments:
+$$(\mathbf{i}\cdot\mathbf{a}_1 > \mathbf{a}_1\cdot\mathbf{a}_2) \land (\mathbf{i}\cdot\mathbf{a}_2 > \mathbf{a}_1\cdot\mathbf{a}_2)\land(\mathbf{i}\cdot\mathbf{b}_1 > \mathbf{b}_1\cdot\mathbf{b}_2) \land (\mathbf{i}\cdot\mathbf{b}_2 > \mathbf{b}_1\cdot\mathbf{b}_2)$$
+If any two segments of the two triangles intersect, the triangles must by the sign analysis have non-empty intersection and therefore collide. If all tests are negative, the triangles are disjoint.
+\subsection{Merging of spherical circles}
+\subsection{Texture mapping}
 
