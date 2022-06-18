@@ -64,7 +64,7 @@ $$\forall\mathbf{x}\in\lambda: \mathbf{n}_\lambda\cdot\mathbf{x}+d_\lambda=0$$
 We can calculate $d_\lambda$ by assigning e. g. $\mathbf{x}=\mathbf{a}$ and solving the plane equation with respect to $d_\lambda$, but that will not be neccessary. We impose a further requirement $\mathbf{n}_\lambda\cdot\mathbf{a}>0$. This is not always true, in which case it can be ensured by swapping any two vertices in the triplet and recalculating $\mathbf{n}_\lambda$. This means that all three vertices and their circumcenter are all 'on one side' of the sphere. In Unity coordinate system, this also means that for an outside observer, the vertices are oriented \textit{clockwise} on the sphere surface.
 
 Spherical circumcircle $l$ is a set of points on a sphere that has constant spherical distance from a single point $\mathbf{c}_\mathcal{T}\in\mathcal{S}$ called \textit{circumcenter}. Equivalently, we can substitute dot product for distance:
-$$\exists k\in\mathbb{R}:(\forall\mathbf{x}\in l:\mathbf{c}_\mathcal{T}\cdot\mathbf{x}=k)$$
+$$\exists t\in\mathbb{R}:(\forall\mathbf{x}\in l:\mathbf{c}_\mathcal{T}\cdot\mathbf{x}=t)$$
 Since $\mathbf{n}_\lambda\cdot\mathbf{a}=\mathbf{n}_\lambda\cdot\mathbf{b}=\mathbf{n}_\lambda\cdot\mathbf{c}>0$, we know that some scalar multiple of $\mathbf{n}_\lambda$ is the circumcenter for the vertices. In fact, there is only one possible circumcircle for all three vertices, which is the intersection $\mathcal{S}\cap\lambda$. We easily find the circumcenter and the circumradius $r_l$ as\footnote{We have to keep in mind that on a unit sphere, central angle and spherical distance are identical, barring formal dimension.}
 $$\mathbf{c}_\mathcal{T}=\frac{\mathbf{n}_\lambda}{||\mathbf{n}_\lambda||}, r_l=\arccos(\mathbf{c}_\mathcal{T}\cdot\mathbf{a})$$
 
@@ -165,8 +165,8 @@ Delaunay meshes for Driftworld use an algorithm which originally triangulates a 
 \subsection{Collisions}
 The tectonic model in Driftworld computes many interactions on a regular basis and these computations must be as efficient as possible. There are two basic collisions used for evaluating interactions -- a collision of two circles and a collision of two triangles. To clarify, in both cases we only need to answer the question whether the two objects have a non-empty intersection -- not to fully classifiy the intersection. Algorithms for both collisions are fairly simple and the spherical geometry actually helps in the case of triangle collisions.
 
-The relative position of two circles $K,L\subset\mathcal{S}$ is governed by several parameters. Each circle has a~circumcenter $\mathbf{c} \in \mathcal{S}$ and a radius $r > 0$. We consider full circles to determine the intersection:
-$$\forall\mathbf{x}\in\mathcal{S}:\arccos(\mathbf{x}\cdot\mathbf{c}_K) \le r_K\Rightarrow\mathbf{x}\in K$$
+The relative position of two circles $k,l\subset\mathcal{S}$ is governed by several parameters. Each circle has a~circumcenter $\mathbf{c} \in \mathcal{S}$ and a radius $r > 0$. We consider full circles to determine the intersection:
+$$\forall\mathbf{x}\in\mathcal{S}:\arccos(\mathbf{x}\cdot\mathbf{c}_k) \le r_k\Rightarrow\mathbf{x}\in k$$
 This means that there is only one case of relative circle position that has an empty intersection: disjoint circles. The case of one circle lying inside another has an intersection indentical to the inside triangle. Three major cases of the relative positions of circles are seen in Figure \ref{fig:circle-collisions}.
 \begin{figure}[ht]
 \centering
@@ -191,7 +191,7 @@ This means that there is only one case of relative circle position that has an e
 \end{figure}
 
 It is therefore easy to decide whether two circles collide or not - circles not colliding have a spherical distance larger than the sum of their radii:
-$$K \cap L = \emptyset \Longleftrightarrow \arccos(\mathbf{c}_K\cdot\mathbf{c}_L)>r_K+r_L$$
+$$k \cap l = \emptyset \Longleftrightarrow \arccos(\mathbf{c}_k\cdot\mathbf{c}_l)>r_k+r_l$$
 
 In case of triangles the collision is more complex. There are four major cases of the relative position of two spherical triangles - three  similar to the case of circles and one specific (see Figure \ref{fig:triangle-collisions}). The second and the third case can be resolved by determining whether any point of one triangle lies within the other (see subsection \ref{subsec:spherical-triangles}). The fourth requires a more thorough test.
 
@@ -227,5 +227,80 @@ If neither of the two triangles contain a vertex of the other one, we have to de
 $$(\mathbf{i}\cdot\mathbf{a}_1 > \mathbf{a}_1\cdot\mathbf{a}_2) \land (\mathbf{i}\cdot\mathbf{a}_2 > \mathbf{a}_1\cdot\mathbf{a}_2)\land(\mathbf{i}\cdot\mathbf{b}_1 > \mathbf{b}_1\cdot\mathbf{b}_2) \land (\mathbf{i}\cdot\mathbf{b}_2 > \mathbf{b}_1\cdot\mathbf{b}_2)$$
 If any two segments of the two triangles intersect, the triangles must by the sign analysis have non-empty intersection and therefore collide. If all tests are negative, the triangles are disjoint.
 \subsection{Merging of spherical circles}
-\subsection{Texture mapping}
+Because of the need to build bounding volume hiearchies (see subsection \ref{subsec:bvh}), there is a task of finding a~suitable circle $l$ which has the smallest area possible and which contains two other given circles $m,n$ (see Figure \ref{fig:circles-merged}). The center of $l$ must lie on a great circle $L$ containing both centers of the circles. This means we have to find a center and radius of $l$ so that it only touches either both of the two circles $m,n$ or one in case one circle is within the other. The algorithm falls in at least one of the following cases: concentric circles, circles with opposite centers, one circle contained in the other, circles intersecting at two points or disjoint circles. The goal is to determine which case has the deciding influence on the position of the center $\mathbf{c}_l$ and the radius $r_l$ except in the case of concentric circles, where $l$ is found easily. In case of concentric circles the solution is:
+$$\mathbf{c}_l=\mathbf{c}_m, r_l=\mbox{max}(r_m, r_n)$$
+Otherwise we find a suitable local basis in which we can easily parametrize all relevant points (Figure \ref{fig:merging-local-basis}). One circle center will be identical to the base vector:
+$$\mathbf{e}_x'=\mathbf{c}_m$$
+\begin{figure}[ht]
+\centering
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{merging-local-basis.png}
+\caption{local basis}
+\label{fig:merging-local-basis}
+\end{subfigure}
+\hspace*{1cm}
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{circle-joining.png}
+\caption{circles merged}
+\label{fig:circles-merged}
+\end{subfigure}
+\caption{Merging of two circles}
+\label{fig:merging-circles}
+\end{figure}
 
+Computation of the second base vector $\mathbf{e}_z'$ depends on whether the circles are directly opposite, i. e. they have centers opposite on the sphere. If so, it is any vector perpendicular to $\mathbf{e}_x'$ since the centers lie on inifinitely many great circles. If not, it it can be found with a double cross product:
+$$\mathbf{e}_z'=\frac{(\mathbf{c}_m\times\mathbf{c}_n)\times\mathbf{c}_m}{||(\mathbf{c}_m\times\mathbf{c}_n)\times\mathbf{c}_m||}$$
+There are three variables we need to compute now. First is the distance $d_{mn}$ between $\mathbf{c}_m$ and $\mathbf{c}_n$:
+$$d_{mn}=\arccos(\mathbf{c}_m\cdot\mathbf{c}_n)$$
+Second is the central angle $\Delta\phi$ of an arc running between $\mathbf{c}_m$ and the center of the merged circle. This allows us to compute the center as a linear combination of the base vectors $(\mathbf{e}_x', \mathbf{e}_z')$. Third is the actual radius $r_l$. However, we first need to see if one of the circles is contained within the other. If so, then one boundary is pushed by the encompassing circle:
+$$-r_m > d_{mn} - r_n \Longrightarrow \Delta\phi=d_{mn}, r_l = r_n$$
+$$r_m > d_{mn} +  r_n \Longrightarrow \Delta\phi=0, r_l = r_m$$
+The first condition is for $n$ encompassing $m$, the second is the other way around. If neither is true, the computation is slightly more difficult:
+$$\Delta\phi=\frac{d_{mn}-r_m+r_n}{2}$$
+$$r_l=\frac{r_m + r_n + d_{mn}}{2}$$
+Finally, we compute the center of $l$\footnote{Note that the value of $\Delta\phi$ can be negative. This is the case of clockwise-oriented arc from $\mathbf{c}_m$ in the local basis.}:
+$$\mathbf{c}_l=\cos(\Delta\phi)\mathbf{e}_x' + \sin(\Delta\phi)\mathbf{e}_z'$$
+\subsection{Texture mapping}
+The system of overlays requires creating a texture every time the planet is to be rendered. Suppose we have a texture with resolution $w\times h$ that should have a color $b_{ij}$ from some color space $\mathcal{C}$ assigned to each of its points:
+$$i\in\mathcal{I}=\{0,1,2,...,w-1\}$$
+$$j\in\mathcal{J}=\{0,1,2,...,h-1\}$$
+$$b:\mathcal{I}\times\mathcal{J}\rightarrow\mathcal{C}$$
+We want $b_{ij}$ to reflect the data on the sphere. Let $b'$ be a map from the sphere surface, representing an overlay:
+$$b': \mathcal{S}\rightarrow\mathcal{C}$$
+We now have to find some map between the pixel indices and the sphere surface. This is very similar to the classical problem in cartography. Our choice will be an equirectangular projection because of its simplicity. We first compute the azimuthal and polar angles $\phi_i, \theta_j$ from $i,j$:
+$$\phi_i = 2\pi\frac{\left(i+\frac{1}{2}\right)}{w}$$
+$$\theta_j = \pi(1-\frac{j+\frac{1}{2}}{h})$$
+\begin{figure}[ht]
+\centering
+\includegraphics[height=7cm]{texture-coordinates.png}
+\caption{Cylinder rectangle around a sphere}
+\label{fig:rectangle-sphere}
+\end{figure}
+This means the texture $y$ coordinate increases \textit{upwards} (to north) in the respective cylinder rectangle (Figure \ref{fig:rectangle-sphere}). From the angles it is simple to find the point on the sphere:
+$$\mathbf{x}_{ij} = (\sin\theta_j\cos\phi_i,\cos\theta_j,\sin\theta_j\sin\phi_i)$$
+Finally, we can compute $b_{ij}$:
+$$b_{ij}=b'(\sin\theta_j\cos\phi_i,\cos\theta_j,\sin\theta_j\sin\phi_i)$$
+This texture is subsequently used for rendering the surface, however, there is an inherent problem with uv mapping. Because of my insecurity about the math involved, the process will not be explained in this text and instead, the reader is encouraged to read a more educated article \cite{bgolus}.
+
+There is perhaps a better way to deal with texture mapping, which was discussed in a Unity forum thread \cite{unityforum}. Cubemaps are quite possibly a more logical choice, as the texture information density needlesly increases towards extreme values of the $y$ coordinate.
+\subsection{Spherical units}
+Virtually all expressions throughout this section assumed a unit sphere for simplicity, but for rendering and parameter context some scaling is needed. For example, radius $R$ of the planet might be given in kilometers \cite{cortial}. Since rendering in thousands of 'Unity meters' is impractical, let us denote this unit $\mbox{u}$ and consider:
+$$1 \mbox{ u} = 1000\mbox{ km}, \forall\mathbf{x}\in\mathcal{S}:||\mathbf{x}|| = 1\mbox{ u}$$
+Then the all the rendered vertices should only be transformed as $\mathbf{x}\rightarrow R\mathbf{x}$. Our unit of time will be $\mbox{My}$. Some useful conversions follow in table \ref{tab:unit-conversion}.
+
+Some given parameters can be set for a sphere with a given radius $R$. In this case, conversion of the value to unit sphere must take the radius into consideration -- quantities of distance must be divided by $R$, quantities of area by $R^2$.
+\paragraph{Example}Maximum plate speed $v_0$ is 100 mm$\cdot$y$^{-1}$ on a planet with radius $R=6370$ km. Its unit sphere value is\footnote{Because Driftworld Tectonics uses the unit sphere values, we will reference quantities declared on a unit sphere as primed to distinguish from the quantities of the original article \cite{cortial}.}:
+$$v_0' = \frac{100\mbox{ mm}\cdot\mbox{y}^{-1}}{6370\mbox{ km}}=\frac{0.1\mbox{ u}\cdot\mbox{My}^{-1}}{6.370\mbox{ u}}\approx 0.0157\mbox{ My}^{-1}$$
+This allows us to identify any surface speed with an angular speed.
+\begin{table}
+\centering
+\begin{tabular}{rr}
+\textbf{Unit}&\textbf{Conversion}\\
+\hline\\
+1 km&0.001 u\\
+1 km$^{-1}$&1000 u$^{-1}$\\
+1 mm$\cdot$y$^{-1}$&$10^{-3}$ u$\cdot$My$^{-1}$
+\end{tabular}
+\caption{Unit conversion table}
+\label{tab:unit-conversion}
+\end{table}
