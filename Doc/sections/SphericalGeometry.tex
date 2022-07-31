@@ -19,7 +19,7 @@ There are several ways to rotate points, vectors or whole transformations. For c
 \subsection{Sectional planes and great circles}
 Sphere can have any number of sectional planes, i. e. planes that have some non-empty intersection with the sphere. Planes passing the center of the sphere will be called \textit{sectional central planes} (Figure \ref{fig:sectional-plane}). Any sectional central plane $\rho$ is characterized by some non-zero normal vector $\textbf{n}_\rho$ and for any point on the plane represented by their position vector $\mathbf{x}$ it holds that
 $$\mathbf{n}_\rho\cdot\mathbf{x}=0$$
-This is synonymous to the fact that any vector lying within a plane passing the origin is perpendicular to the normal vector of the plane. The dot product on the left side of the equality is also important because given a specific normal vector we can decide on which side is any vector $\mathbf{x}$ \textit{outside} the plane -- simply take the sign of the dot product, vector on the side of the normal vector will result in a positive dot product value with $\mathbf{n}_\rho$, negative otherwise.
+This is synonymous to the fact that any vector lying within a plane passing the origin is perpendicular to the normal vector of the plane. The dot product on the left side of the equality is also important because given a specific normal vector we can decide \textit{on which side} is any vector $\mathbf{x}$ outside the plane -- simply take the sign of the dot product, vector on the side of the normal vector will result in a positive dot product value with $\mathbf{n}_\rho$, negative otherwise.
 
 An important object on the surface of a sphere is a great circle. It is any circle that shares its center and radius with the sphere (Figure \ref{fig:great-circle}). It is also the intersection of a plane passing the center of the sphere with its surface.
 \begin{figure}[ht]
@@ -82,7 +82,7 @@ $$\mathcal{T}=\{\mathbf{x}\in\mathcal{S}:\mathbf{n}_{\rho}\cdot\mathbf{x}\ge 0, 
 This simply tells us that $\mathbf{x}$ is inside the spherical triangle $\mathcal{T}$ when it is on the surface of the sphere and also on one specific side of all three planes $\rho, \sigma, \tau$. This definition does not encompass all possible spherical triangles on a sphere, but it allows us to properly test the properties of any triangles used in reasonable spherical meshes.
 \subsection{Vertex sampling}
 Because of memory restrictions, sphere surface data is represented as a set of sampled points. We can identify these points as position vectors $\mathbf{u}_i$ from the global origin to sample points, resulting in a~sequence $U=\left(\mathbf{u}_i\right)_{i=0}^{N-1}, \mathbf{u}_i \in \mathcal{S}$. Samples are therefore three-dimensional normalized vectors. Driftworld uses spherical Fibonacci sampling \cite{keinert}. To get the sequence $U$, another sequence $F=\left(\mathbf{f}_i\right)_{i=0}^{N-1}$ is first computed, using the following definition:
-$$\mathbf{f}_i=(\phi_i, z_i), \phi_i \in \mathbb{R}, z_i \in \mathbb{R},$$
+$$\mathbf{f}_i=(\phi_i, z_i), \phi_i \in [0,2\pi), z_i \in (-1,1),$$
 $$\phi_i = 2\pi\left[\frac{i}{\Phi}\right],$$
 $$z_i = 1-\frac{2i+1}{N}.$$
 $\left[x\right]$ denotes the fractional part of $x$, $\Phi$ is the golden ratio $\Phi=\frac{\sqrt{5}+1}{2}$. The values of $\mathbf{f}_i$ actually lie on a~spiral on the surface of a cylinder with the radius of 1 and the height of 2 \cite{keinert}. $U$ is finally obtained by mapping $\mathbf{f}_i$ values to $\mathcal{S}$:
@@ -111,14 +111,14 @@ $$\mathbf{b}_\mathcal{T}=\frac{\mathbf{a} + \mathbf{b} + \mathbf{c}}{||\mathbf{a
 To store crust data, we must assign values to points on the sphere. These values may be of different types or have different meaning. Formally, we denote a sequence of arbitrary sets $C=\left(V_i\right)_{i=0}^{n-1}$, where $n$ is the number of different values assigned to a point and each $V_i$ is a specific set of possible values. The system of all possible value combinations is then a cartesian product of these value sets:
 $$V=\prod_{i=0}^{n-1}V_i$$
 Stored data can then be defined as a map:
-$$s: U\rightarrow V$$
-$$s_i: U\rightarrow V_i$$
+$$h: U\rightarrow V$$
+$$h_i: U\rightarrow V_i$$
 We store data only for sphere samples because of limited memory. Other values will be computed as needed using \textit{barycentric interpolation} \cite{scratchapixel}.\newpage
 
 Now it comes to the following problem: how to compute values anywhere on $\mathcal{S}$? We are effectively looking for some domain extension, since $U\subset\mathcal{S}$:
-$$s':\mathcal{S}\rightarrow V, \forall \mathbf{u}\in U:s'(\mathbf{u})=s(\mathbf{u})$$
-$$s_i':\mathcal{S}\rightarrow V_i, \forall \mathbf{u}\in U:s_i'(\mathbf{u})=s_i(\mathbf{u})$$
-Given some arbitrary point $\mathbf{x}\in\mathcal{S}$, we start with an assumption that $\mathbf{x}$ is found inside some spherical triangle $\mathcal{T}$ with negligible triangle excess and vertices $\{\mathbf{a}, \mathbf{b}, \mathbf{c}\} \subset U$ for which we already know the values of $s$. We would like $s'(\mathbf{x})$ to be computed 'fairly', i. e. the closer $\mathbf{x}$ is to some vertex, the more influence the vertex value should have on $s'(\mathbf{x})$. A good start might be in analogy with a political voting system based on area. If the population is homogeneous, any region vote is weighted by its area and transitionally, by its population.
+$$h':\mathcal{S}\rightarrow V, \forall \mathbf{u}\in U:h'(\mathbf{u})=h(\mathbf{u})$$
+$$h_i':\mathcal{S}\rightarrow V_i, \forall \mathbf{u}\in U:h_i'(\mathbf{u})=h_i(\mathbf{u})$$
+Given some arbitrary point $\mathbf{x}\in\mathcal{S}$, we start with an assumption that $\mathbf{x}$ is found inside some spherical triangle $\mathcal{T}$ with negligible triangle excess and vertices $\{\mathbf{a}, \mathbf{b}, \mathbf{c}\} \subset U$ for which we already know the values of $h$. We would like $h'(\mathbf{x})$ to be computed 'fairly', i. e. the closer $\mathbf{x}$ is to some vertex, the more influence the vertex value should have on $h'(\mathbf{x})$. A good start might be in analogy with a political voting system based on area. If the population is homogeneous, any region vote is weighted by its area and transitionally, by its population.
 
 Let $P$ be some point within a triangle $ABC$ (Figure \ref{fig:triangle-barycentric}). This point is represented by a point vector $\mathbf{p}\in\mathcal{S}$. As stated earlier, we assume all points lie nearly on the same plane. If we construct three triangles $PBC$, $APC$ and $APB$, the triangle $ABC$ will be divided into three regions, each corresponding to their oposite vertex of $ABC$. The closer $P$ is to any of the vertices, the larger the corresponding triangle area is. Total area sum of the three triangles is equal to the area of $ABC$. Therefore, we can use these triangle areas as weights for interpolating values at $P$ -- we only need to find the respective areas of $S_A, S_B, S_C$ and $S_{ABC}$. This can be done using cross product:
 $$S_A=\frac{|(\mathbf{b}-\mathbf{p})\times(\mathbf{c}-\mathbf{p})|}{2}$$
@@ -132,14 +132,14 @@ $$w=\frac{|(\mathbf{a}-\mathbf{p})\times(\mathbf{b}-\mathbf{p})|}{|(\mathbf{b}-\
 It is easy to confirm that $u+v+w=1$.
 
 There are basically two types of values interpolated in the project -- real values and categories. Real value interpolation is straightforward:
-$$s_i'(\mathbf{p})=us_i(\mathbf{a})+vs_i(\mathbf{b})+ws_i(\mathbf{c})$$
+$$h_i'(\mathbf{p})=uh_i(\mathbf{a})+vh_i(\mathbf{b})+wh_i(\mathbf{c})$$
 Categories are simply assigned to $\mathbf{p}$ according to the largest weight:
-$$u=\mbox{max}(\{u,v,w\})\Rightarrow s_j'(\mathbf{p})=s_j(\mathbf{a})$$
-$$v=\mbox{max}(\{u,v,w\})\Rightarrow s_j'(\mathbf{p})=s_j(\mathbf{b})$$
-$$w=\mbox{max}(\{u,v,w\})\Rightarrow s_j'(\mathbf{p})=s_j(\mathbf{c})$$
+$$u=\mbox{max}(\{u,v,w\})\Rightarrow h_j'(\mathbf{p})=h_j(\mathbf{a})$$
+$$v=\mbox{max}(\{u,v,w\})\Rightarrow h_j'(\mathbf{p})=h_j(\mathbf{b})$$
+$$w=\mbox{max}(\{u,v,w\})\Rightarrow h_j'(\mathbf{p})=h_j(\mathbf{c})$$
 This effectively draws a Voronoi map according to categories \cite{voronoi}.
 \subsection{Spherical mesh and Delaunay triangulation}
-There is a basic sphere mesh, provided by Unity (Figure \ref{fig:unity-mesh}). It is like a detailed cubic mesh, projected onto a sphere. However, for finer terrain details, a much more detailed mesh is needed, preferably with uniform triangles (Figure \ref{fig:delaunay-mesh}). Scaling the mesh detail is also important.
+There is a basic sphere mesh, provided by Unity (Figure \ref{fig:unity-mesh}). It is like a detailed cubic mesh, projected onto a sphere. However, for finer terrain details, a much more detailed mesh is needed, preferably with uniform triangles (Figure \ref{fig:delaunay-mesh}).
 
 \begin{figure}[ht]
 \centering
@@ -157,17 +157,17 @@ There is a basic sphere mesh, provided by Unity (Figure \ref{fig:unity-mesh}). I
 \caption{Spherical meshes}
 \label{fig:spherical-mesh}
 \end{figure}
-Definition and description of a 3D mesh is way beyond the scope and purpose of this document. In this context, it is simply an approximation of the sphere surface. All samples $U$ are vertices connected into triangles so that the whole sphere is covered by them without any gaps. For Driftworld, a set of prepared meshes is provided, created by \textit{Delaunay triangulation} \cite{delaunay}.
+Definition and description of a 3D mesh is way beyond the scope and purpose of this document. In this context, it is simply an approximation of the sphere surface. All samples $U$ are vertices connected into triangles so that the whole sphere is covered by them without any gaps. For Driftworld, a set of prepared meshes is provided, created by \textit{Delaunay triangulation}\footnote{The triangulation algorithm is not a part of Driftworld. The meshes were actually constructed in a separate tool written in C++ and then added as data files to Driftworld Tectonics repository.} \cite{delaunay}.
 
-When interpolating surface data such as elevation, it is important that reasonable samples are used for the interpolation. Calculating elevation in a mountain range from a triangle with vertices too far apart may result in meaningless artifacts. Furthermore, the earlier mentioned requirement that the triangles are nearly planar would be undermined by extreme spherical triangles which exhibit considerable excess. It stands to reason that triangles used in the mesh should be as regular as possible. This is the goal and result of a Delaunay triangulation. There is a number of algorithms performing the triangulation on a plane \cite{knuth}. Since sphere has a closed mesh, an adaptation is needed.
+When interpolating surface data such as elevation, it is important that reasonable samples are used for the interpolation. Calculating elevation in a mountain range from a triangle with vertices too far apart may result in meaningless artifacts. Furthermore, the earlier mentioned requirement that the triangles are nearly planar would be undermined by extreme spherical triangles which exhibit considerable excess. It stands to reason that triangles used in the mesh should be as regular as possible. This is the goal and result of a Delaunay triangulation. There is a number of algorithms performing the triangulation on a plane \cite{knuth}. Since a sphere has a closed mesh, an adaptation is needed.
 
 Delaunay meshes for Driftworld use an algorithm which originally triangulates a set of random samples \cite{ma}. Because $U$ is ordered, the initial tetrahedron is somewhat difficult to construct, especially because of the requirements imposed on a spherical triangle -- in a large number of cases at least one triangle had a circumcircle larger than a great circle. For this reason, the initial structure was set to be a nearly regular octahedron with vertices assigned by a brute-force look-up. Other than that, the algorithm follows the article \cite{ma}.
 \subsection{Collisions}
-The tectonic model in Driftworld computes many interactions on a regular basis and these computations must be as efficient as possible. There are two basic collisions used for evaluating interactions -- a collision of two circles and a collision of two triangles. To clarify, in both cases we only need to answer the question whether the two objects have a non-empty intersection -- not to fully classifiy the intersection. Algorithms for both collisions are fairly simple and the spherical geometry actually helps in the case of triangle collisions.
+The tectonic model in Driftworld computes many interactions on a regular basis and these computations must be as efficient as possible. There are two basic collisions used for evaluating interactions -- a collision of two circles and a collision of two triangles. To clarify, in both cases we only need to answer the question whether the two objects have a non-empty intersection -- not to fully classify the intersection. Algorithms for both collisions are fairly simple and the spherical geometry actually helps in the case of triangle collisions.
 
 The relative position of two circles $k,l\subset\mathcal{S}$ is governed by several parameters. Each circle has a~circumcenter $\mathbf{c} \in \mathcal{S}$ and a radius $r > 0$. We consider full circles to determine the intersection:
 $$\forall\mathbf{x}\in\mathcal{S}:\arccos(\mathbf{x}\cdot\mathbf{c}_k) \le r_k\Rightarrow\mathbf{x}\in k$$
-This means that there is only one case of relative circle position that has an empty intersection: disjoint circles. The case of one circle lying inside another has an intersection indentical to the inside triangle. Three major cases of the relative positions of circles are seen in Figure \ref{fig:circle-collisions}.
+This means that there is only one case of relative circle position that has an empty intersection: disjoint circles. The case of one circle lying inside another has an intersection indentical to the inside circle. Three major cases of the relative positions of circles are seen in Figure \ref{fig:circle-collisions}.
 \begin{figure}[ht]
 \centering
 \begin{subfigure}{7cm}
@@ -193,7 +193,7 @@ This means that there is only one case of relative circle position that has an e
 It is therefore easy to decide whether two circles collide or not - circles not colliding have a spherical distance larger than the sum of their radii:
 $$k \cap l = \emptyset \Longleftrightarrow \arccos(\mathbf{c}_k\cdot\mathbf{c}_l)>r_k+r_l$$
 
-In case of triangles the collision is more complex. There are four major cases of the relative position of two spherical triangles - three  similar to the case of circles and one specific (see Figure \ref{fig:triangle-collisions}). The second and the third case can be resolved by determining whether any point of one triangle lies within the other (see subsection \ref{subsec:spherical-triangles}). The fourth requires a more thorough test.
+In case of triangles the collision is more complex. There are four major cases of the relative position of two spherical triangles - three  similar to the case of circles and one specific (see Figure \ref{fig:triangle-collisions}). The second and the third case can be resolved by determining whether any point of one triangle lies within the other (see subsection \ref{subsec:spherical-triangles}). The first and the fourth require a more thorough test.
 
 \begin{figure}[ht]
 \centering
@@ -223,7 +223,7 @@ In case of triangles the collision is more complex. There are four major cases o
 \label{fig:triangle-collisions}
 \end{figure}
 
-If neither of the two triangles contain a vertex of the other one, we have to decide if any two edges intersect. Consider two edges defined by pairs of non-identical vertices $(\mathbf{a}_1, \mathbf{a}_2)$ and $(\mathbf{b}_1, \mathbf{b}_2)$. These define planes within which lie their respective great circles. The planes have normal vectors $\mathbf{a}_1 \times \mathbf{a}_2$ and $\mathbf{b}_1 \times \mathbf{b}_2$. Since the planes are central, Any intersection must be along the vector $(\mathbf{a}_1 \times \mathbf{a}_2)\times(\mathbf{b}_1 \times \mathbf{b}_2)$. There are two intersections in $\mathcal{S}$ and we consider the one maximizing the dot product with $\mathbf{a}_1$ (same hemisphere). We denote such intersection $\mathbf{i}$. The final test simply decides if $\mathbf{i}$ lies on both segments or is somewhere else on the great circles. This can be done by testing dot products, as i must be closer to both vertices than the distance of the vertices for both segments:
+If neither of the two triangles contain a vertex of the other one, we have to decide if any two edges intersect. Consider two edges defined by pairs of non-identical vertices $(\mathbf{a}_1, \mathbf{a}_2)$ and $(\mathbf{b}_1, \mathbf{b}_2)$. These define planes within which lie their respective great circles. The planes have normal vectors $\mathbf{a}_1 \times \mathbf{a}_2$ and $\mathbf{b}_1 \times \mathbf{b}_2$. Since the planes are central, Any intersection must be along the vector $(\mathbf{a}_1 \times \mathbf{a}_2)\times(\mathbf{b}_1 \times \mathbf{b}_2)$. There are two intersections in $\mathcal{S}$ and we consider the one maximizing the dot product with $\mathbf{a}_1$ (same hemisphere). We denote such intersection $\mathbf{i}$. The final test simply decides if $\mathbf{i}$ lies on both segments or is somewhere else on the great circles. This can be done by testing dot products, as $\mathbf{i}$ must be closer to both vertices than the distance of the vertices for both segments:
 $$(\mathbf{i}\cdot\mathbf{a}_1 > \mathbf{a}_1\cdot\mathbf{a}_2) \land (\mathbf{i}\cdot\mathbf{a}_2 > \mathbf{a}_1\cdot\mathbf{a}_2)\land(\mathbf{i}\cdot\mathbf{b}_1 > \mathbf{b}_1\cdot\mathbf{b}_2) \land (\mathbf{i}\cdot\mathbf{b}_2 > \mathbf{b}_1\cdot\mathbf{b}_2)$$
 If any two segments of the two triangles intersect, the triangles must by the sign analysis have non-empty intersection and therefore collide. If all tests are negative, the triangles are disjoint.
 \subsection{Merging of spherical circles}
@@ -283,19 +283,20 @@ $$b_{ij}=b'(\sin\theta_j\cos\phi_i,\cos\theta_j,\sin\theta_j\sin\phi_i)$$
 This texture is subsequently used for rendering the surface, however, there is an inherent problem with uv mapping. Because of my insecurity about the math involved, the process will not be explained in this text and instead, the reader is encouraged to read a more educated article \cite{bgolus}.
 
 There is perhaps a better way to deal with texture mapping, which was discussed in a Unity forum thread \cite{unityforum}. Cubemaps are quite possibly a more logical choice, as the texture information density needlesly increases towards extreme values of the $y$ coordinate.
-\subsection{Spherical units}
-Virtually all expressions throughout this section assumed a unit sphere for simplicity, but for rendering and parameter context some scaling is needed. For example, radius $R$ of the planet might be given in kilometers \cite{cortial}. Since rendering in thousands of 'Unity meters' is impractical, let us denote this unit $\mbox{u}$ and consider:
-$$1 \mbox{ u} = 1000\mbox{ km}, \forall\mathbf{x}\in\mathcal{S}:||\mathbf{x}|| = 1\mbox{ u}$$
-Then the all the rendered vertices should only be transformed as $\mathbf{x}\rightarrow R\mathbf{x}$. Our unit of time will be $\mbox{My}$. Some useful conversions follow in table \ref{tab:unit-conversion}.
+\subsection{Unit dimensions}
+Virtually all expressions throughout this section assumed a unit sphere for simplicity, but for rendering and parameter context some scaling is needed. For example, radius $R$ of the planet might be given in kilometers \cite{cortial}. Quantities such as this one describe planets in a~physical metric space with a~basic length unit of 1 m (and its metric prefixes). We consider the basic length unit in Unity scenes a 'Unity meter' $\mbox{u}$ and the corresponding space as Unity space. Given standard radius of a planet (in order of 1000 km), rendering in 1:1 scale from metric to Unity space is impractical. We set a scale convention $1\mbox{ u}=1000\mbox{ km}$. Because of the geological time scale, our basic unit of time will be $\mbox{My}$ (million years). Some useful conversions follow in table \ref{tab:unit-conversion}.
 
-Some given parameters can be set for a sphere with a given radius $R$. In this case, conversion of the value to unit sphere must take the radius into consideration -- quantities of distance must be divided by $R$, quantities of area by $R^2$.
-\paragraph{Example}Maximum plate speed $v_0$ is 100 mm$\cdot$y$^{-1}$ on a planet with radius $R=6370$ km. Its unit sphere value is\footnote{Because Driftworld Tectonics uses the unit sphere values, we will reference quantities declared on a unit sphere as primed to distinguish from the quantities of the original article \cite{cortial}.}:
-$$v_0' = \frac{100\mbox{ mm}\cdot\mbox{y}^{-1}}{6370\mbox{ km}}=\frac{0.1\mbox{ u}\cdot\mbox{My}^{-1}}{6.370\mbox{ u}}\approx 0.0157\mbox{ My}^{-1}$$
-This allows us to identify any surface speed with an angular speed.
+The planet radius expressed in Unity meters is used as a scaling parameter to transform quantities from Unity space to the unit sphere representation (denoted by $R_\mathcal{U}$). The simulation runs in the unit sphere representation and planet is rendered by scaling the vertices on the unit sphere by $R_\mathcal{U}$.
+
+\paragraph{Example}Planet with a radius $R=6370$ km has a maximum plate speed\footnote{Because Driftworld Tectonics uses the unit sphere values, we will reference quantities declared in the original article~\cite{cortial} as primed.} $v_0'$ of 100 mm$\cdot$y$^{-1}$ and an average plate area $\mathcal{A}_0'$ of $25.5\times 10^{6}\mbox{ km}^2$ . We want to transform these values to a unit sphere representation. The scaling parameter is  $R_\mathcal{U}=6.37$ u. Maximum plate speed is transformed as:
+$$v_0 = \frac{v_0'}{R_\mathcal{U}} =  \frac{100\mbox{ mm}\cdot\mbox{y}^{-1}}{6370\mbox{ km}}=\frac{0.1\mbox{ u}\cdot\mbox{My}^{-1}}{6.37\mbox{ u}}\approx 0.0157\mbox{ My}^{-1}$$
+This allows us to identify any surface speed with an angular speed. The average area has two length dimensions, so to transform to a unit sphere, the expression is:
+$$\mathcal{A}_0 = \frac{\mathcal{A}_0'}{R_\mathcal{U}^2} =  \frac{25.5\times 10^{6}\mbox{ km}^2}{40576900\mbox{ km}^2}= \frac{25.5\mbox{ u}^2}{40.5769\mbox{ u}^2}\approx 0.628$$
+Note that the value is fraction-scaled to $4\pi$, which is the unit sphere surface area.
 \begin{table}
 \centering
 \begin{tabular}{rr}
-\textbf{Unit}&\textbf{Conversion}\\
+\textbf{Metric unit}&\textbf{Unity conversion}\\
 \hline\\
 1 km&0.001 u\\
 1 km$^{-1}$&1000 u$^{-1}$\\
@@ -304,3 +305,28 @@ This allows us to identify any surface speed with an angular speed.
 \caption{Unit conversion table}
 \label{tab:unit-conversion}
 \end{table}
+\subsection{Vector noise on mesh}
+\label{subsec:vector-noise-on-mesh}
+Given a Delauney triangulation of a sphere, Driftworld uses a specific type of noise to randomize simple linear borders, such as between two tectonic plates. Because only whole mesh triangles are assigned to plates, a single noise value is assigned to each triangle. Because the goal of the randomizer is to shift border directions, the noise values are vectors. A single value $\mathbf{m}$ is obtained by taking a~random vector $\mathbf{s}\in\mathcal{S}$ and projecting it onto the tangent plane of the triangle centroid $\mathbf{c}$\footnote{This part is similar to the grid vector assignment when calculating 2D Perlin noise \cite{perlinnoise}, although with additional projection.}:
+$$\mathbf{m} = \mathbf{s}-(\mathbf{s}\cdot\mathbf{c})\mathbf{c}$$
+This way, the obtained random vectors should be uniformly distributed. Note that the vector lengths are from the interval $[0,1]$ and completely random. To avoid some of the border jitter, the noise should be low-frequency. Every triangle has three neighbours along its edges. This means that for every triangle we can average its noise vector with the neighbour noise vectors to filter higher frequency noise. We only need to ensure that the result is again within the tangent plane by projecting either the contributing vectors or the result itself. This summation can be repeated several time to adjust the filtering. 
+
+The resulting low-frequency vector noise is driven by the number of averaging iterations. This is basically a 'smearing' of the triangle noise up to a certain radius. The total number of triangles in a~mesh influences the resulting noise pattern (detail) on the sphere. In Figure \ref{fig:vector-noise} the same number of iterations were used for meshes with 10,000 (\ref{fig:vector-noise-lowpoly}) and 500,000 (\ref{fig:vector-noise-highpoly}) triangles. It is clearly seen that the the granulation is finer on the sphere with more detailed mesh. Also, there is a noise pattern change along the lines where the mesh pattern changes. This is partially because each triangle is colored whole with a single color and the triangles are not perfectly regular.
+
+It might be a good idea to revisit the concept of a vector noise on the sphere some time in the future. The concept is experimental and it is unclear if it has some unforeseen consequences for the plate border interactions.
+\begin{figure}[ht]
+\centering
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{vector-noise-lowpoly.png}
+\caption{low poly with mesh - whole triangles are coloured}
+\label{fig:vector-noise-lowpoly}
+\end{subfigure}
+\hspace*{1cm}
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{vector-noise-highpoly.png}
+\caption{high poly without mesh - borders of mesh patterns visible}
+\label{fig:vector-noise-highpoly}
+\end{subfigure}
+\caption{Vector noise representation - hue represents relative direction, saturation the length of a~vector, value is set to constant 1}
+\label{fig:vector-noise}
+\end{figure}

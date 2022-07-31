@@ -1,2 +1,2 @@
-started work on PDF documentation
-updated .gitignore
+documentation
+minor refactoring

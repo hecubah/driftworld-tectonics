@@ -5,12 +5,12 @@ public class SimulationSettings // single object for simulation parameters, make
 {
     public float PlanetRadius = 6.37f; // multiple of 1000 km
 
-    public int PlateInitNumberOfCentroids = 7; // number of initial tectonic plates (Voronoi centers)
+    public int PlateInitNumberOfCentroids = 40; // number of initial tectonic plates (Voronoi centers)
     public float TectonicIterationStepTime = 2; // simulation time-step in My, def: 2
     public float MaximumPlateSpeed = 0.0157f; // maximum plate angular speed
     public float InitialOceanicDepth = -0.004f; // elevation parameter for initially created oceanic plates
     public float InitialContinentalAltitude = 0.001f; // elevation parameter for initially created continental plates
-    public float InitialContinentalProbability = 0.3f; // probability a new plate is continental for new crust initialization
+    public float InitialContinentalProbability = 0.0f; // probability a new plate is continental for new crust initialization
     public float NewCrustThickness = 0.01f; // initial crust thickness on generated points
     public int VectorNoiseAveragingIterations = 3; // number of iterations in averaging the vector noise
     public int VoronoiBorderNoiseIterations = 6; // number of iterations in plate border perturbations

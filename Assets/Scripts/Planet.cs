@@ -1199,6 +1199,7 @@ public class TectonicPlanet
     public void TectonicStep()
     {
         ComputeShader work_shader = m_PlanetManager.m_Shaders.m_PlateInteractionsShader; // shader assignment
+        bool collision_occured = false; // global collision flag
         if (m_PlanetManager.m_ContinentalCollisions) // if continental collisions are allowed
         {
             UpdateCBBuffers(); // update buffers
@@ -1235,7 +1236,6 @@ public class TectonicPlanet
 
             int[] continental_vertex_collisions = new int[m_VerticesCount]; // corresponding vertex collision data
             int[] continental_vertex_collisions_table = new int[m_VerticesCount * m_TectonicPlatesCount];
-            bool collision_occured = false; // global collision flag
             int n_triangles = m_CrustTriangles.Count;
             for (int i = 0; i < n_triangles; i++)
             {
@@ -1260,6 +1260,11 @@ public class TectonicPlanet
             {
                 Debug.Log("Continental collision detected :<"); // log the collision
                 List<CollidingTerrane> c_terranes = new List<CollidingTerrane>(); // set of colliding terranes
+
+                if (m_PlanetManager.m_StepMovePlates) // increment transforms of all plates before actually colliding
+                {
+                    MovePlates();
+                }
 
                 int[] continental_vertex_collisions_terranes = new int[m_CrustVertices.Count]; // array of colliding terranes indices
                 int[] continental_vertex_collisions_plates = new int[m_CrustVertices.Count]; // with which plate the vertex collide
@@ -1406,7 +1411,7 @@ public class TectonicPlanet
             continental_triangle_contacts_table_buffer.Release(); // release buffers
             continental_triangle_contacts_buffer.Release();
         }
-        if (m_PlanetManager.m_StepMovePlates) // increment transforms of all plates
+        if ((!collision_occured)&&(m_PlanetManager.m_StepMovePlates)) // increment transforms of all plates if not already moved due to a continental collision
         {
             MovePlates();
         }
@@ -1985,14 +1990,10 @@ public class TectonicPlanet
     public void CreateVectorNoise ()
     {
         Vector3 noise_vec;
-        for (int i = 0; i < m_DataTriangles.Count; i++) // assign normalized random vector to each triangle, project to a tangent plane and normalize
+        for (int i = 0; i < m_DataTriangles.Count; i++) // assign random vector to each triangle, projected to a tangent plane and normalized
         {
-            do
-            {
-                noise_vec = new Vector3(m_Random.Range(0.0f, 1.0f), m_Random.Range(0.0f, 1.0f), m_Random.Range(0.0f, 1.0f));
-                noise_vec = noise_vec - (Vector3.Dot(noise_vec, m_DataTriangles[i].m_BCenter)) * m_DataTriangles[i].m_BCenter;
-            } while (noise_vec.magnitude == 0.0f);
-            noise_vec = noise_vec.normalized;
+            noise_vec = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
+            noise_vec = noise_vec - (Vector3.Dot(noise_vec, m_DataTriangles[i].m_BCenter)) * m_DataTriangles[i].m_BCenter;
             m_VectorNoise.Add(noise_vec);
         }
         for (int i = 0; i < m_PlanetManager.m_Settings.VectorNoiseAveragingIterations; i++) // average the noise over neighbours a number of times
@@ -2006,7 +2007,7 @@ public class TectonicPlanet
                     work_noise[j] += contrib - (Vector3.Dot(contrib, m_DataTriangles[j].m_BCenter)) * m_DataTriangles[j].m_BCenter; // contribution is the neighbour's noise vector projected into tangent plane
 
                 }
-
+                work_noise[j] = 0.25f * work_noise[j];
             }
             m_VectorNoise = work_noise; // reassign after each iteration, so that results are consistent
 
@@ -2033,11 +2034,11 @@ public class TectonicPlanet
             float mindot = Mathf.Infinity;
             int maxdotind = -1;
             int mindotind = -1;
-            p1 = m_DataPointData[m_DataTriangles[i].m_A].plate; // test if the triangle is border
+            p1 = m_DataPointData[m_DataTriangles[i].m_A].plate; // test if the triangle has vertices from two plates
             p2 = m_DataPointData[m_DataTriangles[i].m_B].plate;
             p3 = m_DataPointData[m_DataTriangles[i].m_C].plate;
             bool candidate = ((p1 == p2) && (p1 != p3)) || ((p2 == p3) && (p2 != p1)) || ((p3 == p1) && (p3 != p2));
-            if (!candidate) // non-border triangles are skipped
+            if (!candidate) // plate triangles and three-plate triangles are skipped
             {
                 continue;
             } else
