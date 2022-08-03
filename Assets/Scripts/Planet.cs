@@ -530,7 +530,7 @@ public class TectonicPlanet
         work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_CBuffers["data_vertex_locations"]); // shader looks up these
         work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_CBuffers["data_vertex_data"]); // interpolation goal
 
-        work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation); // new crust parameters, ocean ridges
+        work_shader.SetFloat("highest_oceanic_ridge_elevation", m_PlanetManager.m_Settings.HighestOceanicRidgeElevation); // new crust parameters, oceanic ridges
         work_shader.SetFloat("abyssal_plains_elevation", m_PlanetManager.m_Settings.AbyssalPlainsElevation); // new crust parameters
         work_shader.SetFloat("oceanic_ridge_elevation_falloff", m_PlanetManager.m_Settings.OceanicRidgeElevationFalloff); // new crust parameters (shape)
 
@@ -793,7 +793,7 @@ public class TectonicPlanet
     {
         List<Vector3> centroids = new List<Vector3>(); // centroids of the Voronoi cells
         List<Plate> plates = new List<Plate>(); // initialize new plate list
-        List<float> plate_elevations = new List<float>(); // initial elevations of plate vertices - set to either ocean or continental
+        List<float> plate_elevations = new List<float>(); // initial elevations of plate vertices - set to either oceanic or continental
         for (int i = 0; i < m_PlanetManager.m_Settings.PlateInitNumberOfCentroids; i++) // create random plate instances with Voronoi centroids
         {
             Vector3 added_centroid = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized; // centroids are generated randomly
@@ -822,7 +822,6 @@ public class TectonicPlanet
             }
             m_DataPointData[i].thickness = m_PlanetManager.m_Settings.NewCrustThickness; // initialize crust data point
             m_DataPointData[i].plate = plate_index; // assign the nearest plate centroid 
-            m_DataPointData[i].orogeny = OroType.UNKNOWN; // orogeny is not differentiated
             m_DataPointData[i].age = 0; // new crust
         }
 
@@ -834,6 +833,7 @@ public class TectonicPlanet
         for (int i = 0; i < m_DataVertices.Count; i++) // translate all data layer vertices into crust layer, add corresponding vertices to plates
         {
             m_DataPointData[i].elevation = plate_elevations[m_DataPointData[i].plate];
+            m_DataPointData[i].orogeny = (m_DataPointData[i].elevation < 0 ? OroType.UNKNOWN : OroType.ANDEAN); // orogeny is differentiated by elevation, above ocean level is Andean
             plates[m_DataPointData[i].plate].m_PlateVertices.Add(i);
             m_CrustVertices.Add(m_DataVertices[i]);
             m_CrustPointData.Add(new PointData(m_DataPointData[i]));
@@ -940,7 +940,7 @@ public class TectonicPlanet
         float[] plate_scores = new float[m_TectonicPlatesCount]; // assign each plate a score according to vertex elevation sum adjusted for continental elevation cases
         int[] plate_ranks = new int[m_TectonicPlatesCount]; // plate rank ordering the plates from highest to lowest score
         List<int> ranked = new List<int>(); // list of plates already assigned a rank
-        for (int i = 0; i < m_TectonicPlatesCount; i++) // calculate scores by summing elevation with weight -1 in case of ocean crust elevation and 100 in case of continental crust elevation (abs value)
+        for (int i = 0; i < m_TectonicPlatesCount; i++) // calculate scores by summing elevation with weight -1 in case of oceanic crust elevation and 100 in case of continental crust elevation (abs value)
         {
             foreach (int it in m_TectonicPlates[i].m_PlateVertices)
             {
@@ -1280,7 +1280,7 @@ public class TectonicPlanet
                 {
                     if (continental_vertex_collisions[i] != 0) // if a vertex is flagged as colliding
                     {
-                        for (int j = 0; j < m_TectonicPlatesCount; j++) //
+                        for (int j = 0; j < m_TectonicPlatesCount; j++) // for each plate
                         {
                             if (continental_vertex_collisions_table[j * m_CrustVertices.Count + i] != 0) // if found flagged vertex, assume it has not been yet assigned to a colliding terrane and build one
                             {
@@ -1294,10 +1294,12 @@ public class TectonicPlanet
                                 continental_vertex_collisions[i] = 0; // deflag the vertex, will not be used again
                                 continental_vertex_collisions_plates[i] = collided_plate; // to which plate the vertex should be attached
                                 int active_vertex_index; // index of the neighbour-expanded vertex
+                                Vector3 terrane_centroid = Vector3.zero;
                                 while (to_search.Count > 0) // while there is something left to expand
                                 {
                                     active_vertex_index = to_search.Dequeue(); // take first to expand
                                     new_c_terrane.m_Vertices.Add(active_vertex_index); // add vertex to terrane
+                                    terrane_centroid += m_CrustVertices[active_vertex_index]; // add th vertex for the centroid calculation
                                     foreach (int it in m_DataVerticesNeighbours[active_vertex_index]) // for all neighbours of the expanded vertex
                                     {
                                         if ((continental_vertex_collisions_terranes[it] == 0) && (m_CrustPointData[it].elevation >= 0) && (m_CrustPointData[it].plate == colliding_plate)) // if it is continental, not yet assigned a terrane and of the same plate as the original vertex
@@ -1309,9 +1311,21 @@ public class TectonicPlanet
                                         }
                                     }
                                 }
+                                if (terrane_centroid.magnitude > 0)
+                                {
+                                    terrane_centroid = m_TectonicPlates[colliding_plate].m_Transform * (terrane_centroid.normalized);
+                                } else
+                                {
+                                    do
+                                    {
+                                        terrane_centroid = new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized;
+                                    } while (terrane_centroid.magnitude == 0);
+                                }
                                 new_c_terrane.colliding_plate = colliding_plate; // fill the terrane data
                                 new_c_terrane.collided_plate = collided_plate;
                                 new_c_terrane.index = terrane_count_index;
+                                Vector3 relative_velocity = Vector3.Cross(m_TectonicPlates[colliding_plate].m_PlateAngularSpeed * m_TectonicPlates[colliding_plate].m_RotationAxis - m_TectonicPlates[collided_plate].m_PlateAngularSpeed * m_TectonicPlates[collided_plate].m_RotationAxis, terrane_centroid);
+                                new_c_terrane.mutual_speed = relative_velocity.magnitude;
                                 c_terranes.Add(new_c_terrane); // add to terrane list
                                 break; // looking only for first plate that fits, skipping the rest
                             }
@@ -1324,7 +1338,9 @@ public class TectonicPlanet
                 List<int> terrane_collided_plates = new List<int>();
                 List<int> terrane_vertices = new List<int>(); // array of terrane vertices, delimited by the sps counterpart (see sps buffers for details)
                 List<int> terrane_vertices_sps = new List<int>();
+                List<float> terrane_relative_speeds = new List<float>();
                 terrane_vertices_sps.Add(0); // initialize first delimiter
+
 
                 foreach (CollidingTerrane it in c_terranes) // construct the input
                 {
@@ -1335,17 +1351,20 @@ public class TectonicPlanet
                         terrane_vertices.Add(it2);
                     }
                     terrane_vertices_sps.Add(terrane_vertices.Count);
+                    terrane_relative_speeds.Add(it.mutual_speed);
                 }
 
                 ComputeBuffer terrane_colliding_plates_buffer = new ComputeBuffer(terrane_colliding_plates.Count, 4); // create corresponding buffers
                 ComputeBuffer terrane_collided_plates_buffer = new ComputeBuffer(terrane_collided_plates.Count, 4);
                 ComputeBuffer terrane_vertices_buffer = new ComputeBuffer(terrane_vertices.Count, 4);
                 ComputeBuffer terrane_vertices_sps_buffer = new ComputeBuffer(terrane_vertices_sps.Count, 4);
+                ComputeBuffer terrane_relative_speeds_buffer = new ComputeBuffer(terrane_relative_speeds.Count, 4);
 
                 terrane_colliding_plates_buffer.SetData(terrane_colliding_plates.ToArray()); // set the data to buffers
                 terrane_collided_plates_buffer.SetData(terrane_collided_plates.ToArray());
                 terrane_vertices_buffer.SetData(terrane_vertices.ToArray());
                 terrane_vertices_sps_buffer.SetData(terrane_vertices_sps.ToArray());
+                terrane_relative_speeds_buffer.SetData(terrane_relative_speeds.ToArray());
 
                 int continentalCollisionUpliftKernelHandle = work_shader.FindKernel("CSContinentalCollisionUplift"); // assign the kernel
 
@@ -1358,7 +1377,8 @@ public class TectonicPlanet
                 work_shader.SetFloat("maximum_plate_speed", m_PlanetManager.m_Settings.MaximumPlateSpeed);
                 work_shader.SetFloat("collision_coefficient", m_PlanetManager.m_Settings.ContinentalCollisionCoefficient);
                 work_shader.SetFloat("global_collision_distance", m_PlanetManager.m_Settings.ContinentalCollisionGlobalDistance);
-                work_shader.SetFloat("initial_average_vertex_area", (float)m_CrustVertices.Count/m_PlanetManager.m_Settings.PlateInitNumberOfCentroids);
+                work_shader.SetFloat("initial_average_vertex_area", (float)m_CrustVertices.Count / m_PlanetManager.m_Settings.PlateInitNumberOfCentroids);
+                work_shader.SetFloat("planet_radius", m_PlanetManager.m_Settings.PlanetRadius);
 
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "crust_vertex_locations", m_CBuffers["crust_vertex_locations"]);
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "crust_vertex_data", m_CBuffers["crust_vertex_data"]);
@@ -1370,6 +1390,7 @@ public class TectonicPlanet
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_collided_plates", terrane_collided_plates_buffer);
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_vertices", terrane_vertices_buffer);
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_vertices_sps", terrane_vertices_sps_buffer);
+                work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "terrane_relative_speeds", terrane_relative_speeds_buffer);
 
                 work_shader.SetBuffer(continentalCollisionUpliftKernelHandle, "uplift", uplift_buffer);
 
@@ -1393,6 +1414,7 @@ public class TectonicPlanet
                 terrane_collided_plates_buffer.Release();
                 terrane_vertices_buffer.Release();
                 terrane_vertices_sps_buffer.Release();
+                terrane_relative_speeds_buffer.Release();
                 uplift_buffer.Release();
                 m_CBufferUpdatesNeeded["crust_vertex_data"] = true; // update elevation buffer
 
@@ -1490,7 +1512,7 @@ public class TectonicPlanet
             uplift_buffer.Release();
             m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
         }
-        if (m_PlanetManager.m_StepErosionDamping) // if continental erosion and ocean damping are allowed
+        if (m_PlanetManager.m_StepErosionDamping) // if continental erosion and oceanic damping are allowed
         {
             UpdateCBBuffers();
             int erosionDampingSedimentKernelHandle = work_shader.FindKernel("CSErosionDampingSediments"); // calculate uplift contributions (decrease) by erosion, damping and sediment accretion
@@ -1553,6 +1575,7 @@ public class TectonicPlanet
             work_shader.Dispatch(slabContributionsKernelHandle, m_VerticesCount / 64 + (m_VerticesCount % 64 != 0 ? 1 : 0), 1, 1); // dispatch over all vertices
 
             pull_contributions_buffer.GetData(pull_contributions_output);
+            float perturbation_parameter = m_PlanetManager.m_Settings.SlabPullPerturbation * m_PlanetManager.m_Settings.PlateInitNumberOfCentroids / m_CrustVertices.Count; // slab pull contribution scaling to mesh size
             Vector3[] axis_corrections = new Vector3[m_TectonicPlatesCount]; // contributions are assigned to individual plates
             for (int i = 0; i < m_VerticesCount; i++)
             {
@@ -1567,7 +1590,7 @@ public class TectonicPlanet
             }
             for (int i = 0; i < m_TectonicPlatesCount; i++) // axes changes are calculated as added perturbations weighed by a constant and then normalized
             {
-                Vector3 new_axis = m_TectonicPlates[i].m_RotationAxis + m_PlanetManager.m_Settings.SlabPullPerturbation * axis_corrections[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime;
+                Vector3 new_axis = m_TectonicPlates[i].m_RotationAxis + perturbation_parameter * axis_corrections[i] * m_PlanetManager.m_Settings.TectonicIterationStepTime;
                 m_TectonicPlates[i].m_RotationAxis = (new_axis.magnitude > 0 ? new_axis.normalized : new Vector3(m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f), m_Random.Range(-1.0f, 1.0f)).normalized);
             }
             pull_contributions_buffer.Release();
@@ -1576,11 +1599,9 @@ public class TectonicPlanet
 
         if (m_PlanetManager.m_PlateRifting) // if plate rifting is allowed
         {
-            float initial_average_vertex_area = (float)m_CrustVertices.Count / m_PlanetManager.m_Settings.PlateInitNumberOfCentroids; // probability is derived from current area
+            float rift_frequency_coefficient = (float)m_PlanetManager.m_Settings.PlateInitNumberOfCentroids*m_PlanetManager.m_Settings.TectonicIterationStepTime/m_CrustVertices.Count*m_PlanetManager.m_Settings.PlateRiftsPerTimeUnit; // probability parameter, needs to be scaled by a plate vertex size
             float adjusted_rift_frequency;
             int plate_count = m_TectonicPlates.Count;
-            int ocean_count, continental_count;
-            float ratio_weight;
             bool rift_occured = false;
 
             int max_vertices_plate = -1; // largest plate index
@@ -1594,23 +1615,9 @@ public class TectonicPlanet
                 }
             }
 
-            if (m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count >= 2) // rifting a plate implies at lwast two vertices - consistency check
+            if (m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count >= 2) // rifting a plate implies at last two vertices - consistency check
             {
-                ocean_count = 0; // how many ocean vertices
-                continental_count = 0; // how many continental vertices
-                for (int j = 0; j < m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count; j++) // count different vertices types
-                {
-                    if (m_CrustPointData[m_TectonicPlates[max_vertices_plate].m_PlateVertices[j]].elevation < 0)
-                    {
-                        ocean_count++;
-                    }
-                    else
-                    {
-                        continental_count++;
-                    }
-                }
-                ratio_weight = (float)continental_count / (continental_count + ocean_count) * 0.9f + 0.1f; // continental ratio weight function - linear between 0.1f and 1.0f
-                adjusted_rift_frequency = m_PlanetManager.m_Settings.PlateRiftsPerTectonicIterationStep * ratio_weight * (m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count) / initial_average_vertex_area; // calculate probability the plate rift spontaneously
+                adjusted_rift_frequency = rift_frequency_coefficient * (m_TectonicPlates[max_vertices_plate].m_PlateVertices.Count); // calculate probability the plate rift spontaneously
                 if (m_Random.Random() < adjusted_rift_frequency * Mathf.Exp(-adjusted_rift_frequency)) // Poisson distribution
                 {
                     Debug.Log("Rift occured at plate " + max_vertices_plate); // log the rift

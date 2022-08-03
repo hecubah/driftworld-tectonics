@@ -357,7 +357,15 @@ void CSOverlayTextureOrogeny(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThread
     }
     else {
         vertex_data data = data_barycentric_interpolation(w_pixelpoint, found_index);
-        Result[pix_coords] = HSVtoRGB(data.orogeny * 45.0f, 1, 1); // orogeny is int, simply multiply by 45 to get hue
+        if (data.orogeny == 0) {
+          Result[pix_coords] = float4(0.5f, 0.0f, 0.0f, 1.0f); // dark red for Unknown
+          } else if (data.orogeny == 1) {
+            Result[pix_coords] = float4(0.0f, 1.0f, 0.0f, 1.0f); // green for Andean
+          } else if (data.orogeny == 2) {
+            Result[pix_coords] = float4(0.0f, 0.0f, 1.0f, 1.0f); // blue for Himalayan
+          } else {
+            Result[pix_coords] = float4(0.0f, 0.0f, 0.0f, 1.0f); // blue for Error
+          }
     }
 }
 

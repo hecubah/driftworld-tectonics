@@ -74,5 +74,6 @@ public class CollidingTerrane
     public int collided_plate = -1; // index of the plate the terrane is colliding with (and will be attached to)
     public int index = 0; // primary index identifier of the terrane
     public List<int> m_Vertices = new List<int>(); // set of connected continental vertices - this set has no continental neighbours (or at least it shouldn't have)
+    public float mutual_speed = 0.0f; // mutual speed of the plates
 }
 

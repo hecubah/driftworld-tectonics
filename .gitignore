@@ -19,5 +19,6 @@ Doc/*.toc
 Doc/*.out
 Doc/*.lof
 Doc/*.lot
+Doc/resources/*~
 save.dat
 tex.png

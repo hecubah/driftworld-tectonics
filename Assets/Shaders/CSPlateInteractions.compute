@@ -273,7 +273,7 @@ float subduction_distance_transfer(float distance) {
         return 0;
     }
     // piecewise cubic function with controling of the peak
-    float normal = (pow(subduction_max_distance, 3) - pow(subduction_control_distance, 3)) / 6.0f + (pow(subduction_control_distance, 2) * subduction_max_distance - pow(subduction_max_distance, 2) * subduction_control_distance) * 0.5f;
+    float normal =  (pow(subduction_max_distance, 3) - pow(subduction_control_distance, 3)) / 6.0f + (pow(subduction_control_distance, 2) * subduction_max_distance - pow(subduction_max_distance, 2) * subduction_control_distance) * 0.5f;
     float value = pow(distance, 3) / 3.0f - (subduction_control_distance + subduction_max_distance) * pow(distance, 2) * 0.5f + subduction_control_distance * subduction_max_distance * distance + pow(subduction_max_distance, 3) / 6.0f - pow(subduction_max_distance, 2) * subduction_control_distance * 0.5f;
     return value / normal;
 }
@@ -562,12 +562,14 @@ int n_terranes; // number of terranes in the crust layer
 float collision_coefficient; // discrete output multiplication parameter
 float global_collision_distance; // global parameter
 float initial_average_vertex_area; // initial average number of vertices per plate
+float planet_radius; // planet radius for uplift calculation
 
 // input variables for collision uplift contributions
 StructuredBuffer<int> terrane_colliding_plates;
 StructuredBuffer<int> terrane_collided_plates;
 StructuredBuffer<int> terrane_vertices;  // all terranes vertices, concatenated
 StructuredBuffer<int> terrane_vertices_sps; // indices referencing terrane array boundaries in terrane_vertices - index corresponding to terrane order is starting offset, next one is upper limit, where the next terrane vertex set starts - last is total upper limit
+StructuredBuffer<float> terrane_relative_speeds; // indices referencing terrane array boundaries in terrane_vertices - index corresponding to terrane order is starting offset, next one is upper limit, where the next terrane vertex set starts - last is total upper limit
 
 // Calculate discrete collision uplift contributions.
 [numthreads(64, 1, 1)]
@@ -588,18 +590,18 @@ void CSContinentalCollisionUplift(uint3 dID : SV_DispatchThreadID)
     if (ivi_plate != terrane_collided_plates[i]) { // if the terrane does not collide with the plate, move along
       continue;
     }
-    mindist = MAX_DISTANCE; // our friendly inifinity
+    mindist = MAX_DISTANCE; // our friendly infinity
     offset = terrane_vertices_sps[i]; // get the offset
     terrane_size = terrane_vertices_sps[i+1] - terrane_vertices_sps[i];
     terrane_area = (float)terrane_size / (float)n_crust_vertices * 4.0f * 3.141592653f; // terrane area is calculated from the number of its vertices, as one point on average corresponds to the sphere area divided by the number of vertices
-    collision_max_distance = global_collision_distance * sqrt(subduction_speed_transfer(iv, ivi_plate, terrane_colliding_plates[i])) * (float)terrane_size / initial_average_vertex_area; // max distance of terrane influence
+    collision_max_distance = global_collision_distance * sqrt(terrane_relative_speeds[i]/maximum_plate_speed) * (float)terrane_size / initial_average_vertex_area; // max distance of terrane influence
     for (int j = 0; j < terrane_size; j++) { // for all vertices of the terrane, calculate the closest point
       dot_prod = dot(iv, quat_rot(crust_vertex_locations[terrane_vertices[offset + j]], plate_transforms[terrane_colliding_plates[i]]));
       dist = (dot_prod <= 1 ? acos(dot_prod) : 0.0f);
       mindist = (dist < mindist ? dist : mindist);
     }
     if (mindist <= collision_max_distance) { // if the closest point is near enough, calculate the partial contribution
-      uplift_sum += collision_coefficient * terrane_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
+      uplift_sum += (4*3.141592653f*planet_radius*planet_radius)*(float)terrane_size/n_crust_vertices*collision_coefficient * terrane_area * pow(1 - pow(mindist/collision_max_distance, 2) , 2);
     }
   }
   uplift[ivi] = uplift_sum; // sum the contribution and MOVE ALONG HOME!!!

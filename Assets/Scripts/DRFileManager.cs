@@ -151,6 +151,9 @@ public class PlanetBinaryData
     public int m_TotalTectonicStepsTaken; // total tectonic steps taken for reference
     public int m_TectonicStepsTakenWithoutResample; // tectonic steps taken without resampling
 
+    public List<uint> m_RandomMT;
+    public uint m_RandomMTI;
+
     public List<Vector3Serial> m_CrustVertices;
     public List<DRTriangleSerial> m_CrustTriangles;
     public List<PointData> m_CrustPointData;
@@ -168,6 +171,7 @@ public class PlanetBinaryData
     public List<List<int>> m_RenderVerticesNeighbours;
     public List<List<int>> m_RenderTrianglesOfVertices;
     public List<PointData> m_RenderPointData;
+
 }
 
 /// <summary>
@@ -204,6 +208,8 @@ public class DRFileManager
         data.m_Radius = man.m_Planet.m_Radius;
         data.m_TectonicStepsTakenWithoutResample = man.m_Planet.m_TectonicStepsTakenWithoutResample;
         data.m_TotalTectonicStepsTaken = man.m_Planet.m_TotalTectonicStepsTaken;
+        data.m_RandomMTI = man.m_Random.mti;
+        data.m_RandomMT = new List<uint>(); // RNG state
         data.m_CrustVertices = new List<Vector3Serial>(); // lists are created as empty and later filled through PlanetManager
         data.m_CrustPointData = new List<PointData>();
         data.m_DataVertices = new List<Vector3Serial>();
@@ -211,6 +217,10 @@ public class DRFileManager
         data.m_DataVerticesNeighbours = new List<List<int>>();
         data.m_DataTrianglesOfVertices = new List<List<int>>();
         data.m_VectorNoise = new List<Vector3Serial>();
+        for (int i = 0; i < RandomMersenne.MERS_N; i++)
+        {
+            data.m_RandomMT.Add(man.m_Random.mt[i]); // fill the RNG state array
+        }
         for (int i = 0; i < man.m_Planet.m_DataVertices.Count; i++) // copy data and crust (if available) vertices and auxiliary data
         {
             if (data.m_TectonicsPresent)
@@ -282,6 +292,13 @@ public class DRFileManager
         fs.Write(value_buffer, 0, 4);
         value_buffer = BitConverter.GetBytes(data.m_Radius);
         fs.Write(value_buffer, 0, 4);
+        value_buffer = BitConverter.GetBytes(data.m_RandomMTI);
+        fs.Write(value_buffer, 0, 4);
+        for (int i = 0; i < RandomMersenne.MERS_N; i++)
+        {
+            value_buffer = BitConverter.GetBytes(data.m_RandomMT[i]);
+            fs.Write(value_buffer, 0, 4);
+        }
         if (tectonics_present)
         {
             value_buffer = BitConverter.GetBytes(data.m_TectonicStepsTakenWithoutResample);
@@ -495,9 +512,14 @@ public class DRFileManager
             man.m_Surface.AddComponent<MeshRenderer>().sharedMaterial = new Material(Shader.Find("Custom/SphereTextureShader"));
             newMeshFilter.sharedMesh = new Mesh();
         }
-        if (man.m_Random == null) // new RandomMersenne, if needed
+        if (man.m_Random == null) // new RandomMersenne, if needed - actually overriden by random state from the loaded file
         {
             man.m_Random = new RandomMersenne(man.m_RandomSeed);
+        }
+        man.m_Random.mti = data.m_RandomMTI; // set the random state
+        for (int i = 0; i < RandomMersenne.MERS_N; i++)
+        {
+            man.m_Random.mt[i] = data.m_RandomMT[i];
         }
         man.m_Planet = new TectonicPlanet(man.m_Settings.PlanetRadius);
 
@@ -687,6 +709,14 @@ public class DRFileManager
         ms.Read(value_read, 0, 4); // bool as an int
         data.m_TectonicsPresent = BitConverter.ToInt32(value_read, 0) > 0 ? true : false;
         bool tectonics_present = data.m_TectonicsPresent;
+        ms.Read(value_read, 0, 4);
+        data.m_RandomMTI = BitConverter.ToUInt32(value_read, 0);
+        data.m_RandomMT = new List<uint>();
+        for (int i = 0; i < RandomMersenne.MERS_N; i++)
+        {
+            ms.Read(value_read, 0, 4);
+            data.m_RandomMT.Add(BitConverter.ToUInt32(value_read, 0));
+        }
         ms.Read(value_read, 0, 4);
         data.m_Radius = BitConverter.ToSingle(value_read, 0);
         if (tectonics_present)

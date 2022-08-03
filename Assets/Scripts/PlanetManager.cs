@@ -485,7 +485,7 @@ public class PlanetManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Paint hue differentiated orogeny, red is unknown, yellow Andean and green Himalayan
+    /// Paint hue differentiated orogeny, red is unknown, green Andean and blue Himalayan
     /// </summary>
     /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayOrogeny()

@@ -3,7 +3,7 @@
 // Implementation from: http://www.prowaretech.com/Computer/DotNet/Mersenne [cit. 7th January 2021] - adapted
 public class RandomMersenne
 {
-	const int MERS_N = 624;
+	public const int MERS_N = 624;
 	const int MERS_M = 397;
 	const int MERS_U = 11;
 	const int MERS_S = 7;
@@ -13,8 +13,8 @@ public class RandomMersenne
 	const uint MERS_B = 0x9D2C5680;
 	const uint MERS_C = 0xEFC60000;
 
-	uint[] mt = new uint[MERS_N];          // state vector
-	uint mti;                            // index into mt
+	public uint[] mt = new uint[MERS_N];          // state vector
+	public uint mti;                            // index into mt
 
 	/// <summary>
 	/// Dummy constructor.

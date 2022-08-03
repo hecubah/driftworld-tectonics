@@ -1,2 +1,3 @@
-documentation
+finished tectonic model documentation
 minor refactoring
+update file saving to include RNG state
