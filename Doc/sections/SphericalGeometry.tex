@@ -311,7 +311,7 @@ Given a Delauney triangulation of a sphere, Driftworld uses a specific type of n
 $$\mathbf{m} = \mathbf{s}-(\mathbf{s}\cdot\mathbf{c})\mathbf{c}$$
 This way, the obtained random vectors should be uniformly distributed. Note that the vector lengths are from the interval $[0,1]$ and completely random. To avoid some of the border jitter, the noise should be low-frequency. Every triangle has three neighbours along its edges. This means that for every triangle we can average its noise vector with the neighbour noise vectors to filter higher frequency noise. We only need to ensure that the result is again within the tangent plane by projecting either the contributing vectors or the result itself. This summation can be repeated several time to adjust the filtering. 
 
-The resulting low-frequency vector noise is driven by the number of averaging iterations. This is basically a 'smearing' of the triangle noise up to a certain radius. The total number of triangles in a~mesh influences the resulting noise pattern (detail) on the sphere. In Figure \ref{fig:vector-noise} the same number of iterations were used for meshes with 10,000 (\ref{fig:vector-noise-lowpoly}) and 500,000 (\ref{fig:vector-noise-highpoly}) triangles. It is clearly seen that the the granulation is finer on the sphere with more detailed mesh. Also, there is a noise pattern change along the lines where the mesh pattern changes. This is partially because each triangle is colored whole with a single color and the triangles are not perfectly regular.
+The resulting low-frequency vector noise is driven by the number of averaging iterations. This is basically a 'smearing' of the triangle noise up to a certain radius. The total number of triangles in a~mesh influences the resulting noise pattern (detail) on the sphere. In Figure \ref{fig:vector-noise} the same number of iterations were used for meshes with 10,000 (\ref{fig:vector-noise-lowpoly}) and 500,000 (\ref{fig:vector-noise-highpoly}) triangles. Hue represents relative direction, saturation the length of a~vector and value is set to constant 1. It is clearly seen that the the granulation is finer on the sphere with more detailed mesh. Also, there is a noise pattern change along the lines where the mesh pattern changes. This is partially because each triangle is colored whole with a single color and the triangles are not perfectly regular.
 
 It might be a good idea to revisit the concept of a vector noise on the sphere some time in the future. The concept is experimental and it is unclear if it has some unforeseen consequences for the plate border interactions.
 \begin{figure}[ht]
@@ -327,6 +327,10 @@ It might be a good idea to revisit the concept of a vector noise on the sphere s
 \caption{high poly without mesh - borders of mesh patterns visible}
 \label{fig:vector-noise-highpoly}
 \end{subfigure}
-\caption{Vector noise representation - hue represents relative direction, saturation the length of a~vector, value is set to constant 1}
+\caption{Vector noise representation}
 \label{fig:vector-noise}
 \end{figure}
+\subsection{Elevation Laplacian}
+Sometimes it is important to see where some $s_i$ values of mesh points differ in a~significant manner relative to their neighbouring mesh vertices. Driftworld uses this diagnostic method for the elevation values. Let $\mathbf{u}$ be a point on the mesh and $W=\{\mathbf{u}_1,\mathbf{u}_2,\mathbf{u}_3,...,\mathbf{u}_n\}$ a~set of its neighbours along the edges of mesh triangles. Then for some data map $h_j$ we define the mesh point Laplacian as \cite{diffoperators}:
+$$L_j(\mathbf{u})=\sum_{i=1}^n\left(h_j(\mathbf{u}_i)-h_j(\mathbf{u})\right)$$
+Note that this operation only makes sense for real number values, not categories.

@@ -4,6 +4,10 @@
 % This is a simple template for a LaTeX document using the "article" class.
 % See "book", "report", "letter" for other types of document.
 
+
+% ad-hoc changes to typesetting:
+% -
+
 \documentclass[11pt]{article} % use larger type; default would be 10pt
 
 \usepackage[utf8]{inputenc} % set input encoding (not needed with XeLaTeX)
@@ -50,6 +54,7 @@
 \usepackage[titles]{tocloft} % Alter the style of the Table of Contents
 \renewcommand{\cftsecfont}{\rmfamily\mdseries\upshape}
 \renewcommand{\cftsecpagefont}{\rmfamily\mdseries\upshape} % No bold!
+\newcommand{\asd}[1]{\texttt{#1}}
 %%% END Article customizations
 \graphicspath{ {./resources/} }
 \usepackage[hidelinks]{hyperref}
@@ -91,6 +96,7 @@
 \listoftables
 \newpage
 \appendix
-\input{sections/ProjectParameters}
+\input{sections/TemplateDataFileStructure}
+\input{sections/SaveDataFileStructure}
 
 \end{document}

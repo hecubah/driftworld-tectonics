@@ -535,6 +535,7 @@ public class PlanetManager : MonoBehaviour
 
         m_Planet.UpdateCBBuffers();
         work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
         work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
         work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
         work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);

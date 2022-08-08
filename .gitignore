@@ -20,5 +20,6 @@ Doc/*.out
 Doc/*.lof
 Doc/*.lot
 Doc/resources/*~
+Doc/resources/*autosave
 save.dat
 tex.png
