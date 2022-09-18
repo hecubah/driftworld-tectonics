@@ -2176,6 +2176,31 @@ public class TectonicPlanet
             m_DataPointData[i].plate = vertex_plates[i];
         }
     }
+
+    public void ManualCrustElevation()
+    {
+        int pointsize = m_CrustPointData.Count;
+        for (int i = 0; i < pointsize; i++)
+        {
+            float height = m_CrustPointData[i].elevation;
+            if ((height < 0) && (height > -m_PlanetManager.m_Settings.TerrainHeightIncrement))
+            {
+                m_CrustPointData[i].orogeny = OroType.ANDEAN;
+            }
+            m_CrustPointData[i].elevation += m_PlanetManager.m_Settings.TerrainHeightIncrement;
+        }
+        m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
+    }
+
+    public void ManualCrustDepression()
+    {
+        int pointsize = m_CrustPointData.Count;
+        for (int i = 0; i < pointsize; i++)
+        {
+            m_CrustPointData[i].elevation -= m_PlanetManager.m_Settings.TerrainHeightIncrement;
+        }
+        m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
+    }
 }
 
 

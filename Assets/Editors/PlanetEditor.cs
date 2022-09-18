@@ -31,6 +31,10 @@ public class PlanetEditor : Editor
         GUILayout.EndVertical(); // component aligning
         if (GUILayout.Button("Load new planet")) // start button to load fresh planet
         {
+            if (planet_is_loaded)
+            {
+                m_PlanetManager.m_Planet.InitializeCBuffers();
+            }
             m_PlanetManager.LoadNewPlanet(); // manager call for new mesh and topology
         }
         if (planet_is_loaded)
@@ -43,6 +47,10 @@ public class PlanetEditor : Editor
         }
         if (GUILayout.Button("Load planet from file")) // load simulated data from a file
         {
+            if (planet_is_loaded)
+            {
+                m_PlanetManager.m_Planet.InitializeCBuffers();
+            }
             m_PlanetManager.m_FileManager.LoadPlanet();
         }
 
@@ -91,6 +99,7 @@ public class PlanetEditor : Editor
                 GUILayout.BeginVertical("box");
                 if (GUILayout.Button("Initialize tectonic plates")) // fresh tectonic plates system
                 {
+                    m_PlanetManager.m_Planet.InitializeCBuffers();
                     m_PlanetManager.m_Planet.InitializeRandomCrust(); // random plates initialization
                     m_PlanetManager.RenderPlanet(); // render after changes
                 }
@@ -140,6 +149,19 @@ public class PlanetEditor : Editor
                 if (GUILayout.Button("Clear/reinitialize buffers")) // release old buffers and initialize new without setting them
                 {
                     m_PlanetManager.m_Planet.InitializeCBuffers();
+                }
+                if (m_PlanetManager.m_Planet.m_TectonicPlatesCount > 0)
+                {
+                    if (GUILayout.Button("Elevate crust")) // increase crust point elevations
+                    {
+                        m_PlanetManager.m_Planet.ManualCrustElevation();
+                        m_PlanetManager.RenderPlanet();
+                    }
+                    if (GUILayout.Button("Lower crust")) // decrease crust point elevations
+                    {
+                        m_PlanetManager.m_Planet.ManualCrustDepression();
+                        m_PlanetManager.RenderPlanet();
+                    }
                 }
                 if (GUILayout.Button("Generate Fractal Terrain")) // generate a reference fractal terrain
                 {

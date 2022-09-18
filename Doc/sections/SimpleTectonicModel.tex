@@ -30,7 +30,7 @@ Crust data values included so far are: elevation, crust thickness, orogeny type 
 The default crust point data for new points depends on whether the new point is continental or not. The only new continental points are created during the first partitioning (see Subsection \ref{subsec:plate-initialization}). Initial elevation is $z_{0t}=-0.004 \mbox{ u}$ for oceanic crust and $z_{0c}=0.001 \mbox{ u}$ for continental crust. Crust thickness is always calculated from a~basic crust thickness value $e_0=0.01\mbox{ u}$ as $e=e_0+z$, where $z$ is the crust elevation. The initial orogeny type is None for all new oceanic crust points and Andean for the initial continental crust. Initial crust age is universally equal to 0.
 \subsection{Plate initialization}
 \label{subsec:plate-initialization}
-Partitioning of the crust into the initial set of plates  is governed by two parameters: the number of initial plates $N_\mathcal{P}$ and the probability of an initial plate being continental $p_C$. The initial number of plates is 30 and the probability of an initial plate to be continental is 0 for testing purposes. Before partitioning, vector noise is assigned to each triangle on the mesh with a noise averaging iterations parameter $n_{\mbox{sm}}$ of 4.
+Partitioning of the crust into the initial set of plates  is governed by two parameters: the number of initial plates $N_\mathcal{P}$ and the probability of an initial plate being continental $p_C$. The initial number of plates is 20 and the probability of an initial plate to be continental is 0 for testing purposes. Before partitioning, vector noise is assigned to each triangle on the mesh with a noise averaging iterations parameter $n_{\mbox{sm}}$ of 4.
 
 At first, $N_\mathcal{P}$ number of random points $\mathbf{c}$ (future \textit{centroids} of the plates) is distributed on the surface. Then all initial crust vertices are assigned to these points by their shortest distance on a unit sphere:
 $$d(\mathbf{x},\mathbf{c})=\arccos(\mathbf{x}\cdot\mathbf{c})$$
@@ -106,8 +106,8 @@ $$\mathbf{s}_i(\mathbf{q})=\omega_i\mathbf{w}_i\times\mathbf{q}$$
 Relative speed of two plates $\mathcal{P}_i,\mathcal{P}_j$ at a point $\mathbf{q}$ is:
 $$v_{ij}(\mathbf{q})=||\mathbf{s}_i(\mathbf{q})-\mathbf{s}_j(\mathbf{q})||=||\omega_i\mathbf{w}_i\times\mathbf{q}-\omega_j\mathbf{w}_j\times\mathbf{q}||=||(\omega_i\mathbf{w}_i-\omega_j\mathbf{w}_j)\times\mathbf{q}||$$
 The radius of influence is computed as follows:
-$$r = r_c\sqrt{\frac{v_{ij}}{v_0}}\frac{\mathcal{A}_i}{\mathcal{A}_0}\approx r_c\sqrt{\frac{v_{ij}}{v_0}}N_i\frac{N_\mathcal{P}}{N}= r_c\sqrt{\frac{v_{ij}}{v_0}}\frac{N_i}{N_0}$$
-The ratio of terrane area to the average initial area is approximately the same as the ratio of the number of terrane vertices to the average number of vertices in an initial plate, provided the number of samples is sufficiently high.
+$$r = r_c\min(\xi,1), \xi = \sqrt{\frac{v_{ij}}{v_0}}\frac{\mathcal{A}_i}{\mathcal{A}_0}\approx \sqrt{\frac{v_{ij}}{v_0}}N_i\frac{N_\mathcal{P}}{N}= \sqrt{\frac{v_{ij}}{v_0}}\frac{N_i}{N_0}$$
+The ratio of terrane area to the average initial area is approximately the same as the ratio of the number of terrane vertices to the average number of vertices in an initial plate, provided the number of samples is sufficiently high. The minimum value sets absolute maximum collision distance to prevent extreme elevation changes across continents for large mass collisions.
 
 This range applies to area beyond the border of the terrane. A vertex on a plate in which the terrane collides is affected by the collision uplift if its distance $d$ from the nearest vertex of the terrane is less or equal to $r$.
 
@@ -168,7 +168,7 @@ $R$&Planet radius&6,378 km&6.37 u\\
 $z_{0t}$&Initial oceanic elevation&-&-0.004 u\\
 $z_{0c}$&Initial continental elevation&-&0.001 u\\
 $e_0$&Basic crust thickness&-&0.01 u\\
-$N_\mathcal{P}$&Initial number of plates&40&30\\
+$N_\mathcal{P}$&Initial number of plates&40&20\\
 $p_C$&Initial continental plate probability&0.3&0\\
 $v_0$&Maximum plate speed&100 mm$\cdot$y$^{-1}$&$0.0157\mbox{ My}^{-1}$\\
 $n_{\mbox{sm}}$&Noise averaging iterations&-&4\\

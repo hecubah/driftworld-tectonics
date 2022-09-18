@@ -546,7 +546,6 @@ public class DRFileManager
         }
 
         n_triangles = data.m_DataTriangles.Count;
-
         man.m_Planet.m_CrustTriangles = new List<DRTriangle>();
         man.m_Planet.m_DataTriangles = new List<DRTriangle>();
         man.m_Planet.m_VectorNoise = new List<Vector3>();
@@ -666,6 +665,7 @@ public class DRFileManager
                     it.m_BVHArray = BoundingVolume.BuildBVHArray(it.m_BVHPlate);
                 }
             }
+            man.m_Planet.CleanUpPlates();
             man.m_Planet.DetermineBorderTriangles(); // find all border triangles and assign
             man.m_Planet.m_PlatesOverlap = man.m_Planet.CalculatePlatesVP(); // recalculate overlap matrix
         }

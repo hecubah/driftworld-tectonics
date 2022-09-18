@@ -594,7 +594,7 @@ void CSContinentalCollisionUplift(uint3 dID : SV_DispatchThreadID)
     offset = terrane_vertices_sps[i]; // get the offset
     terrane_size = terrane_vertices_sps[i+1] - terrane_vertices_sps[i];
     terrane_area = (float)terrane_size / (float)n_crust_vertices * 4.0f * 3.141592653f; // terrane area is calculated from the number of its vertices, as one point on average corresponds to the sphere area divided by the number of vertices
-    collision_max_distance = global_collision_distance * sqrt(terrane_relative_speeds[i]/maximum_plate_speed) * (float)terrane_size / initial_average_vertex_area; // max distance of terrane influence
+    collision_max_distance = global_collision_distance * min(sqrt(terrane_relative_speeds[i]/maximum_plate_speed) * (float)terrane_size / initial_average_vertex_area, 1.0f); // max distance of terrane influence
     for (int j = 0; j < terrane_size; j++) { // for all vertices of the terrane, calculate the closest point
       dot_prod = dot(iv, quat_rot(crust_vertex_locations[terrane_vertices[offset + j]], plate_transforms[terrane_colliding_plates[i]]));
       dist = (dot_prod <= 1 ? acos(dot_prod) : 0.0f);

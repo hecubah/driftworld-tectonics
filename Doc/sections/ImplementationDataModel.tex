@@ -101,7 +101,7 @@ The algorithm uses a~stack with the maximum size of $d_s=40$, which remembers th
 \label{fig:dfs-traversal}
 \end{figure}
 \subsection{GPU Computing}
-The number of processing-intensive tasks that are performed each step requires a~faster implementation using compute shaders. \asd{TectonicPlanet} stores a~dictionary of \asd{ComputeBuffer} instances. The buffers are updated only when relevant data is changed, using a~\asd{bool} dictionary for flagging. All buffers are interpreted as one-index array of either primitive types or specially designed structs understandable by the shaders. Two-dimensional arrays representing a~list of lists are accompanied by so-called sps buffer arrays with pivot points dividing individual lists. All buffers remain active in the memory unless rewritten by loading another simulation.
+The number of processing-intensive tasks that are performed each step requires a~faster implementation using compute shaders, each kernel of every shader having 64-thread large batches. \asd{TectonicPlanet} stores a~dictionary of \asd{ComputeBuffer} instances. The buffers are updated only when relevant data is changed, using a~\asd{bool} dictionary for flagging. All buffers are interpreted as one-index array of either primitive types or specially designed structs understandable by the shaders. Two-dimensional arrays representing a~list of lists are accompanied by so-called sps buffer arrays with pivot points dividing individual lists. All buffers remain active in the memory unless rewritten by loading another simulation.
 \begin{itemize}[\label={}]
 \item[\textbf{BVH nearest neighbour shader}] Used for determining the nearest bounding volume candidates for constructing BVH. Run once per construction iteration.
 \item[\textbf{Vertex data interpolation shader}]  Used for translating data between planet data layers. Interpolates point data to mesh of the correspondent layer.
@@ -224,7 +224,24 @@ Render options are a~set of tools to look at different aspects of the simulation
 
 Tectonic tools are the main controls of the simulation. \asd{Initialize tectonic plates} creates a new random tectonic configuration (it a actually starts a~new simulation on a~loaded mesh). This allows for the tectonic steps to be performed. Any part of the tectonic simulation can be switched for fine-tuning or adjusting the simulation. \asd{Resample crust} manually forces resampling of \asd{Crust} layer data. Tectonic step is the manual activation tool to perform a~sequence of tectonic steps set above (1 is recommended for purposes other than fine-tuning). Calling for plates initialization requires clearing the buffers.
 
-Data manipulation has several tools to help adjust the simulation. Clearing the buffers is the most important if the user wants to load another simulation or make changes to the script code. Smoothing elevation flattens the terrain by neighbour elevation averaging. It uses a~\textit{neighbour smooth} parameter $z_s=0.1$ , which represents the weight of the neighbour elevation when averaging. Laplacian smooth elevation performs a~similar action, however the weights are differences in elevation scaled to the maximum elevation range. RNG initialization resets the random number generator to the state denoted by a~set seed. Calculating thickness is a~placeholder action that recalculates the default thickness (this crust point information is not implemented in a~contextual manner). Forcing a~plate rift creates two new randomly divided plates from the largest plate in the \asd{Crust} layer. User can export an~overlay texture at any time, provided there is one rendered.
+Data manipulation has several tools to help adjust the simulation. Clearing the buffers is the most important if the user wants to load another simulation or make changes to the script code. Smoothing elevation flattens the terrain by neighbour elevation averaging. It uses a~\textit{neighbour smooth} parameter $z_s=0.1$ , which represents the weight of the neighbour elevation when averaging. Laplacian smooth elevation performs a~similar action, however the weights are differences in elevation scaled to the maximum elevation range. RNG initialization resets the random number generator to the state denoted by a~set seed. Calculating thickness is a~placeholder action that recalculates the default thickness (this crust point information is not implemented in a~contextual manner). Forcing a~plate rift creates two new randomly divided plates from the largest plate in the \asd{Crust} layer. It is possible to manually increase or decrease all \texttt{Crust} layer points to adjust landmass ratio or stress continental features. The increment is a~parameter $z_\delta=0.0001\mbox{ u}$. Any crust elevated above the ocean level is automatically denoted as Andean. An example the manual elevation effect is seen in Figure \ref{fig:manual-elevation}. User can export an~overlay texture at any time, provided there is one rendered.
+
+\begin{figure}[ht]
+\centering
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{manual-elevation-before.png}
+\caption{before}
+\label{fig:manual-elevation-before}
+\end{subfigure}
+\hspace*{1cm}
+\begin{subfigure}{7cm}
+\includegraphics[height=7cm]{manual-elevation-after.png}
+\caption{after}
+\label{fig:manual-elevation-after}
+\end{subfigure}
+\caption{Manually highlighting island arcs}
+\label{fig:manual-elevation}
+\end{figure}
 
 There is the possibility of creating a~standard fractal terrain. This does not simulate orogeny, crust age or other aspects of the tectonic simulation. It takes place entirely within the \asd{Data} layer. There are two main parameters that drive the fractal terrain generation: fractal terrain elevation step $z_f=0.003\mbox{ u}$ and fractal terrain iterations $n_f=10,000$. It runs in a~loop of $n_f$ iterations.  Each iteration chooses a~random plane passing the origin and changes elevation of every \asd{Data} point by $z_f$ -- increases on one side of the plane, decreases on the other. Data from fractal terrain generation can be used to a~degree, but the user must keep in mind that only elevation values are created. For quicker computation, fractal terrain generation uses a~dedicated compute shader and the random normal vectors of the planes are provided beforehand to the dispatched kernel. The elevations are computed for each point independently (one thread -- one vertex). Also note that the parameters $z_f$ and $n_f$ depend on each other.
 
@@ -242,6 +259,7 @@ $d_s$&Maximum stack size for DFS search&40\\
 -&Triangle interior test tolerance&$10^{-4}$\\
 $h_e$&Elevation scale factor&50\\
 $z_s$&Neighbour smooth parameter&0.1\\
+$z_\delta$&Manual elevation increment&0.0001\mbox{ u}\\
 $z_f$&Fractal terrain elevation step&0.003\mbox{ u}\\
 $n_f$&Fractal terrain iterations&10,000\\
 \end{tabular}

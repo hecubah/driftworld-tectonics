@@ -1,5 +1,1 @@
-manual documentation
-GPU reset
-memory leaks?
-optimization?
-cubemap overlays?
+manual documentation - appendices
