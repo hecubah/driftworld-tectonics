@@ -2,8 +2,6 @@
 **Warning: this release is the first published, errors in running the project are quite possible! Please comment if you would like to try the project out and are unable to.**
 ## Introduction
 Driftworld Tectonics is a project written for Unity editor, used to create basic forms of planets. It utilizes ideas and methods described in an article by Yann Cortial et al. in 2019 (see the main documentation file). Planets are created by reading basic template topology, performing a simplified tectonic simulation of the planet’s crust and then exporting the raw data to customized binary files. Users can display various overlays of the planet during the simulation, as well as see the surface elevation mesh. This documentation describes some basic theoretical framework, details of the simulation and the implementation. Hopefully it can be of use to anyone interested in this topic, who either just wants to play around with Driftworld or build their own projects.
-
-Project Driftworld is licensed under a Creative Commons Attribution 4.0 International License.
 ## Acknowledgements
 I would like to thank Dr. Yann Cortial of the National Institute of Applied Sciences of Lyon for discussing his article. His answers to my various inquiries helped me decide the scope and form of Driftworld. I would also like to thank Dr. Daniel Meister of AMD Japan Co. Ltd. for his comments on the use of bounding volume hiearchy algorithms. Driftworld implements a part of an algorithm described in one of his publications. More thanks to PROWAREtech for allowing me to include an adapted version of an example implementation of Mersenne Twister random number generator in
 the project.
