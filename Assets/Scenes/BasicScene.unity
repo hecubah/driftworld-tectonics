@@ -213,6 +213,7 @@ Transform:
   m_LocalRotation: {x: 1, y: -0, z: -0, w: 0}
   m_LocalPosition: {x: 0, y: 0, z: 5}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1181952462}
   m_RootOrder: 0
@@ -306,6 +307,7 @@ Transform:
   m_LocalRotation: {x: -0, y: -0.7071068, z: -0, w: 0.7071068}
   m_LocalPosition: {x: 5, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1181952462}
   m_RootOrder: 3
@@ -399,6 +401,7 @@ Transform:
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -5}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1181952462}
   m_RootOrder: 1
@@ -447,6 +450,7 @@ MeshRenderer:
   m_CastShadows: 1
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
   m_MotionVectors: 1
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
@@ -495,6 +499,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0.7071068, z: -0.7071068, w: 0}
   m_LocalPosition: {x: 0, y: 0, z: 100}
   m_LocalScale: {x: 2, y: 2, z: 2}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 3
@@ -561,6 +566,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 2
@@ -654,20 +660,22 @@ Transform:
   m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1181952462}
   m_RootOrder: 5
   m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
 --- !u!21 &714974743
 Material:
-  serializedVersion: 6
+  serializedVersion: 8
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Custom/SphereTextureShader
   m_Shader: {fileID: 4800000, guid: 291b82589ee9ec048b8ae2ee166fd497, type: 3}
-  m_ShaderKeywords: 
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -681,6 +689,7 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    m_Ints: []
     m_Floats:
     - _Glossiness: 0
     - _Metallic: 0
@@ -766,6 +775,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 1, z: -60}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 0
@@ -960,6 +970,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 91806070}
   - {fileID: 425762862}
@@ -1002,63 +1013,57 @@ MonoBehaviour:
   m_Surface: {fileID: 1992954670}
   m_DataMeshFilename: topomesh1000.dat
   m_RenderMeshFilename: topomesh1000.dat
+  m_SaveFilename: save.dat
+  m_TextureSaveFilenamePNG: tex.png
   m_RandomSeed: 0
   m_TectonicIterationSteps: 1
   m_ElevationScaleFactor: 10
   m_Settings:
-    FractalTerrainIterations: 10000
-    FractalTerrainElevationStep: 0.003
-    MarkupElevation: 0.1
-    PlateInitElevationRange: 0.1
-    PlateInitNumberOfCentroids: 7
-    PlateInitLandRatio: 0
-    CrustThicknessMin: 0.04
-    CrustThicknessMax: 0.06
-    CrustElevationRandomThicknessRange: 0.01
-    OceanBaseFloor: -0.004
-    OceanicRidgeElevationFalloff: 0.05
-    BVHConstructionRadius: 20
-    AverageContinentalElevation: 0.001
-    AverageOceanicDepth: -0.004
-    MaxBorderTrianglesCount: 1500
-    TectonicIterationStepTime: 2
     PlanetRadius: 6.37
-    HighestOceanicRidgeElevation: -0.001
-    OceanicTrenchElevation: -0.01
-    AbyssalPlainsElevation: -0.006
-    HighestContinentalAltitude: 0.01
-    SubductionDistanceTransferControlDistance: 0.1
-    SubductionDistanceTransferMaxDistance: 0.28
-    CollisionDistance: 0.66
-    CollisionCoefficient: 0.013
+    PlateInitNumberOfCentroids: 20
+    TectonicIterationStepTime: 2
     MaximumPlateSpeed: 0.0157
+    InitialOceanicDepth: -0.004
+    InitialContinentalAltitude: 0.001
+    InitialContinentalProbability: 0
+    NewCrustThickness: 0.01
+    VectorNoiseAveragingIterations: 4
+    VoronoiBorderNoiseIterations: 4
+    BVHConstructionRadius: 20
+    AbyssalPlainsElevation: -0.006
+    AverageOceanicDepth: -0.004
+    HighestContinentalAltitude: 0.01
+    HighestOceanicRidgeElevation: -0.001
+    OceanicRidgeElevationFalloff: 0.05
+    OceanicTrenchElevation: -0.01
+    ContinentalCollisionGlobalDistance: 0.659
+    ContinentalCollisionCoefficient: 0.013
+    SubductionDistanceTransferControlDistance: 0.1
+    SubductionDistanceTransferMaxDistance: 0.283
+    SubductionUplift: 0.0006
+    SlabPullPerturbation: 1
     OceanicElevationDamping: 0.00004
     ContinentalErosion: 0.00003
     SedimentAccretion: 0.0003
-    SubductionUplift: 0.0006
-    SlabPullPerturbation: 0.1
+    PlateRiftsPerTimeUnit: 0.1
+    FractalTerrainIterations: 10000
+    FractalTerrainElevationStep: 0.003
+    NeighbourSmoothWeight: 0.1
+    TerrainHeightIncrement: 0.0001
   m_Shaders:
-    m_DefaultTerrainTextureCShader: {fileID: 7200000, guid: e256be65a63892248be3dcb5e1716797,
-      type: 3}
-    m_PlatesAreaTextureCShader: {fileID: 7200000, guid: abe531b600a520f48961f96322926a37,
-      type: 3}
-    m_FractalTerrainCShader: {fileID: 7200000, guid: 45a8ab396e49c2340957752c7f7cea01,
-      type: 3}
-    m_TriangleCollisionTestCShader: {fileID: 7200000, guid: 5258b061de61b6343b3f0e01f149e5ef,
-      type: 3}
-    m_CircleMergeShader: {fileID: 7200000, guid: 67c0f866e7f0ae3409d5fdcdbf218cf9,
+    m_FractalTerrainShader: {fileID: 7200000, guid: 45a8ab396e49c2340957752c7f7cea01,
       type: 3}
     m_BVHNearestNeighbourShader: {fileID: 7200000, guid: d8a0db6cc20fea742bd3c959f9b06a30,
       type: 3}
     m_VertexDataInterpolationShader: {fileID: 7200000, guid: 016dc696076448a4191e63bc1afd279f,
       type: 3}
-    m_TerrainesConstructShader: {fileID: 7200000, guid: 1fe41ac217945204cb44b70706acb1c2,
-      type: 3}
     m_PlateInteractionsShader: {fileID: 7200000, guid: 559f56f2fe2dcbe4a8b2569a4231c812,
       type: 3}
-    m_DebugTextureShader: {fileID: 7200000, guid: 467e9e4abde699c4c9b05143894db562,
+    m_OverlayTextureShader: {fileID: 7200000, guid: b7263c39e579a6844ab327a7bf4b2bb7,
       type: 3}
-  m_RenderMode: normal
+  m_TextureOverlay: 0
+  m_RenderMode: 0
+  m_OverlayOnRender: 1
   m_PropagateCrust: 0
   m_PropagateData: 0
   m_ClampToOceanLevel: 0
@@ -1067,7 +1072,13 @@ MonoBehaviour:
   m_StepSlabPull: 1
   m_StepErosionDamping: 1
   m_SedimentAccretion: 1
-  m_CAPTerrainOnStep: 1
+  m_ContinentalCollisions: 0
+  m_PlateRifting: 0
+  m_FoldoutRenderOptions: 0
+  m_FoldoutTectonics: 0
+  m_FoldoutDataManipulation: 0
+  m_FoldoutDiagnostics: 0
+  m_FoldoutWIPTools: 0
 --- !u!4 &1329373857
 Transform:
   m_ObjectHideFlags: 0
@@ -1078,6 +1089,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1992954673}
   m_Father: {fileID: 0}
@@ -1172,6 +1184,7 @@ Transform:
   m_LocalRotation: {x: -0.7071068, y: -0, z: -0, w: 0.7071068}
   m_LocalPosition: {x: 0, y: -5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1181952462}
   m_RootOrder: 2
@@ -1265,6 +1278,7 @@ Transform:
   m_LocalRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
   m_LocalPosition: {x: -5, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1181952462}
   m_RootOrder: 4
@@ -1298,6 +1312,7 @@ MeshRenderer:
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
   m_MotionVectors: 1
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
@@ -1346,6 +1361,7 @@ Transform:
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1329373857}
   m_RootOrder: 0

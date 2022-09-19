@@ -40,7 +40,7 @@ public class SimulationSettings // single object for simulation parameters, make
     public int FractalTerrainIterations = 10000; // how many times the fractal terrain generator (FTG) shader should iterate
     public float FractalTerrainElevationStep = 0.003f; // elementary elevation change per FTG iteration
     public float NeighbourSmoothWeight = 0.1f; // weight for neighbour elevations for smoothing
-    public float TerrainHeightIncrement = 0.001f; // Forced terrain height change increment
+    public float TerrainHeightIncrement = 0.0001f; // Forced terrain height change increment
 
 }
 
