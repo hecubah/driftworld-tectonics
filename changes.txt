@@ -1,3 +1,1 @@
-maximum collision distance
-manual elevation increments
-finalized first documentation draft
+finalized first documentation draft with appendices

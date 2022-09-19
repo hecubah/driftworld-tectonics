@@ -1,2 +1,111 @@
-\section{Save datafile structure}
+\section{Save datafile structure - version 1}
 \label{sec:save-datafile-structure}
+First iteration of the simulation data file is, like the template data file, a~structured byte stream with a header, ordered in little-endian.
+
+\begin{enumerate}
+\item int value - denoting the length $l$ of the header ($1\times$4 B)
+\item ASCII char array of length $l$ ('DRIFTWORLD' in the current version) ($l\times$1 B)
+\item int value - save file version (1) ($1\times$4 B)
+\item int value as bool - whether tectonic plates are present ($1\times$4 B)
+\item float value - planet radius ($1\times$4 B)
+\item uint value - index into internal RNG state ($1\times$4 B)
+\item uint array representing the internal RNG state ($624\times$4 B)
+\item if tectonics are present:
+\begin{enumerate}
+\item int value - number of tectonic steps taken without resampling ($1\times$4 B)
+\item int value - total number of tectonic steps taken ($1\times$4 B)
+\end{enumerate}
+\item int value - denoting $n_d$ number of data layer vertices ($1\times$4 B)
+\item crust and data vertex values ($n_d\times$?):
+\begin{enumerate}
+\item if tectonics are present:
+\begin{enumerate}
+\item float value - x coordinate of the current crust vertex ($1\times$4 B)
+\item float value - y coordinate of the current crust vertex ($1\times$4 B)\footnote{Note that the y coordinate actually corresponds to the z coordinate in a~tight-handed system.}
+\item float value - z coordinate of the current crust vertex ($1\times$4 B)
+\item float value - current crust vertex elevation ($1\times$4 B)
+\item float value - current crust vertex thickness ($1\times$4 B)
+\item int value - current crust vertex plate index within the plate array ($1\times$4 B)
+\item float value - current crust vertex age ($1\times$4 B)
+\item int value as enum - current crust vertex orogeny ($1\times$4 B)
+\end{enumerate}
+\item float value - x coordinate of the current data vertex ($1\times$4 B)
+\item float value - y coordinate of the current data vertex ($1\times$4 B)
+\item float value - z coordinate of the current data vertex ($1\times$4 B)
+\item float value - current data vertex elevation ($1\times$4 B)
+\item float value - current data vertex thickness ($1\times$4 B)
+\item int value -  current data vertex plate index within the plate array ($1\times$4 B)
+\item float value - current data vertex age ($1\times$4 B)
+\item int value as enum - current data vertex orogeny ($1\times$4 B)
+\item int value - current data vertex neighbours count $k_n$ ($1\times$4 B):
+\item int array of current data vertex neighbour indices within the data vertex array ($k_n\times$4 B)
+\item int value - current data vertex corresponding triangle count $k_t$ ($1\times$4 B):
+\item int array of current data vertex corresponding triangle indices within the data triangle array ($k_t\times$4 B)
+\end{enumerate}
+\item int value - denoting $m_d$ number of data layer triangles ($1\times$4 B)
+\item crust and data triangle values, vector noise ($m_d\times$?):
+\begin{enumerate}
+\item if tectonics are present:
+\begin{enumerate}
+\item int value - A vertex index of the current crust triangle ($1\times$4 B)
+\item int value - B vertex index of the current crust triangle ($1\times$4 B)
+\item int value - C vertex index of the current crust triangle ($1\times$4 B)
+\item int value - first neighboring triangle index of the current crust triangle ($1\times$4 B)
+\item int value - second neighboring triangle index of the current crust triangle ($1\times$4 B)
+\item int value - third neighboring triangle index of the current crust triangle ($1\times$4 B)
+\end{enumerate}
+\item int value - A vertex index of the current data triangle ($1\times$4 B)
+\item int value - B vertex index of the current data triangle ($1\times$4 B)
+\item int value - C vertex index of the current data triangle ($1\times$4 B)
+\item int value - first neighboring triangle index of the current data triangle ($1\times$4 B)
+\item int value - second neighboring triangle index of the current data triangle ($1\times$4 B)
+\item int value - third neighboring triangle index of the current data triangle ($1\times$4 B)
+\item float value - vector noise x coordinate of the current data triangle ($1\times$4 B)
+\item float value - vector noise y coordinate of the current data triangle ($1\times$4 B)
+\item float value - vector noise z coordinate of the current data triangle ($1\times$4 B)
+\end{enumerate}
+\item if tectonics are present:
+\begin{enumerate}
+\item int value - denoting the number of tectonic plates plates array $n_p$ ($1\times$4 B)
+\item plates array ($n_p\times$?):
+\begin{enumerate}
+\item float value - current plate rotation axis x coordinate ($1\times$4 B)
+\item float value - current plate rotation axis y coordinate ($1\times$4 B)
+\item float value - current plate rotation axis z coordinate ($1\times$4 B)
+\item float value - current plate angular speed ($1\times$4 B)
+\item float value - current plate quaternion transform x coordinate ($1\times$4 B)
+\item float value - current plate quaternion transform y coordinate ($1\times$4 B)
+\item float value - current plate quaternion transform z coordinate ($1\times$4 B)
+\item float value - current plate quaternion transform w coordinate ($1\times$4 B)
+\item float value - current plate quaternion centroid x coordinate ($1\times$4 B)
+\item float value - current plate quaternion centroid y coordinate ($1\times$4 B)
+\item float value - current plate quaternion centroid z coordinate ($1\times$4 B)
+\end{enumerate}
+\end{enumerate}
+\item int value - denoting $n_r$ number of render layer vertices ($1\times$4 B)
+\item render vertex values ($n_r\times$?):
+\begin{enumerate}
+\item float value - x coordinate of the current render vertex ($1\times$4 B)
+\item float value - y coordinate of the current render vertex ($1\times$4 B)
+\item float value - z coordinate of the current render vertex ($1\times$4 B)
+\item float value - current render vertex elevation ($1\times$4 B)
+\item float value - current render vertex thickness ($1\times$4 B)
+\item int value -  current render vertex plate index within the plate array ($1\times$4 B)
+\item float value - current render vertex age ($1\times$4 B)
+\item int value as enum - current render vertex orogeny ($1\times$4 B)
+\item int value - current render vertex neighbours count $k_{rn}$ ($1\times$4 B):
+\item int array of current render vertex neighbour indices within the render vertex array ($k_{rn}\times$4 B)
+\item int value - current render vertex corresponding triangle count $k_{rt}$ ($1\times$4 B):
+\item int array of current render vertex corresponding triangle indices within the render triangle array ($k_{rt}\times$4 B)
+\end{enumerate}
+\item int value - denoting $m_{rd}$ number of data layer triangles ($1\times$4 B)
+\item crust and data triangle values, vector noise ($m_{rd}\times$?):
+\begin{enumerate}
+\item int value - A vertex index of the current render triangle ($1\times$4 B)
+\item int value - B vertex index of the current render triangle ($1\times$4 B)
+\item int value - C vertex index of the current render triangle ($1\times$4 B)
+\item int value - first neighboring triangle index of the current render triangle ($1\times$4 B)
+\item int value - second neighboring triangle index of the current render triangle ($1\times$4 B)
+\item int value - third neighboring triangle index of the current render triangle ($1\times$4 B)
+\end{enumerate}
+\end{enumerate}

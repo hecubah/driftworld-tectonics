@@ -2177,29 +2177,35 @@ public class TectonicPlanet
         }
     }
 
+    /// <summary>
+    /// Increase the crust elevation by an incremental step
+    /// </summary>
     public void ManualCrustElevation()
     {
         int pointsize = m_CrustPointData.Count;
-        for (int i = 0; i < pointsize; i++)
+        for (int i = 0; i < pointsize; i++) // go over all vertices
         {
-            float height = m_CrustPointData[i].elevation;
-            if ((height < 0) && (height > -m_PlanetManager.m_Settings.TerrainHeightIncrement))
+            float height = m_CrustPointData[i].elevation; // current elevation
+            if ((height < 0) && (height > -m_PlanetManager.m_Settings.TerrainHeightIncrement)) // if the vertex elevation goes above the ocean level, set its orogeny as Andean
             {
                 m_CrustPointData[i].orogeny = OroType.ANDEAN;
             }
-            m_CrustPointData[i].elevation += m_PlanetManager.m_Settings.TerrainHeightIncrement;
+            m_CrustPointData[i].elevation += m_PlanetManager.m_Settings.TerrainHeightIncrement; // increase the elevation
         }
-        m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
+        m_CBufferUpdatesNeeded["crust_vertex_data"] = true; // the corresponding buffer needs to be updates
     }
 
+    /// <summary>
+    /// Devrease the crust elevation by an incremental step
+    /// </summary>
     public void ManualCrustDepression()
     {
         int pointsize = m_CrustPointData.Count;
-        for (int i = 0; i < pointsize; i++)
+        for (int i = 0; i < pointsize; i++) // go over all vertices
         {
-            m_CrustPointData[i].elevation -= m_PlanetManager.m_Settings.TerrainHeightIncrement;
+            m_CrustPointData[i].elevation -= m_PlanetManager.m_Settings.TerrainHeightIncrement; // increase the elevation
         }
-        m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
+        m_CBufferUpdatesNeeded["crust_vertex_data"] = true; // the corresponding buffer needs to be updates
     }
 }
 

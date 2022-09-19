@@ -31,7 +31,7 @@ public class PlanetEditor : Editor
         GUILayout.EndVertical(); // component aligning
         if (GUILayout.Button("Load new planet")) // start button to load fresh planet
         {
-            if (planet_is_loaded)
+            if (planet_is_loaded) // clear the buffers since they will be reassigned
             {
                 m_PlanetManager.m_Planet.InitializeCBuffers();
             }
@@ -47,7 +47,7 @@ public class PlanetEditor : Editor
         }
         if (GUILayout.Button("Load planet from file")) // load simulated data from a file
         {
-            if (planet_is_loaded)
+            if (planet_is_loaded) // clear the buffers since they will be reassigned
             {
                 m_PlanetManager.m_Planet.InitializeCBuffers();
             }
@@ -99,7 +99,7 @@ public class PlanetEditor : Editor
                 GUILayout.BeginVertical("box");
                 if (GUILayout.Button("Initialize tectonic plates")) // fresh tectonic plates system
                 {
-                    m_PlanetManager.m_Planet.InitializeCBuffers();
+                    m_PlanetManager.m_Planet.InitializeCBuffers(); // clear the buffers since they will be reassigned
                     m_PlanetManager.m_Planet.InitializeRandomCrust(); // random plates initialization
                     m_PlanetManager.RenderPlanet(); // render after changes
                 }
