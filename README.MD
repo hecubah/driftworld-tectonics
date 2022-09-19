@@ -17,3 +17,14 @@ The project was created using Unity Editor, lately in its version 2021.3.1f1. Th
 This repository includes all source codes and necessary files to run Driftworld Tectonics, provided the user has Unity installed. MS Visual Studio is recommended for its compatibility with Unity (also, the project was mostly written in it).
 ## Documentation
 The Doc directory contains a PDF file with the documentation overview. It is written in a thesis-like style, but it is not intended as such. There is also a lot of dreamy rambling, I implore any would-be reader to take it easy on me (thanks!).
+
+Shield: [![CC BY 4.0][cc-by-shield]][cc-by]
+
+This work is licensed under a
+[Creative Commons Attribution 4.0 International License][cc-by].
+
+[![CC BY 4.0][cc-by-image]][cc-by]
+
+[cc-by]: http://creativecommons.org/licenses/by/4.0/
+[cc-by-image]: https://i.creativecommons.org/l/by/4.0/88x31.png
+[cc-by-shield]: https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg
