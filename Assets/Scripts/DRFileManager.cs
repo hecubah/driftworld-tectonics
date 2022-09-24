@@ -194,7 +194,7 @@ public class DRFileManager
         man = man_p;
         filename = "save.dat"; // taken later from the PlanetManger instance as demanded
         path = ""; // not used
-        m_DataFileHeader = "DRIFTWORLD"; // simple header
+        m_DataFileHeader = "DRIFTWORLD TECTONICS"; // simple header
         m_Version = 1; // first planned version at the moment of initial public release
     }
 
