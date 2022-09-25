@@ -1013,7 +1013,7 @@ MonoBehaviour:
   m_Surface: {fileID: 1992954670}
   m_DataMeshFilename: topomesh1000.dat
   m_RenderMeshFilename: topomesh1000.dat
-  m_SaveFilename: save.dat
+  m_SaveFilename: save.drdat
   m_TextureSaveFilenamePNG: tex.png
   m_RandomSeed: 0
   m_TectonicIterationSteps: 1

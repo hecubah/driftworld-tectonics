@@ -22,4 +22,5 @@ Doc/*.lot
 Doc/resources/*~
 Doc/resources/*autosave
 save.dat
+*.drdat
 tex.png
