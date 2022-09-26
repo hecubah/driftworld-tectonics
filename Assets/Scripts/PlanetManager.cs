@@ -63,18 +63,6 @@ public class PlanetManager : MonoBehaviour
     /// </summary>
     public void DebugFunction()
     {
-        int pointsize = m_Planet.m_CrustPointData.Count;
-        for (int i = 0; i < pointsize; i++)
-        {
-            float height = m_Planet.m_CrustPointData[i].elevation;
-            if ((height < 0) && (height > - m_Settings.TerrainHeightIncrement))
-            {
-                m_Planet.m_CrustPointData[i].orogeny = OroType.ANDEAN;
-            }
-            m_Planet.m_CrustPointData[i].elevation += m_Settings.TerrainHeightIncrement;
-        }
-        m_Planet.m_CBufferUpdatesNeeded["crust_vertex_data"] = true;
-        RenderPlanet();
     }
 
     /// <summary>

@@ -710,6 +710,8 @@ public class DRFileManager
         data.m_TectonicsPresent = BitConverter.ToInt32(value_read, 0) > 0 ? true : false;
         bool tectonics_present = data.m_TectonicsPresent;
         ms.Read(value_read, 0, 4);
+        data.m_Radius = BitConverter.ToSingle(value_read, 0);
+        ms.Read(value_read, 0, 4);
         data.m_RandomMTI = BitConverter.ToUInt32(value_read, 0);
         data.m_RandomMT = new List<uint>();
         for (int i = 0; i < RandomMersenne.MERS_N; i++)
@@ -717,8 +719,6 @@ public class DRFileManager
             ms.Read(value_read, 0, 4);
             data.m_RandomMT.Add(BitConverter.ToUInt32(value_read, 0));
         }
-        ms.Read(value_read, 0, 4);
-        data.m_Radius = BitConverter.ToSingle(value_read, 0);
         if (tectonics_present)
         {
             ms.Read(value_read, 0, 4);
