@@ -521,7 +521,7 @@ public class DRFileManager
         {
             man.m_Random.mt[i] = data.m_RandomMT[i];
         }
-        man.m_Planet = new TectonicPlanet(man.m_Settings.PlanetRadius);
+        man.m_Planet = new TectonicPlanet(data.m_Radius);
 
         // Start of planet reconstruction.
         int n_vertices, n_triangles;
