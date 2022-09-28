@@ -1,1 +1,2 @@
-Finalized preparations for publishing
+corrected vertex interpolation (clamp values)
+changed slab pull parameter

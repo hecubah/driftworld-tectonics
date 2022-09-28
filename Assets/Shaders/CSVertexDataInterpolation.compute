@@ -228,9 +228,15 @@ vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, f
     float3 c = crust_vertex_locations[crust_triangles[triangle_index].c];
     float3 p = quat_rot(ipoint, triangle_transformation * float4(-1, -1, -1, 1)); // inverse-transformed point
     float u, v, w; // barycentric coordinates, corresponding to relative area ratios of smaller opposite triangle
-    v = length(cross(c-a, p-a))/length(cross(b-a, c-a)); // calculation based on parallelogram areas
-    w = length(cross(b-a, p-a))/length(cross(b-a, c-a));
-    u = 1.0f - v - w;
+    //v = length(cross(c-a, p-a))/length(cross(b-a, c-a)); // calculation based on parallelogram areas
+    //w = length(cross(b-a, p-a))/length(cross(b-a, c-a));
+    v = clamp(length(cross(c-p, a-p))/length(cross(b-a, c-a)), 0.0f, 1.0f); // calculation based on parallelogram areas
+    w = clamp(length(cross(a-p, b-p))/length(cross(b-a, c-a)), 0.0f, 1.0f);
+    u = clamp(1.0f - v - w, 0.0f, 1.0f);
+    float barsum = u + v + w;
+    u = u / barsum;
+    v = v / barsum;
+    w = w / barsum;
     vertex_data ret;
 
     float e1, e2, e3, ag1, ag2, ag3; // float crust values
@@ -540,9 +546,15 @@ vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
     float3 b = data_vertex_locations[data_triangles[triangle_index].b];
     float3 c = data_vertex_locations[data_triangles[triangle_index].c];
     float u, v, w; // barycentric coordinates, corresponding to relative area ratios of smaller opposite triangle
-    v = length(cross(c-a, ipoint-a))/length(cross(b-a, c-a)); // calculation based on parallelogram areas
-    w = length(cross(b-a, ipoint-a))/length(cross(b-a, c-a));
-    u = 1.0f - v - w;
+    //v = length(cross(c-a, ipoint-a))/length(cross(b-a, c-a)); // calculation based on parallelogram areas
+    //w = length(cross(b-a, ipoint-a))/length(cross(b-a, c-a));
+    v = clamp(length(cross(c-ipoint, a-ipoint))/length(cross(b-a, c-a)), 0.0f, 1.0f); // calculation based on parallelogram areas
+    w = clamp(length(cross(a-ipoint, b-ipoint))/length(cross(b-a, c-a)), 0.0f, 1.0f);
+    u = clamp(1.0f - v - w, 0.0f, 1.0f);
+    float barsum = u + v + w;
+    u = u / barsum;
+    v = v / barsum;
+    w = w / barsum;
     vertex_data ret;
 
     float e1, e2, e3, ag1, ag2, ag3;
@@ -566,7 +578,7 @@ vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
       ret.plate = data_vertex_data[data_triangles[triangle_index].c].plate;
       ret.orogeny = data_vertex_data[data_triangles[triangle_index].c].orogeny;
     }
-    return ret;//REWRITE
+    return ret;
 
 }
 

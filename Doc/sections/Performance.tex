@@ -41,8 +41,6 @@ As a direct result of a terrain smoothing, borders are somewhat simplified, whic
 \label{fig:issue-blobs}
 \end{figure}
 
-\subsection{Crust furrows}
-During a simulation after 20-30 steps, sometimes a crust artifact occurs where the terrain is creased along one direction (see Figure \ref{fig:crust-furrows}). This is not a~result of crust folding as folding is not implemented. This creasing is usually accompanied by extreme elevation gradients. The reasons for these occurences are not very well understood yet but the artifacts can be corrected to a~degree using Laplacian smoothing. The result is usually a group of elongated islands.
 \begin{figure}[ht!]
 \centering
 \includegraphics[height=9cm]{issue-furrows.png}
@@ -54,3 +52,5 @@ During a simulation after 20-30 steps, sometimes a crust artifact occurs where t
 For high sample count simulations (500,000 data samples), computations on the crust layer stretch GPU compute shaders to their limits. For crust plates number exceeding 30, tectonic steps sometimes cause crashes on compute shader dispatches. This is the main reason why the recommended initial number of plates is 20. For lower number of samples, 40 plates is a~viable option and should be used to create more interesting crust formations. The lower number of plates can be counter-weighted by applying manual elevation increments, such as in the example in Figure  \ref{fig:output-example}. It is possible that a~better GPU might not have the same issues, but this was not tested.
 \subsection{Memory leaks}
 The simulations of 500,000 data samples are somewhat RAM-intensive. After many tectonic and rendering steps, the simulation may continuously increase its used operational memory. This is obviously due to memory leaks, which may have two probable causes: constant resampling of the crust or memory lost due to texture reassignments. Until the problem is properly addressed, it is recommended that users periodically save their simulations to files and then load them to restarted Unity editor scenes. The rate of the memory increase is small but steady -- 100 tectonic steps with renders seem to increase the required memory by about 5 GB at 500,000 data samples.
+\subsection{Past issues}
+During a simulation after 20-30 steps, crust artifacts used to occur where the terrain was creased along one direction (see Figure \ref{fig:crust-furrows}). These artifacts were caused by incorrectly normalized barycentric interpolation and subsequent crust resampling. This normalization has since been improved.

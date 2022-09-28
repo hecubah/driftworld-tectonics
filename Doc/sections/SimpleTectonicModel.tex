@@ -148,7 +148,7 @@ $\epsilon_t=3\times10^{-1}\mbox{ mm}\cdot\mbox{y}^{-1}=3\times10^{-4}\mbox{ u}\c
 \subsection{Slab pull}
 All vertices of a plate $\mathcal{P}_i$ in a subduction front of another plate $\mathcal{P}_j$ alter its rotation axis $\mathbf{w}_i$. In our model, this means we have to flag all vertices that are found inside any triangle belonging to another plate with a higher overlap score. Again, we assume no continental collision is taking place since all such events have been resolved earlier in the tectonic step. We group all vertices by the plates they belong to and then we compute slab pull contributions for each plate. Given a plate $\mathcal{P}_i$ with a~rotation axis $\mathbf{w}_i$ and a~centroid $\mathbf{c}_i$, the slab pull adjustment for $n$ flagged points (each at a~location $\mathbf{q}_k$) is computed as follows:
 $$\delta\mathbf{w}_i=\epsilon'\sum_{k=0}^{n-1}\frac{\mathbf{c}_i\times\mathbf{q}_k}{||\mathbf{c}_i\times\mathbf{q}_k||}\delta t$$
-$\epsilon'$ is a perturbation coefficient scaling the influence of the slab pull. Because the summation vector varies wildly with the total number of mesh vertices, we need to find a~parameter somewhat independent of $N$. We chose $\epsilon'=\epsilon\frac{N_\mathcal{P}}{N}$ and call the new parameter $\epsilon=1$ \textit{slab pull perturbation parameter}. After the adjustments are computed for all plates, they are added as vectors to their respective axes and the results are normalized to 1.
+$\epsilon'$ is a perturbation coefficient scaling the influence of the slab pull. Because the summation vector varies wildly with the total number of mesh vertices, we need to find a~parameter somewhat independent of $N$. We chose $\epsilon'=\epsilon\frac{N_\mathcal{P}}{N}$ and call the new parameter $\epsilon=0.1$ \textit{slab pull perturbation parameter}. After the adjustments are computed for all plates, they are added as vectors to their respective axes and the results are normalized to 1.
 \subsection{Plate rifting}
 Continental collisions inevitably create unproportionally large tectonic plates. This leads to decreased tectonic activity and created continents sink through erosion into the ocean. To counter that, there is a~chance for plates to rift. Every tectonic step Driftworld checks probability to rift the largest plate.\footnote{The original article does not mention the mechanism specifically, but it probably checks all plates.} The probability for a plate $\mathcal{P}_j$ to rift is $p_i=\lambda_i e^{-\lambda_i}$. Driftworld computes the parameter $\lambda_i$ differently as:
 $$\lambda_i=\lambda_0\frac{\mathcal{A}_i}{\mathcal{A}_0}\delta t=\lambda_0\frac{N_iN_\mathcal{P}}{N}\delta t$$
@@ -185,7 +185,7 @@ $\epsilon_c$&Continental erosion parameter&$3\times10^{-2}\mbox{ mm}\cdot\mbox{y
 $\epsilon_o$&Oceanic damping parameter&$4\times10^{-2}\mbox{ mm}\cdot\mbox{y}^{-1}$&$4\times10^{-5}\mbox{ u}\cdot\mbox{My}^{-1}$\\
 $\bar{z}_o$&Average ocean depth&-&-0.004 u\\
 $\epsilon_t$&Sediment accretion parameter&$3\times10^{-1}\mbox{ mm}\cdot\mbox{y}^{-1}$&$3\times10^{-4}\mbox{ u}\cdot\mbox{My}^{-1}$\\
-$\epsilon$&Slab pull perturbation parameter&-&1\\
+$\epsilon$&Slab pull perturbation parameter&-&0.1\\
 $\lambda_0$&Average rifting frequency&-&$0.1\mbox{ My}^{-1}$\\
 \end{tabular}
 \caption{Model parameters summary}

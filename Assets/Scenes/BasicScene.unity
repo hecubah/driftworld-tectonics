@@ -1041,7 +1041,7 @@ MonoBehaviour:
     SubductionDistanceTransferControlDistance: 0.1
     SubductionDistanceTransferMaxDistance: 0.283
     SubductionUplift: 0.0006
-    SlabPullPerturbation: 1
+    SlabPullPerturbation: 0.1
     OceanicElevationDamping: 0.00004
     ContinentalErosion: 0.00003
     SedimentAccretion: 0.0003
