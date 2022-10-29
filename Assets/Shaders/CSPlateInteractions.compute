@@ -372,10 +372,6 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
 
     dfs_stack[stack_index] = 0;
 
-    struct vertex_data{
-    float elevation;
-    int plate;
-    };
     float3 vl = quat_rot(crust_vertex_locations[vertex_index], plate_transforms[crust_vertex_data[vertex_index].plate]);
     int offset = crust_BVH_sps[index_bv_plate];
 
@@ -491,7 +487,7 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
                 stack_index--;
             }
             if (stack_index == 0) {
-                return 0;
+                return -1;
             }
             dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
             continue;
@@ -506,8 +502,8 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
             if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) {
                 if (crust_triangles_intersect(triangle_index, crust_BVH[offset + dfs_stack[stack_index]].triangle_index, triangle_plate_index, bv_plate_index)) {
                     candidate_index = crust_BVH[offset + dfs_stack[stack_index]].triangle_index;
-                    if ((crust_vertex_data[crust_triangles[candidate_index].a].elevation >= 0) || (crust_vertex_data[crust_triangles[candidate_index].b].elevation >= 0) || (crust_vertex_data[crust_triangles[candidate_index].c].elevation >= 0)) { // test for subducted continental triangle
-                        return 1;
+                    if ((crust_vertex_data[crust_triangles[candidate_index].a].elevation >= 0) && (crust_vertex_data[crust_triangles[candidate_index].b].elevation >= 0) && (crust_vertex_data[crust_triangles[candidate_index].c].elevation >= 0)) { // test for collision with a continental triangle
+                        return candidate_index;
                     }
 
                 }
@@ -518,12 +514,12 @@ int continental_triangle_contact_with_plate_bvh(int triangle_index, int triangle
                 stack_index--;
             }
             if (stack_index == 0) {
-                return 0;
+                return -1;
             }
             dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
         }
     }
-    return 0;
+    return -1; // return a value which cannot be an index
 }
 
 // Look for continental triangles inside subduction areas below upper plates.
@@ -550,10 +546,28 @@ void CSContinentalContacts(uint3 dID : SV_DispatchThreadID)
         if (overlap_matrix[i * n_plates + main_plate_index] < 1) { // only plates above can tear out terranes
             continue;
         }
+        int found_trindex = continental_triangle_contact_with_plate_bvh(ivi, main_plate_index, i); // index of the found triangle
+        if (found_trindex != -1)
+        { // if found, flag collision
+          /*
+            int found_trindex_plate = crust_vertex_data[crust_triangles[found_trindex].a].plate;
+            int n1 = crust_triangles[found_trindex].neigh_1; // test if neighbours of the found triangle belong to the same plate
+            int n2 = crust_triangles[found_trindex].neigh_2;
+            int n3 = crust_triangles[found_trindex].neigh_3;
+            if ((crust_vertex_data[crust_triangles[n1].a].plate != found_trindex_plate) || (crust_vertex_data[crust_triangles[n1].b].plate != found_trindex_plate) || (crust_vertex_data[crust_triangles[n1].c].plate != found_trindex_plate) || (crust_vertex_data[crust_triangles[n2].a].plate != found_trindex_plate) || (crust_vertex_data[crust_triangles[n2].b].plate != found_trindex_plate) || (crust_vertex_data[crust_triangles[n2].c].plate != found_trindex_plate) || (crust_vertex_data[crust_triangles[n3].a].plate != found_trindex_plate) || (crust_vertex_data[crust_triangles[n3].b].plate != found_trindex_plate) || (crust_vertex_data[crust_triangles[n3].c].plate != found_trindex_plate))
+            {
+                continue;
+            }
+            */
+            continental_triangle_contacts_table[i * n_crust_triangles + ivi] = 1; // flag individual plate collision
+            continental_triangle_contacts[ivi] = 1; // flag general collision
+        }
+        /*
         if (continental_triangle_contact_with_plate_bvh(ivi, main_plate_index, i) != 0) { // if found, flag collision
             continental_triangle_contacts_table[i * n_crust_triangles + ivi] = 1; // flag individual plate collision
             continental_triangle_contacts[ivi] = 1; // flag general collision
         }
+        */
     }
 }
 

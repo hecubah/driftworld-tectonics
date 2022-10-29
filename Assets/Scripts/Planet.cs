@@ -944,12 +944,13 @@ public class TectonicPlanet
         {
             foreach (int it in m_TectonicPlates[i].m_PlateVertices)
             {
-                plate_scores[i] += (m_CrustPointData[it].elevation < 0.0f ? -m_CrustPointData[it].elevation : 100 * m_CrustPointData[it].elevation);
+                //plate_scores[i] += (m_CrustPointData[it].elevation < 0.0f ? m_CrustPointData[it].elevation : 100 * m_CrustPointData[it].elevation);
+                plate_scores[i] += (m_CrustPointData[it].elevation < 0.0f ? -1 : 1000);
             }
         }
         for (int i = 0; i < m_TectonicPlatesCount; i++)
         {
-            float max_score = 0.0f;
+            float max_score = Mathf.NegativeInfinity;
             int best_in_round = -1;
             for (int j = 0; j < m_TectonicPlatesCount; j++)
             {
@@ -1103,6 +1104,7 @@ public class TectonicPlanet
         {
             if (m_TectonicPlates[i].m_PlateVertices.Count < 1) // if a plate has no vertices
             {
+                Debug.Log("Getting rid of plate " + i);
                 overlap_matrix_recalculation_need = true; // flag the recalculation
                 if (m_TectonicPlates[i].m_BorderTriangles.Count > 0) // if the plate has some border triangles, vertices were removed incorrectly
                 {
@@ -1299,7 +1301,7 @@ public class TectonicPlanet
                                 {
                                     active_vertex_index = to_search.Dequeue(); // take first to expand
                                     new_c_terrane.m_Vertices.Add(active_vertex_index); // add vertex to terrane
-                                    terrane_centroid += m_CrustVertices[active_vertex_index]; // add th vertex for the centroid calculation
+                                    terrane_centroid += m_CrustVertices[active_vertex_index]; // add the vertex for the centroid calculation
                                     foreach (int it in m_DataVerticesNeighbours[active_vertex_index]) // for all neighbours of the expanded vertex
                                     {
                                         if ((continental_vertex_collisions_terranes[it] == 0) && (m_CrustPointData[it].elevation >= 0) && (m_CrustPointData[it].plate == colliding_plate)) // if it is continental, not yet assigned a terrane and of the same plate as the original vertex
@@ -1404,7 +1406,7 @@ public class TectonicPlanet
                     el_old = m_CrustPointData[i].elevation;
                     el_new = Mathf.Min(el_old + uplift_output[i], m_PlanetManager.m_Settings.HighestContinentalAltitude); // clamp at max height
                     m_CrustPointData[i].elevation = el_new;
-                    if ((el_old < 0) && (el_new >= 0)) // if the vertex rose from the ocean, set the Himalayan orogeny
+                    if (((el_old < 0) && (el_new >= 0)) || ((el_old >= 0) && (uplift_output[i] > 0))) // if the vertex rose from the ocean, set the Himalayan orogeny
                     {
                         m_CrustPointData[i].orogeny = OroType.HIMALAYAN;
                     }
@@ -1418,8 +1420,13 @@ public class TectonicPlanet
                 uplift_buffer.Release();
                 m_CBufferUpdatesNeeded["crust_vertex_data"] = true; // update elevation buffer
 
+                // ---- BEGIN CC TERRANES REWORK
+
+                m_PlatesOverlap = CalculatePlatesVP();
                 CrustToData(); // interpolate to data
+                /*
                 ResampleCrust(false); // resample for easier vertex assignment
+                /*
                 foreach (CollidingTerrane it in c_terranes) // for all terranes, switch plate indices of their plates to their new plates
                 {
                     foreach (int it2 in m_TectonicPlates[it.colliding_plate].m_PlateVertices)
@@ -1427,6 +1434,86 @@ public class TectonicPlanet
                         m_DataPointData[it2].plate = it.collided_plate;
                     }
                 }
+                */
+                /*
+                foreach (CollidingTerrane it in c_terranes) // for all terranes, switch plate indices of their plates to their new plates
+                {
+                    foreach (int it2 in it.m_Vertices)
+                    {
+                        m_DataPointData[it2].plate = it.collided_plate;
+                    }
+                }
+                */
+                Dictionary<int, int> terrane_plate_rewrite = new Dictionary<int, int>();
+                int [] vertex_terrane_indices = new int [m_DataVertices.Count];
+                terrane_count_index = 0;
+                for (int i = 0; i < m_DataVertices.Count; i++) // build colliding terranes
+                {
+                    if ((m_DataPointData[i].elevation >= 0) && (vertex_terrane_indices[i] == 0))
+                    {
+                        terrane_count_index++; // new terrane id
+                        terrane_plate_rewrite[terrane_count_index] = m_DataPointData[i].plate;
+                        Queue<int> to_search = new Queue<int>();
+                        to_search.Enqueue(i);
+                        vertex_terrane_indices[i] = terrane_count_index;
+                        int active_vertex_index; // index of the neighbour-expanded vertex
+                        
+                        while (to_search.Count > 0) // while there is something left to expand
+                        {
+                            active_vertex_index = to_search.Dequeue(); // take first to expand
+                            if (m_PlatesOverlap[m_DataPointData[active_vertex_index].plate, terrane_plate_rewrite[terrane_count_index]] > 0)
+                            {
+                                terrane_plate_rewrite[terrane_count_index] = m_DataPointData[active_vertex_index].plate;
+                            }
+                            foreach (int it in m_DataVerticesNeighbours[active_vertex_index]) // for all neighbours of the expanded vertex
+                            {
+                                if (vertex_terrane_indices[it] == 0)
+                                {
+                                    if (m_DataPointData[it].elevation >= 0) // if it is continental, not yet assigned a terrane and of the same plate as the original vertex
+                                    {
+                                        to_search.Enqueue(it); // add for expansion
+                                        vertex_terrane_indices[it] = terrane_count_index;
+                                    }
+                                    else
+                                    {
+                                        bool continental_neighbour_pass = false;
+                                        foreach (int it2 in m_DataVerticesNeighbours[it])
+                                        {
+                                            if (m_DataPointData[it2].elevation >= 0)
+                                            {
+                                                continental_neighbour_pass = true;
+                                            }
+                                        }
+                                        if (continental_neighbour_pass)
+                                        {
+                                            to_search.Enqueue(it);
+                                            vertex_terrane_indices[it] = terrane_count_index;
+                                        }
+                                    }
+                                }
+
+                            }
+                        }
+                        
+                    }
+                }
+                for (int i = 0; i < m_DataVertices.Count; i++)
+                {
+                    if (vertex_terrane_indices[i] != 0)
+                    {
+                        m_DataPointData[i].plate = terrane_plate_rewrite[vertex_terrane_indices[i]];
+                    }
+                }
+
+
+
+
+
+                // ---- END CC TERRANES REWORK
+
+
+
+
                 ResampleCrust(); // resample again, now with empty plate deletion
 
             }

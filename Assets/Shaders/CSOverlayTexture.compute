@@ -1,265 +1,22 @@
 #pragma kernel CSOverlayTextureBasicTerrain // green for continental, blue for ocean
+#pragma kernel CSOverlayTextureDebugDataIndividualTriangles // data layer triangle areas
 #pragma kernel CSOverlayTextureDebugDataTriangles // data layer triangle areas
+#pragma kernel CSOverlayTextureDebugDataFailedTriangles // data layer triangle areas
 #pragma kernel CSOverlayTextureCrustAge // crust age hue
 #pragma kernel CSOverlayTextureOrogeny // texture orogeny hue
 #pragma kernel CSOverlayTextureCrustPlates // crust plates areas, black borders
+#pragma kernel CSOverlayTextureDebugCrustIndividualTriangles // crust triangle areas, black borders
 #pragma kernel CSOverlayTextureDebugCrustTriangles // crust triangle areas, black borders
+#pragma kernel CSOverlayTextureDebugCrustFailedTriangles // data layer triangle areas
 #pragma kernel CSOverlayTextureElevationLaplacian // laplacian hue
 #pragma kernel CSOverlayTextureDebugVectorNoise // direction and magnitude into hue and saturation
-#pragma warning(disable : 3557) // disable simple loop - unroll warning
-#define MAX_DFS_STACK_SIZE 40 // max depth of the dfs search stack because of memory
-#define DISTANCE_TOLERANCE 0.000f // triangle look-up tolerance
 
-struct BV { // bounding volume data from an array input - binary tree representation
-    int n_children; // 2 (merged volume) or 0 (leaf)
-    int left_child; // left (first) child index in a BVH_array
-    int right_child; // right (second) child index in a BVH_array
-    int triangle_index; // triangle reference in a triangles array (if it is a leaf)
-    float3 circumcenter; // bounding volume circumcenter - not transformed
-    float circumradius; // bound volume circumradius
-};
+#include "Shared.compute"
 
-struct s_triangle { // triangle data
-    int a; // index of the first vertex
-    int b; // index of the second vertex
-    int c; // index of the third vertex
-    int neigh_1; // index of the first neighbour triangle
-    int neigh_2; // index of the second neighbour triangle
-    int neigh_3; // index of the thirs neighbour triangle
-    float3 circumcenter; // triangle circumcenter position - not transformed
-    float circumradius; // triangle circumradius
-};
+RWTexture2D<float4> Result; // output texture for overlays
 
-struct vertex_data { // vertex crust data representation
-    float elevation; // crust elevation
-    int plate; // crust plate index
-    int orogeny; // crust orogeny type
-    float age; // crust age
-};
 
-RWTexture2D<float4> Result; // output texture
 
-float min_age; // newest crust age
-float max_age; // oldest crust age
-
-int n_data_vertices; // how many vertices in data layer
-float tectonic_iteration_step_time; // how long is one tectonic step time
-int total_tectonic_steps_taken; // how many steps were taken in total - age reference
-
-StructuredBuffer<float3> data_vertex_locations; // positions of the data layer vertices
-StructuredBuffer<vertex_data> data_vertex_data; // crust data of the data layer vertices
-
-StructuredBuffer<BV> data_BVH; // data layer bounding volume hiearchy - a binary tree representation in an internally indexed array
-StructuredBuffer<s_triangle> data_triangles; // data layer triangles data
-
-// Returns true if a given point is in a triangle.
-// vertex_location - float3 tested point - for crust triangle testing, inverse plate transformed must be applied before calling
-// tested_triangle - a triangle where to look for vertex_location
-bool is_point_in_tri(float3 vertex_location, s_triangle tested_triangle) {
-    float3 abcross, bccross, cacross;
-    float abplane_test, bcplane_test, caplane_test;
-    float3 A, B, C;
-    A = data_vertex_locations[tested_triangle.a]; // get the triangle vertices
-    B = data_vertex_locations[tested_triangle.b];
-    C = data_vertex_locations[tested_triangle.c];
-    abcross = cross(A, B); // construct normal vectors of planes in which the origin and two of the triangle points lie
-    bccross = cross(B, C);
-    cacross = cross(C, A);
-    abplane_test = dot(abcross, vertex_location); // calculate dot products to see on which side the vertex is
-    bcplane_test = dot(bccross, vertex_location);
-    caplane_test = dot(cacross, vertex_location);
-    return ((abplane_test + DISTANCE_TOLERANCE >= 0) && (bcplane_test + DISTANCE_TOLERANCE >= 0) && (caplane_test + DISTANCE_TOLERANCE >= 0)); // test the signs with tolerance values
-}
-
-// Look for a point in data bounding volume hiearchy.
-// vl - point to search for
-int search_data_bvh_for_point(float3 vl)
-{
-    int candidate_triangle_index = -1; // initialize candidate index out of bounds
-    int dfs_stack[MAX_DFS_STACK_SIZE]; // stack for BV indices - DFS because memory
-    int stack_index = 0; // stack top index - first array element is actually the stack bottom
-
-    dfs_stack[stack_index] = 0; // root is stack bottom
-
-    s_triangle candidate, candidate_neighbour; // evaluated triangles
-
-    float dot_prod, dist, barycenter_dot_product, barycenter_dot_max; // distance variables
-
-    bool nearest_barycenter_found; // distance look-up flag if bvh search fails
-
-    while (stack_index >= 0) { // while stack is not empty - negative stack index means empty
-        dot_prod = dot(vl, data_BVH[dfs_stack[stack_index]].circumcenter); // dot product of circumcenter of the stack top BV and the point
-
-        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f); // calculate distance, clamp cos to 1
-
-        if (dist > data_BVH[dfs_stack[stack_index]].circumradius * 1.01f) { // underestimate the distance, test if the point is outside BV
-            if (stack_index > 0) { // if the stack has other BVs than root
-                while ((stack_index > 0) && (data_BVH[dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) {  // go back until only root is left in the stack or the stack top BV is left child of the element below - the algorithm then expands the right child
-                    stack_index--;
-                }
-            }
-            if (stack_index == 0) { // point is outside root BV or BVH is searched without a hit - this BVH is pointless :)
-                return -1;
-            }
-            dfs_stack[stack_index] = data_BVH[dfs_stack[stack_index - 1]].right_child; // rewrite current stack index BV with the right child of its parent
-            continue; // iterate, there is the right child to take care of
-        }
-        // the point is apparently within BV
-        if (data_BVH[dfs_stack[stack_index]].n_children == 2) { // if the BV has children, expand its left child
-            dfs_stack[stack_index + 1] = data_BVH[dfs_stack[stack_index]].left_child;
-            stack_index++;
-        }
-        else { // BV is a leaf and passed the distance check - it is quite possibly in the primitive triangle or close by its neighbours
-            // triangle test START
-            if (data_BVH[dfs_stack[stack_index]].triangle_index != -1) { // leaf has to have a triangle reference
-                candidate_triangle_index = data_BVH[dfs_stack[stack_index]].triangle_index;
-                if (is_point_in_tri(vl, data_triangles[candidate_triangle_index])) { // if it is in the triangle, return its index
-                    return candidate_triangle_index;
-                }
-
-                candidate = data_triangles[candidate_triangle_index]; // current triangle to search
-                barycenter_dot_max = dot(vl, normalize(data_vertex_locations[candidate.a] + data_vertex_locations[candidate.b] + data_vertex_locations[candidate.c])); // distance is identified with dot product of point and a candidata barycenter - searching for maximum dot product
-                nearest_barycenter_found = false; // flag for identifying a barycenter with maximum global dot product
-                while (!nearest_barycenter_found) { // until the nearest barycenter is found, look through nearer neighbours
-                    nearest_barycenter_found = true; // assume the nearest bc is found
-                    candidate_neighbour = data_triangles[candidate.neigh_1]; // test if one neighbour is does not have a nearer bc - if so, rewrite candidate and repeat
-                    barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
-                    if (barycenter_dot_product > barycenter_dot_max) {
-                        barycenter_dot_max = barycenter_dot_product;
-                        candidate_triangle_index = candidate.neigh_1;
-                        candidate = candidate_neighbour;
-                        nearest_barycenter_found = false;
-                        continue;
-                    }
-                    candidate_neighbour = data_triangles[candidate.neigh_2]; // the same for the second neighbour
-                    barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
-                    if (barycenter_dot_product > barycenter_dot_max) {
-                        barycenter_dot_max = barycenter_dot_product;
-                        candidate_triangle_index = candidate.neigh_2;
-                        candidate = candidate_neighbour;
-                        nearest_barycenter_found = false;
-                        continue;
-                    }
-                    candidate_neighbour = data_triangles[candidate.neigh_3]; // the same for the third neighbour
-                    barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
-                    if (barycenter_dot_product > barycenter_dot_max) {
-                        barycenter_dot_max = barycenter_dot_product;
-                        candidate_triangle_index = candidate.neigh_3;
-                        candidate = candidate_neighbour;
-                        nearest_barycenter_found = false;
-                        continue;
-                    }
-                }
-                if (is_point_in_tri(vl, candidate)) { // if the point is found is within triangle, return its index
-                    return candidate_triangle_index;
-                } // if not, it should be in one of the neighbours
-                candidate_neighbour = data_triangles[candidate.neigh_1];
-                barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
-                if (is_point_in_tri(vl, candidate_neighbour)) {
-                    return candidate.neigh_1;
-                }
-                candidate_neighbour = data_triangles[candidate.neigh_2];
-                barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
-                if (is_point_in_tri(vl, candidate_neighbour)) {
-                    return candidate.neigh_2;
-                }
-                candidate_neighbour = data_triangles[candidate.neigh_3];
-                barycenter_dot_product = dot(vl, normalize(data_vertex_locations[candidate_neighbour.a] + data_vertex_locations[candidate_neighbour.b] + data_vertex_locations[candidate_neighbour.c]));
-                if (is_point_in_tri(vl, candidate_neighbour)) {
-                    return candidate.neigh_3;
-                }
-            }
-            // triangle test END
-            // if the triangle has not been found, go back through stack until an unexpanded right child has been found or only the BVH root remains
-            while ((stack_index > 0) && (data_BVH[dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
-            {
-                stack_index--;
-            }
-            if (stack_index == 0) { // we reached the BVH root, search was unsuccessful
-                return -1;
-            }
-            dfs_stack[stack_index] = data_BVH[dfs_stack[stack_index - 1]].right_child; // expand the next available right child
-        }
-
-    }
-    return -1; // we reached the BVH root, search was unsuccessful
-}
-
-// Interpolate data values at a point, given a triangle
-vertex_data data_barycentric_interpolation(float3 ipoint, int triangle_index) {
-    float3 a = data_vertex_locations[data_triangles[triangle_index].a]; // triangle vertices
-    float3 b = data_vertex_locations[data_triangles[triangle_index].b];
-    float3 c = data_vertex_locations[data_triangles[triangle_index].c];
-    float u, v, w; // barycentric coordinates, corresponding to relative area ratios of smaller opposite triangle
-    v = length(cross(c-a, ipoint-a))/length(cross(b-a, c-a)); // calculations based on parallelogram areas
-    w = length(cross(b-a, ipoint-a))/length(cross(b-a, c-a));
-    u = 1.0f - v - w;
-    vertex_data ret;
-
-    float e1, e2, e3, ag1, ag2, ag3; // float crust values
-    e1 = data_vertex_data[data_triangles[triangle_index].a].elevation;
-    e2 = data_vertex_data[data_triangles[triangle_index].b].elevation;
-    e3 = data_vertex_data[data_triangles[triangle_index].c].elevation;
-    ag1 = data_vertex_data[data_triangles[triangle_index].a].age;
-    ag2 = data_vertex_data[data_triangles[triangle_index].b].age;
-    ag3 = data_vertex_data[data_triangles[triangle_index].c].age;
-
-    ret.elevation = (u * e1 + v * e2 + w * e3); // float values are simply a weighed average of the triangle vertices
-    ret.age = (u * ag1 + v * ag2 + w * ag3);
-
-    ret.plate = data_vertex_data[data_triangles[triangle_index].a].plate; // integer values are asssigned by the largest weight
-    ret.orogeny = data_vertex_data[data_triangles[triangle_index].a].orogeny;
-    if (v > u) {
-      ret.plate = data_vertex_data[data_triangles[triangle_index].b].plate;
-      ret.orogeny = data_vertex_data[data_triangles[triangle_index].b].orogeny;
-    }
-    if (w > v) {
-      ret.plate = data_vertex_data[data_triangles[triangle_index].c].plate;
-      ret.orogeny = data_vertex_data[data_triangles[triangle_index].c].orogeny;
-    }
-    return ret; // return computed crust vertex data
-
-}
-
- // Return RGBcolor given by hue, saturation and value.
-float4 HSVtoRGB(float h, float s, float v)
-{
-    float c = v * s;
-    float x = c * (float)(1 - (abs(((h / 60.0f) % 2) - 1)));
-    float m = v - c;
-    float ra, ga, ba;
-    if (h < 60) {
-        ra = c;
-        ga = x;
-        ba = 0;
-    }
-    else if (h < 120) {
-        ra = x;
-        ga = c;
-        ba = 0;
-    }
-    else if (h < 180) {
-        ra = 0;
-        ga = c;
-        ba = x;
-    }
-    else if (h < 240) {
-        ra = 0;
-        ga = x;
-        ba = c;
-    }
-    else if (h < 300) {
-        ra = x;
-        ga = 0;
-        ba = c;
-    }
-    else {
-        ra = c;
-        ga = 0;
-        ba = x;
-    }
-    return float4(ra+m, ga+m, ba+m, 1);
-}
 
 // Overlay showing crust age as hue. Calculates 4096x4096 texture.
 // A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.
@@ -289,7 +46,32 @@ void CSOverlayTextureBasicTerrain(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupT
     }
 }
 
-// Overlay showing crust age as hue. Calculates 4096x4096 texture.
+// Overlay showing hued individual data triangles. Calculates 4096x4096 texture.
+// A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.
+// Detailed comments in CSOverlayTextureCrustAge.
+[numthreads(4, 4, 4)]
+void CSOverlayTextureDebugDataIndividualTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float) pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float) pix_coords.y + 0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    int found_index = search_data_bvh_for_point(w_pixelpoint);
+
+    if (found_index == -1)
+    {
+        Result[pix_coords] = float4(0, 0, 0, 1); // if not found, point is black
+    }
+    else
+    {
+        Result[pix_coords] = HSVtoRGB((float) ((uint) found_index % 31) / 31.0f * 360.0f, 1, 1); // 31 hues of triangles, paint whole triangle in a single color
+    }
+}
+
+// Overlay showing data triangles, hued and saturated by their coordinates (longitude hue, latitude saturation). Calculates 4096x4096 texture.
 // A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.
 // Detailed comments in CSOverlayTextureCrustAge.
 [numthreads(4, 4, 4)]
@@ -298,17 +80,48 @@ void CSOverlayTextureDebugDataTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_
     int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
     float PI = 3.141592653;
     float phi, theta;
-    phi = ((float)pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
-    theta = (1.0f - ((float)pix_coords.y+0.5f) / 4096.0f) * PI;
+    phi = ((float) pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float) pix_coords.y + 0.5f) / 4096.0f) * PI;
     float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
 
     int found_index = search_data_bvh_for_point(w_pixelpoint);
 
-    if (found_index == -1) {
+    if (found_index == -1)
+    {
         Result[pix_coords] = float4(0, 0, 0, 1); // if not found, point is black
     }
-    else {
-      Result[pix_coords] = HSVtoRGB((float)((uint)found_index % 31)/31.0f * 360.0f, 1, 1); // 31 hues of triangles, paint whole triangle in a single color
+    else
+    {
+        float3 coor_xyz = normalize(data_vertex_locations[data_triangles[found_index].a] + data_vertex_locations[data_triangles[found_index].b] + data_vertex_locations[data_triangles[found_index].c]);
+        float longitude_deg = clamp((atan2(coor_xyz.x, coor_xyz.z) + PI) / PI * 180.0f, 0.0f, 360.0f);
+        float latitude_norm = clamp(acos(abs(coor_xyz.y)) / PI * 2, 0.0, 1.0f);
+
+        Result[pix_coords] = HSVtoRGB(longitude_deg, latitude_norm, 1); // 31 hues of triangles, paint whole triangle in a single color
+    }
+}
+
+// Overlay showing contrast points where no data triangle has been found.
+// A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.
+// Detailed comments in CSOverlayTextureCrustAge.
+[numthreads(4, 4, 4)]
+void CSOverlayTextureDebugDataFailedTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float) pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float) pix_coords.y + 0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    int found_index = search_data_bvh_for_point(w_pixelpoint);
+
+    if (found_index == -1)
+    {
+        Result[pix_coords] = float4(1, 1, 1, 1); // if not found, point is white
+    }
+    else
+    {
+        Result[pix_coords] = float4(0, 0, 0, 1); // if found, point is black
     }
 }
 
@@ -369,192 +182,6 @@ void CSOverlayTextureOrogeny(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThread
     }
 }
 
-// Multiply quaternion transforms.
-float4 qmul(float4 q1, float4 q2) {
-    return float4(
-        q2.xyz * q1.w + q1.xyz * q2.w + cross(q1.xyz, q2.xyz),
-        q1.w * q2.w - dot(q1.xyz, q2.xyz)
-        );
-}
-
-// Apply unitary quaternion transform.
-float3 quat_rot(float3 v, float4 r) {
-    float4 r_c = r * float4(-1, -1, -1, 1);
-    return qmul(r, qmul(float4(v, 0), r_c)).xyz;
-}
-
-int n_plates; // number of tectonic plates
-
-StructuredBuffer<float4> plate_transforms; // quaternion transforms for all plates
-
-StructuredBuffer<int> overlap_matrix; // tectonic plate overlaps - matrix saying if row overlaps column (1 if it does, -1 if it goes under)
-
-StructuredBuffer<float3> crust_vertex_locations; // position of crust vertices
-StructuredBuffer<s_triangle> crust_triangles; // crust triangle data
-StructuredBuffer<vertex_data> crust_vertex_data; // crust vertex data for age, elevation etc.
-
-StructuredBuffer<BV> crust_BVH; // all plate bounding volume hiearchies, concatenated
-StructuredBuffer<int> crust_BVH_sps; // indices referencing plate array boundaries in crust_BVH - index corresponding to plate order in m_TectonicPlates is starting offset, next one is upper limit, where the next BVH starts - last is total upper limit
-
-// Similar to search_data_bvh_for_point(...).
-// index_bv_plate - index of the searched plate
-int search_plate_bvh_for_point(float3 vl, int index_bv_plate)
-{
-    int candidate_triangle_index = -1;
-    int dfs_stack[MAX_DFS_STACK_SIZE];
-    int stack_index = 0;
-
-    dfs_stack[stack_index] = 0;
-
-    float3 vlt = quat_rot(vl, plate_transforms[index_bv_plate] * float4(-1, -1, -1, 1)); // an inverse plate tranform is applied on the point for faster checks on untransformed plate BVs
-    int offset = crust_BVH_sps[index_bv_plate]; // offset for BVH array look-up
-
-    s_triangle candidate, candidate_neighbour;
-
-    float dot_prod, dist, barycenter_dot_product, barycenter_dot_max;
-
-    bool nearest_barycenter_found, plate_check;
-
-    while (stack_index >= 0) {
-        dot_prod = dot(vlt, crust_BVH[offset + dfs_stack[stack_index]].circumcenter);
-
-        dist = (dot_prod < 1 ? acos(dot_prod) : 0.0f);
-
-        if (dist > crust_BVH[offset + dfs_stack[stack_index]].circumradius * 1.01f) {
-            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index])) {
-                stack_index--;
-            }
-            if (stack_index == 0) {
-                return -1;
-            }
-            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
-            continue;
-        }
-        if (crust_BVH[offset + dfs_stack[stack_index]].n_children == 2) {
-            dfs_stack[stack_index + 1] = crust_BVH[offset + dfs_stack[stack_index]].left_child;
-            stack_index++;
-        }
-        else {
-            // triangle test START
-            if (crust_BVH[offset + dfs_stack[stack_index]].triangle_index != -1) {
-                candidate_triangle_index = crust_BVH[offset + dfs_stack[stack_index]].triangle_index;
-                if (is_point_in_tri(vlt, crust_triangles[candidate_triangle_index])) {
-                    return candidate_triangle_index;
-                }
-
-                candidate = crust_triangles[candidate_triangle_index];
-                barycenter_dot_max = dot(vlt, normalize(crust_vertex_locations[candidate.a] + crust_vertex_locations[candidate.b] + crust_vertex_locations[candidate.c]));
-                nearest_barycenter_found = false;
-                while (!nearest_barycenter_found) { // added plate check so that all only plate triangles are searched
-                    nearest_barycenter_found = true;
-                    candidate_neighbour = crust_triangles[candidate.neigh_1];
-                    plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
-                    barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
-                    if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
-                        barycenter_dot_max = barycenter_dot_product;
-                        candidate_triangle_index = candidate.neigh_1;
-                        candidate = candidate_neighbour;
-                        nearest_barycenter_found = false;
-                        continue;
-                    }
-                    candidate_neighbour = crust_triangles[candidate.neigh_2];
-                    plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
-                    barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
-                    if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
-                        barycenter_dot_max = barycenter_dot_product;
-                        candidate_triangle_index = candidate.neigh_2;
-                        candidate = candidate_neighbour;
-                        nearest_barycenter_found = false;
-                        continue;
-                    }
-                    candidate_neighbour = crust_triangles[candidate.neigh_3];
-                    plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
-                    barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
-                    if ((plate_check) && (barycenter_dot_product > barycenter_dot_max)) {
-                        barycenter_dot_max = barycenter_dot_product;
-                        candidate_triangle_index = candidate.neigh_3;
-                        candidate = candidate_neighbour;
-                        nearest_barycenter_found = false;
-                        continue;
-                    }
-                }
-                if (is_point_in_tri(vlt, candidate)) {
-                    return candidate_triangle_index;
-                }
-                candidate_neighbour = crust_triangles[candidate.neigh_1];
-                plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
-                barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
-                if ((plate_check) && (is_point_in_tri(vlt, candidate_neighbour))) {
-                    return candidate.neigh_1;
-                }
-                candidate_neighbour = crust_triangles[candidate.neigh_2];
-                plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
-                barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
-                if ((plate_check) && (is_point_in_tri(vlt, candidate_neighbour))) {
-                    return candidate.neigh_2;
-                }
-                candidate_neighbour = crust_triangles[candidate.neigh_3];
-                plate_check = (crust_vertex_data[candidate_neighbour.a].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.b].plate == index_bv_plate) && (crust_vertex_data[candidate_neighbour.c].plate == index_bv_plate);
-                barycenter_dot_product = dot(vlt, normalize(crust_vertex_locations[candidate_neighbour.a] + crust_vertex_locations[candidate_neighbour.b] + crust_vertex_locations[candidate_neighbour.c]));
-                if ((plate_check) && (is_point_in_tri(vlt, candidate_neighbour))) {
-                    return candidate.neigh_3;
-                }
-
-
-            }
-            // triangle test END
-            while ((stack_index > 0) && (crust_BVH[offset + dfs_stack[stack_index - 1]].left_child != dfs_stack[stack_index]))
-            {
-                stack_index--;
-            }
-            if (stack_index == 0) {
-                return -1;
-            }
-            dfs_stack[stack_index] = crust_BVH[offset + dfs_stack[stack_index - 1]].right_child;
-        }
-
-    }
-    return -1;
-}
-
-// Similar to data_barycentric_interpolation.
-// triangle_transformation - plate transform for the specific triangle
-vertex_data crust_barycentric_interpolation(float3 ipoint, int triangle_index, float4 triangle_transformation) {
-
-    float3 a = crust_vertex_locations[crust_triangles[triangle_index].a];
-    float3 b = crust_vertex_locations[crust_triangles[triangle_index].b];
-    float3 c = crust_vertex_locations[crust_triangles[triangle_index].c];
-    float3 p = quat_rot(ipoint, triangle_transformation * float4(-1, -1, -1, 1)); // inverse-transformed point
-    float u, v, w; // barycentric coordinates, corresponding to relative area ratios of smaller opposite triangle
-    v = length(cross(c-a, p-a))/length(cross(b-a, c-a)); // calculation based on parallelogram areas
-    w = length(cross(b-a, p-a))/length(cross(b-a, c-a));
-    u = 1.0f - v - w;
-    vertex_data ret;
-
-    float e1, e2, e3, ag1, ag2, ag3;
-    e1 = crust_vertex_data[crust_triangles[triangle_index].a].elevation;
-    e2 = crust_vertex_data[crust_triangles[triangle_index].b].elevation;
-    e3 = crust_vertex_data[crust_triangles[triangle_index].c].elevation;
-    ag1 = crust_vertex_data[crust_triangles[triangle_index].a].age;
-    ag2 = crust_vertex_data[crust_triangles[triangle_index].b].age;
-    ag3 = crust_vertex_data[crust_triangles[triangle_index].c].age;
-
-    ret.elevation = (u * e1 + v * e2 + w * e3);
-    ret.age = (u * ag1 + v * ag2 + w * ag3);
-
-    ret.plate = crust_vertex_data[crust_triangles[triangle_index].a].plate;
-    ret.orogeny = crust_vertex_data[crust_triangles[triangle_index].a].orogeny;
-    if (v > u) {
-      ret.plate = crust_vertex_data[crust_triangles[triangle_index].b].plate;
-      ret.orogeny = crust_vertex_data[crust_triangles[triangle_index].b].orogeny;
-    }
-    if (w > v) {
-      ret.plate = crust_vertex_data[crust_triangles[triangle_index].c].plate;
-      ret.orogeny = crust_vertex_data[crust_triangles[triangle_index].c].orogeny;
-    }
-    return ret;
-}
-
 // Overlay showing crust age as hue. Calculates 4096x4096 texture.
 // A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.
 // Detailed comments in CSOverlayTextureCrustAge.
@@ -591,11 +218,11 @@ void CSOverlayTextureCrustPlates(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupTh
     }
 }
 
-// Overlay showing crust age as hue. Calculates 4096x4096 texture.
+// Overlay showing hued individual triangles in crust plates. Calculates 4096x4096 texture.
 // A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.
 // Detailed comments in CSOverlayTextureCrustAge. Crust mechanism in CSOverlayTextureCrustPlates.
 [numthreads(4, 4, 4)]
-void CSOverlayTextureDebugCrustTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+void CSOverlayTextureDebugCrustIndividualTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
 {
     int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
     float PI = 3.141592653;
@@ -627,25 +254,89 @@ void CSOverlayTextureDebugCrustTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV
     }
 }
 
-StructuredBuffer<float> el_values; // vertex Laplacian values
-float el_min; // Laplacian extremes for hue scaling
-float el_max;
+// Overlay showing triangles in crust plates, hued and saturated by their coordinates (longitude hue, latitude saturation). Calculates 4096x4096 texture.
+// A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.
+// Detailed comments in CSOverlayTextureCrustAge. Crust mechanism in CSOverlayTextureCrustPlates.
+[numthreads(4, 4, 4)]
+void CSOverlayTextureDebugCrustTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float) pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float) pix_coords.y + 0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
 
-// Interpolate Laplacian values within a triangle.
-float laplacian_interpolation(float3 ipoint, int triangle_index) { // pretty much barycentric interpolation but for laplacian values
-    float3 a = data_vertex_locations[data_triangles[triangle_index].a];
-    float3 b = data_vertex_locations[data_triangles[triangle_index].b];
-    float3 c = data_vertex_locations[data_triangles[triangle_index].c];
-    float u, v, w;
-    v = length(cross(c-a, ipoint-a))/length(cross(b-a, c-a)); // calculation based on parallelogram areas
-    w = length(cross(b-a, ipoint-a))/length(cross(b-a, c-a));
-    u = 1.0f - v - w;
-    float el1, el2, el3;
-    el1 = el_values[data_triangles[triangle_index].a];
-    el2 = el_values[data_triangles[triangle_index].b];
-    el3 = el_values[data_triangles[triangle_index].c];
+    int found_index = -1;
+    int found_plate = -1;
 
-    return (u * el1 + v * el2 + w * el3);
+    for (int i = 0; i < n_plates; i++)
+    {
+        int help_index;
+        if ((found_plate == -1) || (overlap_matrix[i * n_plates + found_plate] != -1))
+        {
+
+            help_index = search_plate_bvh_for_point(w_pixelpoint, i);
+            if (help_index != -1)
+            {
+                found_index = help_index;
+                found_plate = i;
+            }
+        }
+    }
+    if (found_index == -1)
+    {
+        Result[pix_coords] = float4(0, 0, 0, 1);
+
+    }
+    else
+    {
+        float3 coor_xyz = quat_rot(normalize(crust_vertex_locations[crust_triangles[found_index].a] + crust_vertex_locations[crust_triangles[found_index].b] + crust_vertex_locations[crust_triangles[found_index].c]), plate_transforms[found_plate]);
+        float longitude_deg = clamp((atan2(coor_xyz.x, coor_xyz.z) + PI) / PI * 180.0f, 0.0f, 360.0f);
+        float latitude_norm = clamp(acos(abs(coor_xyz.y)) / PI * 2, 0.0, 1.0f);
+
+        Result[pix_coords] = HSVtoRGB(longitude_deg, latitude_norm, 1); // 31 hues of triangles, paint whole triangle in a single color
+    }
+}
+
+// Overlay showing contrast points where no crust triangle has been found.
+// A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.
+// Detailed comments in CSOverlayTextureCrustAge. Crust mechanism in CSOverlayTextureCrustPlates.
+[numthreads(4, 4, 4)]
+void CSOverlayTextureDebugCrustFailedTriangles(uint3 gID : SV_GroupID, uint3 gtID : SV_GroupThreadID)
+{
+    int2 pix_coords = { 16 * gID.x + 4 * gtID.z + gtID.x, 4 * gID.y + gtID.y };
+    float PI = 3.141592653;
+    float phi, theta;
+    phi = ((float) pix_coords.x + 0.5f) / 4096.0f * 2 * PI;
+    theta = (1.0f - ((float) pix_coords.y + 0.5f) / 4096.0f) * PI;
+    float3 w_pixelpoint = { sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi) };
+
+    int found_index = -1;
+    int found_plate = -1;
+
+    for (int i = 0; i < n_plates; i++)
+    {
+        int help_index;
+        if ((found_plate == -1) || (overlap_matrix[i * n_plates + found_plate] != -1))
+        {
+
+            help_index = search_plate_bvh_for_point(w_pixelpoint, i);
+            if (help_index != -1)
+            {
+                found_index = help_index;
+                found_plate = i;
+            }
+        }
+    }
+    if (found_index == -1)
+    {
+        Result[pix_coords] = float4(1, 1, 1, 1);
+    }
+    else
+    {
+        Result[pix_coords] = float4(0, 0, 0, 1);
+    }
 }
 
 // Overlay showing crust age as hue. Calculates 4096x4096 texture.
@@ -671,8 +362,6 @@ void CSOverlayTextureElevationLaplacian(uint3 gID : SV_GroupID, uint3 gtID : SV_
       Result[pix_coords] = HSVtoRGB((lap_int - el_min)/(el_max - el_min) * 180.0f, 1, 0.5f); // laplacian values are hue scaled from red to green, red are the largest values
     }
 }
-
-StructuredBuffer<float3> vector_noise; // vector noise at triangles
 
 // Overlay showing crust age as hue. Calculates 4096x4096 texture.
 // A dispatch has 256 x-size and 1024 y-size. One batch then corresponds to 16x4 pixels rectangle.

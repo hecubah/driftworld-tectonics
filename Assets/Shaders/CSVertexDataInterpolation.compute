@@ -106,7 +106,7 @@ int search_plate_bvh_for_point(int vertex_index, int index_bv_plate)
     int stack_index = 0; // stack top index - first array element is actually the stack bottom
 
     dfs_stack[stack_index] = 0; // root is stack bottom
-
+    
     float3 vl = data_vertex_locations[vertex_index]; // actual point without transform
     float3 vlt = quat_rot(data_vertex_locations[vertex_index], plate_transforms[index_bv_plate] * float4(-1, -1, -1, 1)); // an inverse plate tranform is applied on the point for faster checks on untransformed plate BVs
     int offset = crust_BVH_sps[index_bv_plate]; // offset for BVH array look-up

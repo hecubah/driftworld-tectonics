@@ -3,7 +3,7 @@ using UnityEngine;
 
 public enum TexOverlay
 {
-    None, BasicTerrain, CrustPlates, DebugDataTriangles, DebugCrustTriangles, CrustAge, Orogeny, ElevationLaplacian, DebugVectorNoise
+    None, BasicTerrain, CrustPlates, CrustAge, Orogeny, ElevationLaplacian, DebugVectorNoise, DebugDataIndividualTriangles, DebugDataTriangles, DebugDataFailedTriangles, DebugCrustIndividualTriangles, DebugCrustTriangles, DebugCrustFailedTriangles
 }
 
 public enum RenderMode
@@ -193,8 +193,29 @@ public class PlanetManager : MonoBehaviour
                         tex = OverlayBasicTerrain(); // return texture normally
                     }
                     break;
+                case TexOverlay.DebugDataIndividualTriangles: // paint individual triangles on data layer
+                    tex = OverlayDebugDataIndividualTriangles();
+                    break;
                 case TexOverlay.DebugDataTriangles: // paint individual triangles on data layer
                     tex = OverlayDebugDataTriangles();
+                    break;
+                case TexOverlay.DebugDataFailedTriangles: // paint individual contrast points on data layer
+                    tex = OverlayDebugDataFailedTriangles();
+                    break;
+                case TexOverlay.DebugCrustIndividualTriangles: // paint individual transformed crust plate triangles on data layer
+                    if (m_Planet.m_TectonicPlates.Count == 0)
+                    {
+                        Debug.LogError("Debug Crust Triangle overlay impossible when there are no plates.");
+                        problem = true;
+                    }
+                    if (problem)
+                    {
+                        tex = MissingDataTexture();
+                    }
+                    else
+                    {
+                        tex = OverlayDebugCrustIndividualTriangles();
+                    }
                     break;
                 case TexOverlay.DebugCrustTriangles: // paint individual transformed crust plate triangles on data layer
                     if (m_Planet.m_TectonicPlates.Count == 0)
@@ -209,6 +230,21 @@ public class PlanetManager : MonoBehaviour
                     else
                     {
                         tex = OverlayDebugCrustTriangles();
+                    }
+                    break;
+                case TexOverlay.DebugCrustFailedTriangles: // paint contrast points
+                    if (m_Planet.m_TectonicPlates.Count == 0)
+                    {
+                        Debug.LogError("Debug Crust Triangle overlay impossible when there are no plates.");
+                        problem = true;
+                    }
+                    if (problem)
+                    {
+                        tex = MissingDataTexture();
+                    }
+                    else
+                    {
+                        tex = OverlayDebugCrustFailedTriangles();
                     }
                     break;
                 case TexOverlay.CrustPlates: // paint transformed crust plates on data layer
@@ -362,12 +398,90 @@ public class PlanetManager : MonoBehaviour
     /// Colored data triangles. Sorting visible on hue patterns as the hue is rotated in order.
     /// </summary>
     /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
+    public Texture2D OverlayDebugDataIndividualTriangles()
+    {
+
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugDataIndividualTriangles");
+
+        m_Planet.UpdateCBBuffers();
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+
+    }
+
+    /// <summary>
+    /// Colored data triangles. Hue and saturation correspond to longitude and latitude.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayDebugDataTriangles()
     {
 
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
 
         int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugDataTriangles");
+
+        m_Planet.UpdateCBBuffers();
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_data", m_Planet.m_CBuffers["data_vertex_data"]);
+
+        work_shader.SetInt("n_data_vertices", m_Planet.m_VerticesCount);
+
+        work_shader.SetBuffer(kernelHandle, "data_BVH", m_Planet.m_CBuffers["data_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "data_triangles", m_Planet.m_CBuffers["data_triangles"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+
+    }
+
+    /// <summary>
+    /// Contrast points where data triangle look-up failed.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
+    public Texture2D OverlayDebugDataFailedTriangles()
+    {
+
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugDataFailedTriangles");
 
         m_Planet.UpdateCBBuffers();
         work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
@@ -526,12 +640,96 @@ public class PlanetManager : MonoBehaviour
     /// Colored crust triangles. Sorting visible on hue patterns as the hue is rotated in order.
     /// </summary>
     /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
+    public Texture2D OverlayDebugCrustIndividualTriangles()
+    {
+
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugCrustIndividualTriangles");
+
+        m_Planet.UpdateCBBuffers();
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
+        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
+
+        work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_Planet.m_CBuffers["overlap_matrix"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+    }
+
+    /// <summary>
+    /// Colored crust triangles. Hue and saturation correspond to longitude and latitude.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
     public Texture2D OverlayDebugCrustTriangles()
     {
 
         ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
 
         int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugCrustTriangles");
+
+        m_Planet.UpdateCBBuffers();
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "data_vertex_locations", m_Planet.m_CBuffers["data_vertex_locations"]);
+        work_shader.SetBuffer(kernelHandle, "crust_triangles", m_Planet.m_CBuffers["crust_triangles"]);
+        work_shader.SetBuffer(kernelHandle, "crust_vertex_data", m_Planet.m_CBuffers["crust_vertex_data"]);
+        work_shader.SetInt("n_plates", m_Planet.m_TectonicPlatesCount);
+
+        work_shader.SetBuffer(kernelHandle, "overlap_matrix", m_Planet.m_CBuffers["overlap_matrix"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH_sps", m_Planet.m_CBuffers["crust_BVH_sps"]);
+        work_shader.SetBuffer(kernelHandle, "crust_BVH", m_Planet.m_CBuffers["crust_BVH"]);
+        work_shader.SetBuffer(kernelHandle, "plate_transforms", m_Planet.m_CBuffers["plate_transforms"]);
+
+
+        RenderTexture com_tex = new RenderTexture(4096, 4096, 24);
+        com_tex.enableRandomWrite = true;
+        com_tex.Create();
+
+
+        work_shader.SetInt("trianglesNumber", m_Planet.m_TrianglesCount);
+        work_shader.SetTexture(kernelHandle, "Result", com_tex);
+        work_shader.Dispatch(kernelHandle, 256, 1024, 1);
+
+        RenderTexture.active = com_tex;
+        Texture2D tex = new Texture2D(com_tex.width, com_tex.height);
+        tex.ReadPixels(new Rect(0, 0, com_tex.width, com_tex.height), 0, 0);
+        RenderTexture.active = null;
+        com_tex.Release();
+        tex.Apply();
+        return tex;
+    }
+
+    /// <summary>
+    /// Contrast points where crust triangle look-up failed.
+    /// </summary>
+    /// <returns>Texture2D to be applied to the surface of the sphere and the plane.</returns>
+    public Texture2D OverlayDebugCrustFailedTriangles()
+    {
+
+        ComputeShader work_shader = m_Shaders.m_OverlayTextureShader;
+
+        int kernelHandle = work_shader.FindKernel("CSOverlayTextureDebugCrustFailedTriangles");
 
         m_Planet.UpdateCBBuffers();
         work_shader.SetBuffer(kernelHandle, "crust_vertex_locations", m_Planet.m_CBuffers["crust_vertex_locations"]);
@@ -676,6 +874,5 @@ public class PlanetManager : MonoBehaviour
         tex.Apply();
         return tex;
     }
-
 }
 

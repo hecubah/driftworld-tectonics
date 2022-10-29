@@ -1,0 +1,4 @@
+Evaluate new topological artifacts
+simplex noise
+shader refactor
+shader documentation

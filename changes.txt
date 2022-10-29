@@ -1,2 +1,10 @@
-corrected vertex interpolation (clamp values)
-changed slab pull parameter
+change slab pull perturbation to 0.3
+Changed collision uplift effect to all plates
+Himalayan orogeny updated to include risen continental crust
+autodetecting connected terrane plate overrides on data layer
+changed plates scoring (1,1000)
+Separate terranes attachment
+Debug Individual Triangles
+Debug Failed triangles
+partially refactored compute shaders
+--volatile push
